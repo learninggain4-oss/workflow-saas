@@ -38,5 +38,5 @@ class Comment(Base):
     text = Column(Text)
     task_id = Column(Integer, ForeignKey("tasks.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    user_name = Column(String) 
-    created_at = Column(String)
+    user_name = Column(String, nullable=True) 
+    created_at = Column(String, nullable=True)

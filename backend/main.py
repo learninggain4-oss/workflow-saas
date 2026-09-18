@@ -38,14 +38,20 @@ async def global_handler(request, exc):
 @app.on_event("startup")
 def fix_db():
     try:
-        with engine.connect() as conn:
+        models.Base.metadata.create_all(bind=engine)
+        print("create_all ok")
+    except Exception as e:
+        print("create_all err", e)
+
+    try:
+        with engine.begin() as conn:
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER"))
-            conn.commit()
             print("fix columns ok")
     except Exception as e:
         print("fix columns err", e)
+
     try:
         db=SessionLocal()
         for u in db.query(models.User).all():
@@ -177,12 +183,48 @@ def delete_task(task_id:int, db:Session=Depends(get_db)):
 @app.get("/api/tasks/{task_id}/comments")
 def get_comments(task_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     try:
-        return db.query(models.Comment).filter(models.Comment.task_id==task_id).all()
-    except: return []
+        comments = db.query(models.Comment).filter(models.Comment.task_id==task_id).all()
+        return [
+            {
+                "id": c.id,
+                "text": c.text,
+                "task_id": c.task_id,
+                "user_id": c.user_id,
+                "user_name": c.user_name or "User",
+                "created_at": c.created_at or ""
+            }
+            for c in comments
+        ]
+    except Exception as e:
+        print("get comments err", e)
+        traceback.print_exc()
+        return []
 
 @app.post("/api/tasks/{task_id}/comments")
 def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
-    time_now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    c = models.Comment(text=payload.text, task_id=task_id, user_id=current_user.id, user_name=current_user.name, created_at=time_now)
-    db.add(c); db.commit(); db.refresh(c)
-    return c
+    try:
+        time_now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        u_name = current_user.name if (current_user.name and current_user.name.strip()) else current_user.email
+        c = models.Comment(
+            text=payload.text,
+            task_id=task_id,
+            user_id=current_user.id,
+            user_name=u_name,
+            created_at=time_now
+        )
+        db.add(c)
+        db.commit()
+        db.refresh(c)
+        return {
+            "id": c.id,
+            "text": c.text,
+            "task_id": c.task_id,
+            "user_id": c.user_id,
+            "user_name": c.user_name,
+            "created_at": c.created_at
+        }
+    except Exception as e:
+        db.rollback()
+        print("add comment err", e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
