@@ -25,17 +25,9 @@ class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String)
-    status = Column(String)
-    priority = Column(String)
+    status = Column(String, default="todo")
+    priority = Column(String, default="medium")
     description = Column(Text, nullable=True, default="")
     due_date = Column(String, nullable=True, default="")
     user_id = Column(Integer, ForeignKey("users.id"))
     board_id = Column(Integer, nullable=True)
-
-class Comment(Base):
-    __tablename__ = "comments"
-    id = Column(Integer, primary_key=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
-    text = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
