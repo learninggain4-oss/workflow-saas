@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
@@ -20,6 +21,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Auto fix for missing columns - itha main fix
+@app.on_event("startup")
+def fix_db():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
+            conn.commit()
+            print("DB Fixed: columns added")
+    except Exception as e:
+        print(f"Migration skipped: {e}")
 
 SECRET_KEY="workflow-saas-secret-2024"
 ALGORITHM="HS256"
