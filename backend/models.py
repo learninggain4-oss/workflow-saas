@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Text, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from datetime import datetime
 from database import Base
 
@@ -31,7 +30,7 @@ class Task(Base):
     description = Column(Text, nullable=True, default="")
     due_date = Column(String, nullable=True, default="")
     user_id = Column(Integer, ForeignKey("users.id"))
-    board_id = Column(Integer, ForeignKey("boards.id"), default=1)
+    board_id = Column(Integer, nullable=True)
 
 class Comment(Base):
     __tablename__ = "comments"
