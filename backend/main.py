@@ -68,6 +68,7 @@ class RegisterRequest(BaseModel): email:str; password:str; name:str
 class BoardCreate(BaseModel): name:str
 class InviteRequest(BaseModel): email:str
 class TaskCreate(BaseModel): title:str; status:str="todo"; priority:str="medium"; description:str=""; due_date:str=""; board_id:Optional[int]=None
+class CommentCreate(BaseModel): text:str
 
 def get_db():
     db=SessionLocal()
@@ -172,3 +173,16 @@ def update_task(task_id:int, payload:dict, db:Session=Depends(get_db)):
 @app.delete("/api/tasks/{task_id}")
 def delete_task(task_id:int, db:Session=Depends(get_db)):
     db.query(models.Task).filter(models.Task.id==task_id).delete(); db.commit(); return {"ok":True}
+
+@app.get("/api/tasks/{task_id}/comments")
+def get_comments(task_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
+    try:
+        return db.query(models.Comment).filter(models.Comment.task_id==task_id).all()
+    except: return []
+
+@app.post("/api/tasks/{task_id}/comments")
+def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
+    time_now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    c = models.Comment(text=payload.text, task_id=task_id, user_id=current_user.id, user_name=current_user.name, created_at=time_now)
+    db.add(c); db.commit(); db.refresh(c)
+    return c

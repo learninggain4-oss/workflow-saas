@@ -12,6 +12,10 @@ function App(){
   const [editing,setEditing]=useState(null)
   const [boards,setBoards]=useState([]); const [selectedBoard,setSelectedBoard]=useState(null)
   const [newBoardName,setNewBoardName]=useState(""); const [inviteEmail,setInviteEmail]=useState("")
+  
+  // New States for Comments
+  const [taskComments, setTaskComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
 
   const authHeader={headers:{Authorization:`Bearer ${token}`}}
 
@@ -32,8 +36,27 @@ function App(){
     }catch(e){console.log(e)}
   }
 
+  const fetchComments = async (taskId) => {
+    try {
+      const r = await axios.get(`${API_URL}/api/tasks/${taskId}/comments`, authHeader);
+      setTaskComments(r.data);
+    } catch(e) {console.log(e)}
+  }
+
   useEffect(()=>{fetchBoards()},[token])
   useEffect(()=>{fetchTasks()},[selectedBoard])
+
+  // Live Sync Effect (Runs every 5 seconds)
+  useEffect(() => {
+    if (!token || !selectedBoard) return;
+    const interval = setInterval(() => {
+      fetchTasks();
+      if (editing) {
+        fetchComments(editing.id);
+      }
+    }, 5000); // 5 seconds polling
+    return () => clearInterval(interval);
+  }, [token, selectedBoard, editing]);
 
   const handleLogin=async()=>{
     const f=new URLSearchParams(); f.append("username",email); f.append("password",password)
@@ -55,6 +78,11 @@ function App(){
     await axios.put(`${API_URL}/api/tasks/${id}`,{status:ns},authHeader)
   }
 
+  const openEditModal = (t) => {
+    setEditing(t);
+    fetchComments(t.id);
+  }
+
   const saveEdit=async()=>{ await axios.put(`${API_URL}/api/tasks/${editing.id}`,editing,authHeader); setEditing(null); fetchTasks() }
   const delTask=async(id)=>{ await axios.delete(`${API_URL}/api/tasks/${id}`,authHeader); setEditing(null); fetchTasks() }
 
@@ -70,6 +98,15 @@ function App(){
       await axios.post(`${API_URL}/api/boards/${selectedBoard}/invite`,{email:inviteEmail},authHeader)
       alert(`Invited ${inviteEmail} successfully!`); setInviteEmail("")
     }catch(e){ alert(e.response?.data?.detail || "User must register first!") }
+  }
+
+  const addComment = async () => {
+    if(!newComment.trim()) return;
+    try {
+      await axios.post(`${API_URL}/api/tasks/${editing.id}/comments`, {text: newComment}, authHeader);
+      setNewComment("");
+      fetchComments(editing.id);
+    } catch(e) {console.log(e)}
   }
 
   const filtered=tasks.filter(t=>{
@@ -142,7 +179,7 @@ function App(){
                   <h3 className="font-bold uppercase text-xs tracking-wider border-b pb-3 mb-3">{s} ({filtered.filter(t=>t.status===s).length})</h3>
                   {filtered.filter(t=>t.status===s).map((t,i)=>(
                     <Draggable key={t.id} draggableId={String(t.id)} index={i}>{(pr)=>(
-                      <div ref={pr.innerRef} {...pr.draggableProps} {...pr.dragHandleProps} onClick={()=>setEditing(t)} className="bg-[#f1f5f9] p-3 rounded-lg mb-3 border hover:shadow-sm cursor-pointer">
+                      <div ref={pr.innerRef} {...pr.draggableProps} {...pr.dragHandleProps} onClick={()=>openEditModal(t)} className="bg-[#f1f5f9] p-3 rounded-lg mb-3 border hover:shadow-sm cursor-pointer">
                         <div className="font-medium text-">{t.title}</div>
                         {t.description && <div className="text- text-gray-500 mt-1 line-clamp-2">{t.description}</div>}
                         <div className="flex justify-between items-center mt-2">
@@ -161,7 +198,7 @@ function App(){
 
       {editing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-">
+          <div className="bg-white rounded-xl p-6 w-[500px] max-w-full max-h-[90vh] overflow-y-auto">
             <h2 className="font-bold text-lg mb-4">Edit Task</h2>
             <input value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})} className="border w-full p-2.5 mb-3 rounded-lg"/>
             <textarea value={editing.description||""} onChange={e=>setEditing({...editing,description:e.target.value})} className="border w-full p-2.5 mb-3 rounded-lg h-20" placeholder="Description..."/>
@@ -174,6 +211,30 @@ function App(){
               <button onClick={saveEdit} className="bg-black text-white flex-1 p-2.5 rounded-lg">Save</button>
               <button onClick={()=>delTask(editing.id)} className="bg-red-50 text-red-600 flex-1 p-2.5 rounded-lg border">Delete</button>
               <button onClick={()=>setEditing(null)} className="bg-gray-100 flex-1 p-2.5 rounded-lg">Cancel</button>
+            </div>
+
+            {/* Live Comments Section */}
+            <div className="mt-6 border-t pt-4">
+              <h3 className="font-bold text-sm mb-3">Comments (Live Sync)</h3>
+              <div className="max-h-40 overflow-y-auto mb-3 space-y-2">
+                {taskComments.length === 0 ? (
+                  <p className="text-xs text-gray-400">No comments yet. Start a discussion!</p>
+                ) : (
+                  taskComments.map(c => (
+                    <div key={c.id} className="bg-gray-50 p-3 rounded-lg border">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold text-xs text-blue-600">{c.user_name}</span>
+                        <span className="text-[10px] text-gray-400">{c.created_at}</span>
+                      </div>
+                      <p className="text-sm">{c.text}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input value={newComment} onChange={e=>setNewComment(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addComment()} placeholder="Type a comment..." className="border flex-1 p-2.5 rounded-lg text-sm bg-gray-50 focus:bg-white" />
+                <button onClick={addComment} className="bg-blue-600 text-white px-4 rounded-lg text-sm font-medium">Post</button>
+              </div>
             </div>
           </div>
         </div>

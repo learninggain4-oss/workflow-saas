@@ -31,3 +31,12 @@ class Task(Base):
     due_date = Column(String, nullable=True, default="")
     user_id = Column(Integer, ForeignKey("users.id"))
     board_id = Column(Integer, nullable=True)
+
+class Comment(Base):
+    __tablename__ = "comments"
+    id = Column(Integer, primary_key=True, index=True)
+    text = Column(Text)
+    task_id = Column(Integer, ForeignKey("tasks.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    user_name = Column(String) 
+    created_at = Column(String)
