@@ -30,6 +30,9 @@ class Task(Base):
     due_date = Column(String, nullable=True, default="")
     user_id = Column(Integer, ForeignKey("users.id"))
     board_id = Column(Integer, nullable=True)
+    assigned_to = Column(String, nullable=True, default="")
+    assigned_to_name = Column(String, nullable=True, default="")
+    attachment_url = Column(Text, nullable=True, default="")
 
 class Comment(Base):
     __tablename__ = "comments"

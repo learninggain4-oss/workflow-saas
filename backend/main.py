@@ -16,23 +16,12 @@ import traceback
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
 @app.exception_handler(Exception)
 async def global_handler(request, exc):
-    print("GLOBAL ERROR:", exc)
-    traceback.print_exc()
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-        headers={"Access-Control-Allow-Origin": "*"}
-    )
+    print("GLOBAL ERROR:", exc); traceback.print_exc()
+    return JSONResponse(status_code=500, content={"detail": str(exc)}, headers={"Access-Control-Allow-Origin": "*"})
 
 @app.on_event("startup")
 def fix_db():
@@ -41,6 +30,9 @@ def fix_db():
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to VARCHAR DEFAULT ''"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_name VARCHAR DEFAULT ''"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_name VARCHAR"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS created_at VARCHAR"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS text TEXT"))
@@ -53,16 +45,14 @@ def fix_db():
             conn.commit()
             print("fix ok")
     except Exception as e:
-        print("fix err", e)
-        traceback.print_exc()
+        print("fix err", e); traceback.print_exc()
 
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[int, List[WebSocket]] = {}
     async def connect(self, websocket: WebSocket, board_id: int):
         await websocket.accept()
-        if board_id not in self.active_connections:
-            self.active_connections[board_id] = []
+        if board_id not in self.active_connections: self.active_connections[board_id] = []
         self.active_connections[board_id].append(websocket)
     def disconnect(self, websocket: WebSocket, board_id: int):
         if board_id in self.active_connections and websocket in self.active_connections[board_id]:
@@ -70,22 +60,19 @@ class ConnectionManager:
     async def broadcast(self, board_id: int, message: dict):
         if board_id in self.active_connections:
             for conn in list(self.active_connections[board_id]):
-                try:
-                    await conn.send_json(message)
-                except:
-                    pass
+                try: await conn.send_json(message)
+                except: pass
 
 manager = ConnectionManager()
 
-SECRET_KEY="workflow-saas-secret-2024"
-ALGORITHM="HS256"
+SECRET_KEY="workflow-saas-secret-2024"; ALGORITHM="HS256"
 pwd_context=CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme=OAuth2PasswordBearer(tokenUrl="/api/login")
 
 class RegisterRequest(BaseModel): email:str; password:str; name:str
 class BoardCreate(BaseModel): name:str
 class InviteRequest(BaseModel): email:str
-class TaskCreate(BaseModel): title:str; status:str="todo"; priority:str="medium"; description:str=""; due_date:str=""; board_id:Optional[int]=None
+class TaskCreate(BaseModel): title:str; status:str="todo"; priority:str="medium"; description:str=""; due_date:str=""; board_id:Optional[int]=None; assigned_to:Optional[str]=""; assigned_to_name:Optional[str]=""; attachment_url:Optional[str]=""
 class CommentCreate(BaseModel): text:str
 
 def get_db():
@@ -94,8 +81,7 @@ def get_db():
     finally: db.close()
 
 def create_token(data:dict):
-    to_encode=data.copy()
-    to_encode.update({"exp": datetime.utcnow()+timedelta(days=1)})
+    to_encode=data.copy(); to_encode.update({"exp": datetime.utcnow()+timedelta(days=1)})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def get_current_user(token:str=Depends(oauth2_scheme), db:Session=Depends(get_db)):
@@ -123,7 +109,7 @@ def log_activity(board_id, user_name, action, db):
     except Exception as e: print("act err", e)
 
 @app.get("/")
-def root(): return {"ok":True, "message":"Workflow SaaS API running"}
+def root(): return {"ok":True}
 
 @app.post("/api/register")
 def register(req:RegisterRequest, db:Session=Depends(get_db)):
@@ -139,12 +125,10 @@ def login(form_data:OAuth2PasswordRequestForm=Depends(), db:Session=Depends(get_
 
 @app.get("/api/boards")
 def list_boards(current_user=Depends(get_current_user), db:Session=Depends(get_db)):
-    try:
-        boards=get_user_boards(current_user, db)
-        if not boards:
-            b=models.Board(name="My Workspace", owner_id=current_user.id); db.add(b); db.commit(); db.refresh(b); boards=[b]
-        return boards
-    except Exception as e: print(e); traceback.print_exc(); return []
+    boards=get_user_boards(current_user, db)
+    if not boards:
+        b=models.Board(name="My Workspace", owner_id=current_user.id); db.add(b); db.commit(); db.refresh(b); boards=[b]
+    return boards
 
 @app.post("/api/boards")
 def create_board(payload:BoardCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -187,6 +171,21 @@ def invite(board_id:int, payload:InviteRequest, current_user=Depends(get_current
         log_activity(board_id, current_user.name, f"invited {payload.email}", db)
     return {"ok":True}
 
+@app.get("/api/boards/{board_id}/members")
+def get_board_members(board_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
+    boards=get_user_boards(current_user, db)
+    if board_id not in [b.id for b in boards]: raise HTTPException(403)
+    board=db.query(models.Board).filter(models.Board.id==board_id).first()
+    members=[]
+    if board:
+        owner=db.query(models.User).filter(models.User.id==board.owner_id).first()
+        if owner: members.append({"email":owner.email, "name":owner.name})
+        m_ids=[m.user_id for m in db.query(models.BoardMember).filter(models.BoardMember.board_id==board_id).all()]
+        for uid in m_ids:
+            u=db.query(models.User).filter(models.User.id==uid).first()
+            if u: members.append({"email":u.email, "name":u.name})
+    return members
+
 @app.get("/api/boards/{board_id}/activities")
 def get_activities(board_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     return db.query(models.Activity).filter(models.Activity.board_id==board_id).order_by(models.Activity.id.desc()).limit(20).all()
@@ -202,7 +201,7 @@ def list_tasks(board_id:Optional[int]=None, current_user=Depends(get_current_use
 @app.post("/api/tasks")
 async def create_task(payload:TaskCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     boards=get_user_boards(current_user, db); bid=payload.board_id or (boards[0].id if boards else None)
-    t=models.Task(title=payload.title, status=payload.status, priority=payload.priority, description=payload.description, due_date=payload.due_date, user_id=current_user.id, board_id=bid)
+    t=models.Task(title=payload.title, status=payload.status, priority=payload.priority, description=payload.description, due_date=payload.due_date, user_id=current_user.id, board_id=bid, assigned_to=payload.assigned_to or "", assigned_to_name=payload.assigned_to_name or "", attachment_url=payload.attachment_url or "")
     db.add(t); db.commit(); db.refresh(t)
     if bid:
         log_activity(bid, current_user.name, f"created task '{payload.title}'", db)
@@ -214,12 +213,16 @@ async def update_task(task_id:int, payload:dict, db:Session=Depends(get_db)):
     t=db.query(models.Task).filter(models.Task.id==task_id).first()
     if not t: raise HTTPException(404)
     old=t.status
+    old_assign=t.assigned_to
     for k,v in payload.items():
         if hasattr(t,k): setattr(t,k,v)
     db.commit(); db.refresh(t)
     if t.board_id:
         if old!=t.status:
             try: log_activity(t.board_id, "Someone", f"moved '{t.title}' {old}->{t.status}", db)
+            except: pass
+        if old_assign!=t.assigned_to and t.assigned_to:
+            try: log_activity(t.board_id, "Someone", f"assigned '{t.title}' to {t.assigned_to}", db)
             except: pass
         await manager.broadcast(t.board_id, {"type":"update"})
     return t
@@ -232,11 +235,7 @@ async def delete_task(task_id:int, db:Session=Depends(get_db)):
         bid=t.board_id; title=t.title
         db.query(models.Comment).filter(models.Comment.task_id==task_id).delete(synchronize_session=False)
         db.delete(t); db.commit()
-        if bid:
-            try:
-                db2=SessionLocal(); log_activity(bid, "Someone", f"deleted task '{title}'", db2); db2.close()
-            except: pass
-            await manager.broadcast(bid, {"type":"update"})
+        if bid: await manager.broadcast(bid, {"type":"update"})
         return {"ok":True}
     except HTTPException: raise
     except Exception as e:
@@ -248,17 +247,14 @@ def get_comments(task_id:int, current_user=Depends(get_current_user), db:Session
 
 @app.post("/api/tasks/{task_id}/comments")
 async def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
-    try:
-        time_now=datetime.now().strftime("%Y-%m-%d %H:%M")
-        c=models.Comment(text=payload.text, task_id=task_id, user_id=current_user.id, user_name=current_user.name, created_at=time_now)
-        db.add(c); db.commit(); db.refresh(c)
-        task=db.query(models.Task).filter(models.Task.id==task_id).first()
-        if task and task.board_id:
-            log_activity(task.board_id, current_user.name, f"commented on '{task.title}'", db)
-            await manager.broadcast(task.board_id, {"type":"update"})
-        return c
-    except Exception as e:
-        print("add comment err", e); traceback.print_exc(); raise HTTPException(500, detail=str(e))
+    time_now=datetime.now().strftime("%Y-%m-%d %H:%M")
+    c=models.Comment(text=payload.text, task_id=task_id, user_id=current_user.id, user_name=current_user.name, created_at=time_now)
+    db.add(c); db.commit(); db.refresh(c)
+    task=db.query(models.Task).filter(models.Task.id==task_id).first()
+    if task and task.board_id:
+        log_activity(task.board_id, current_user.name, f"commented on '{task.title}'", db)
+        await manager.broadcast(task.board_id, {"type":"update"})
+    return c
 
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: int):
