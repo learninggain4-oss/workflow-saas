@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import axios from 'axios'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 
@@ -211,7 +211,21 @@ export default function App() {
     }
   }, [selectedBoard])
 
+  // ================= POLLING FALLBACK - REALTIME BACKUP =================
+  useEffect(() => {
+    if (!token) return
+    const intervalId = setInterval(() => {
+      if (selectedBoard) {
+        fetchTasks()
+        fetchNotifications()
+        if (editing) fetchComments(editing.id)
+      }
+    }, 8000)
+    return () => clearInterval(intervalId)
+  }, [selectedBoard, token, editing])
+
   // ================= AUTH HANDLERS =================
+
   const handleLogin = async () => {
     const formData = new URLSearchParams()
     formData.append("username", email)
