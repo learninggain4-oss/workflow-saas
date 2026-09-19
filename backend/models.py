@@ -41,7 +41,7 @@ class Comment(Base):
     task_id = Column(Integer, ForeignKey("tasks.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     user_name = Column(String)
-    created_at = Column(String)
+    created_at = Column(String) # String aayi fix cheythu
 
 class Activity(Base):
     __tablename__ = "activities"

@@ -34,10 +34,15 @@ async def global_handler(request, exc):
     print("GLOBAL ERROR:", exc); traceback.print_exc()
     return JSONResponse(status_code=500, content={"detail": str(exc)}, headers={"Access-Control-Allow-Origin": "*"})
 
+def now_str():
+    # Postgres TIMESTAMP-nu valid aaya format
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 @app.on_event("startup")
 def fix_db():
     try:
         with engine.connect() as conn:
+            # basic columns
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER"))
@@ -49,7 +54,7 @@ def fix_db():
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS text TEXT"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS task_id INTEGER"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INTEGER"))
-            # notifications table - create if not exists
+
             conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR, notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR)"))
             conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS user_id INTEGER"))
             conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS board_id INTEGER"))
@@ -59,13 +64,21 @@ def fix_db():
             conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR DEFAULT 'info'"))
             conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS created_at VARCHAR"))
-            # fix old NOT NULL issue that was causing comment 500
+
+            # CRITICAL FIX: old tables created_at TIMESTAMP aayirunnu, athine VARCHAR aakki maattam
+            for tbl in ["comments", "activities", "notifications"]:
+                try:
+                    conn.execute(text(f"ALTER TABLE {tbl} ALTER COLUMN created_at TYPE VARCHAR(100) USING created_at::text"))
+                    print(f"fixed {tbl}.created_at type to VARCHAR")
+                except Exception as e:
+                    print(f"skip fix {tbl}: {e}")
+                    try: conn.execute(text("ROLLBACK")); conn.commit()
+                    except: pass
+
             conn.execute(text("ALTER TABLE notifications ALTER COLUMN type DROP NOT NULL"))
             conn.execute(text("ALTER TABLE notifications ALTER COLUMN notif_type DROP NOT NULL"))
-            conn.execute(text("ALTER TABLE notifications ALTER COLUMN type SET DEFAULT 'info'"))
-            conn.execute(text("ALTER TABLE notifications ALTER COLUMN notif_type SET DEFAULT 'info'"))
             conn.commit()
-            print("fix ok - comment 500 fixed")
+            print("fix ok - comment timestamp fixed")
     except Exception as e:
         print("fix err", e); traceback.print_exc()
 
@@ -127,7 +140,7 @@ def get_user_boards(user, db):
 def log_activity_safe(board_id, user_name, action):
     try:
         db2=SessionLocal()
-        a=models.Activity(board_id=board_id, user_name=user_name, action=action, created_at=datetime.now().strftime("%m/%d %H:%M"))
+        a=models.Activity(board_id=board_id, user_name=user_name, action=action, created_at=now_str())
         db2.add(a); db2.commit(); db2.close()
     except Exception as e:
         print("activity safe err", e)
@@ -137,9 +150,8 @@ def log_activity_safe(board_id, user_name, action):
 def create_notification_safe(user_id, board_id, task_id, message, n_type="info"):
     try:
         db2=SessionLocal()
-        # insert both type and notif_type for old schema compatibility
         db2.execute(text("INSERT INTO notifications (user_id, board_id, task_id, message, notif_type, type, is_read, created_at) VALUES (:uid, :bid, :tid, :msg, :ntype, :ntype, :is_read, :created)"),
-                   {"uid": user_id, "bid": board_id, "tid": task_id, "msg": message, "ntype": n_type, "is_read": False, "created": datetime.now().strftime("%m/%d %H:%M")})
+                   {"uid": user_id, "bid": board_id, "tid": task_id, "msg": message, "ntype": n_type, "is_read": False, "created": now_str()})
         db2.commit(); db2.close()
     except Exception as e:
         print("notif safe err", e)
@@ -163,20 +175,16 @@ def login(form_data:OAuth2PasswordRequestForm=Depends(), db:Session=Depends(get_
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), current_user=Depends(get_current_user)):
-    try:
-        contents = await file.read()
-        if CLOUDINARY_ENABLED:
-            try:
-                result = cloudinary.uploader.upload(contents, folder="workflow-saas", resource_type="auto")
-                return {"url": result.get("secure_url")}
-            except Exception as e: print("cloudinary err", e)
-        b64 = base64.b64encode(contents).decode("utf-8")
-        data_url = f"data:{file.content_type};base64,{b64}"
-        if len(data_url) > 1500000: raise HTTPException(400, detail="File too big, add Cloudinary keys")
-        return {"url": data_url}
-    except HTTPException: raise
-    except Exception as e:
-        print("upload err", e); traceback.print_exc(); raise HTTPException(500, detail=str(e))
+    contents = await file.read()
+    if CLOUDINARY_ENABLED:
+        try:
+            result = cloudinary.uploader.upload(contents, folder="workflow-saas", resource_type="auto")
+            return {"url": result.get("secure_url")}
+        except Exception as e: print("cloudinary err", e)
+    b64 = base64.b64encode(contents).decode("utf-8")
+    data_url = f"data:{file.content_type};base64,{b64}"
+    if len(data_url) > 1500000: raise HTTPException(400, detail="File too big, add Cloudinary keys")
+    return {"url": data_url}
 
 @app.get("/api/boards")
 def list_boards(current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -300,7 +308,9 @@ async def update_task(task_id:int, payload:dict, db:Session=Depends(get_db)):
         if old_assign!=t.assigned_to and t.assigned_to:
             log_activity_safe(t.board_id, "Someone", f"assigned '{t.title}' to {t.assigned_to}")
             try:
-                assigned_user = db.query(models.User).filter(models.User.email==t.assigned_to).first()
+                db2=SessionLocal()
+                assigned_user = db2.query(models.User).filter(models.User.email==t.assigned_to).first()
+                db2.close()
                 if assigned_user:
                     create_notification_safe(assigned_user.id, t.board_id, t.id, f"👤 You were assigned to '{t.title}'", "assign")
             except: pass
@@ -324,13 +334,11 @@ def get_comments(task_id:int, current_user=Depends(get_current_user), db:Session
 @app.post("/api/tasks/{task_id}/comments")
 async def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     try:
-        time_now=datetime.now().strftime("%m/%d %H:%M")
-        c=models.Comment(text=payload.text, task_id=task_id, user_id=current_user.id, user_name=current_user.name, created_at=time_now)
+        c=models.Comment(text=payload.text, task_id=task_id, user_id=current_user.id, user_name=current_user.name, created_at=now_str())
         db.add(c); db.commit(); db.refresh(c)
-        comment_id=c.id
-        task_board_id=None
-        task_title=""
-        task_assigned=""
+
+        # side effects - isolated sessions, never fail main comment
+        task_board_id=None; task_title=""; task_assigned=""
         try:
             task=db.query(models.Task).filter(models.Task.id==task_id).first()
             if task:
@@ -348,9 +356,8 @@ async def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(g
                     db2.close()
                     if assigned_user:
                         create_notification_safe(assigned_user.id, task_board_id, task_id, f"💬 {current_user.name} commented on '{task_title}'", "comment")
-                except: pass
-            try:
-                await manager.broadcast(task_board_id, {"type":"update"})
+                except Exception as e: print("notif side err", e)
+            try: await manager.broadcast(task_board_id, {"type":"update"})
             except: pass
 
         return c
