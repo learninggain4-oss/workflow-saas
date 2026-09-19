@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean
 from database import Base
 
 class User(Base):
@@ -49,4 +49,15 @@ class Activity(Base):
     board_id = Column(Integer, ForeignKey("boards.id"))
     user_name = Column(String)
     action = Column(String)
+    created_at = Column(String)
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    board_id = Column(Integer, nullable=True)
+    task_id = Column(Integer, nullable=True)
+    message = Column(String)
+    type = Column(String, default="info") # assign, comment, invite, due
+    is_read = Column(Boolean, default=False)
     created_at = Column(String)
