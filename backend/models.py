@@ -33,6 +33,7 @@ class Task(Base):
     assigned_to = Column(String, nullable=True, default="")
     assigned_to_name = Column(String, nullable=True, default="")
     attachment_url = Column(Text, nullable=True, default="")
+    labels = Column(String, nullable=True, default="") # NEW TAGS
 
 class Comment(Base):
     __tablename__ = "comments"
@@ -41,7 +42,7 @@ class Comment(Base):
     task_id = Column(Integer, ForeignKey("tasks.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     user_name = Column(String)
-    created_at = Column(String) # String aayi fix cheythu
+    created_at = Column(String)
 
 class Activity(Base):
     __tablename__ = "activities"

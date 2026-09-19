@@ -15,17 +15,11 @@ import traceback, os, base64
 
 try:
     import cloudinary, cloudinary.uploader
-    cloudinary.config(
-        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-        api_key=os.getenv("CLOUDINARY_API_KEY"),
-        api_secret=os.getenv("CLOUDINARY_API_SECRET")
-    )
+    cloudinary.config(cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"), api_key=os.getenv("CLOUDINARY_API_KEY"), api_secret=os.getenv("CLOUDINARY_API_SECRET"))
     CLOUDINARY_ENABLED = bool(os.getenv("CLOUDINARY_CLOUD_NAME"))
-except:
-    CLOUDINARY_ENABLED = False
+except: CLOUDINARY_ENABLED=False
 
 models.Base.metadata.create_all(bind=engine)
-
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 
@@ -34,72 +28,48 @@ async def global_handler(request, exc):
     print("GLOBAL ERROR:", exc); traceback.print_exc()
     return JSONResponse(status_code=500, content={"detail": str(exc)}, headers={"Access-Control-Allow-Origin": "*"})
 
-def now_str():
-    # Postgres TIMESTAMP-nu valid aaya format
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def now_str(): return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 @app.on_event("startup")
 def fix_db():
     try:
         with engine.connect() as conn:
-            # basic columns
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_name VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT ''"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS labels VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_name VARCHAR"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS created_at VARCHAR"))
-            conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS text TEXT"))
-            conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS task_id INTEGER"))
-            conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INTEGER"))
-
             conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR, notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR)"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS user_id INTEGER"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS board_id INTEGER"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS task_id INTEGER"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS message VARCHAR"))
             conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notif_type VARCHAR DEFAULT 'info'"))
             conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR DEFAULT 'info'"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS created_at VARCHAR"))
-
-            # CRITICAL FIX: old tables created_at TIMESTAMP aayirunnu, athine VARCHAR aakki maattam
-            for tbl in ["comments", "activities", "notifications"]:
-                try:
-                    conn.execute(text(f"ALTER TABLE {tbl} ALTER COLUMN created_at TYPE VARCHAR(100) USING created_at::text"))
-                    print(f"fixed {tbl}.created_at type to VARCHAR")
-                except Exception as e:
-                    print(f"skip fix {tbl}: {e}")
+            for tbl in ["comments","activities","notifications"]:
+                try: conn.execute(text(f"ALTER TABLE {tbl} ALTER COLUMN created_at TYPE VARCHAR(100) USING created_at::text"))
+                except:
                     try: conn.execute(text("ROLLBACK")); conn.commit()
                     except: pass
-
-            conn.execute(text("ALTER TABLE notifications ALTER COLUMN type DROP NOT NULL"))
-            conn.execute(text("ALTER TABLE notifications ALTER COLUMN notif_type DROP NOT NULL"))
             conn.commit()
-            print("fix ok - comment timestamp fixed")
-    except Exception as e:
-        print("fix err", e); traceback.print_exc()
+            print("fix ok - labels + timestamp")
+    except Exception as e: print("fix err", e); traceback.print_exc()
 
 class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[int, List[WebSocket]] = {}
+    def __init__(self): self.active_connections: Dict[int, List[WebSocket]] = {}
     async def connect(self, websocket: WebSocket, board_id: int):
         await websocket.accept()
-        if board_id not in self.active_connections: self.active_connections[board_id] = []
+        if board_id not in self.active_connections: self.active_connections[board_id]=[]
         self.active_connections[board_id].append(websocket)
     def disconnect(self, websocket: WebSocket, board_id: int):
-        if board_id in self.active_connections and websocket in self.active_connections[board_id]:
-            self.active_connections[board_id].remove(websocket)
+        if board_id in self.active_connections and websocket in self.active_connections[board_id]: self.active_connections[board_id].remove(websocket)
     async def broadcast(self, board_id: int, message: dict):
         if board_id in self.active_connections:
             for conn in list(self.active_connections[board_id]):
                 try: await conn.send_json(message)
                 except: pass
 
-manager = ConnectionManager()
-
+manager=ConnectionManager()
 SECRET_KEY="workflow-saas-secret-2024"; ALGORITHM="HS256"
 pwd_context=CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme=OAuth2PasswordBearer(tokenUrl="/api/login")
@@ -107,7 +77,7 @@ oauth2_scheme=OAuth2PasswordBearer(tokenUrl="/api/login")
 class RegisterRequest(BaseModel): email:str; password:str; name:str
 class BoardCreate(BaseModel): name:str
 class InviteRequest(BaseModel): email:str
-class TaskCreate(BaseModel): title:str; status:str="todo"; priority:str="medium"; description:str=""; due_date:str=""; board_id:Optional[int]=None; assigned_to:Optional[str]=""; assigned_to_name:Optional[str]=""; attachment_url:Optional[str]=""
+class TaskCreate(BaseModel): title:str; status:str="todo"; priority:str="medium"; description:str=""; due_date:str=""; board_id:Optional[int]=None; assigned_to:Optional[str]=""; assigned_to_name:Optional[str]=""; attachment_url:Optional[str]=""; labels:Optional[str]=""
 class CommentCreate(BaseModel): text:str
 
 def get_db():
@@ -142,21 +112,15 @@ def log_activity_safe(board_id, user_name, action):
         db2=SessionLocal()
         a=models.Activity(board_id=board_id, user_name=user_name, action=action, created_at=now_str())
         db2.add(a); db2.commit(); db2.close()
-    except Exception as e:
-        print("activity safe err", e)
-        try: db2.rollback(); db2.close()
-        except: pass
+    except: pass
 
 def create_notification_safe(user_id, board_id, task_id, message, n_type="info"):
     try:
         db2=SessionLocal()
-        db2.execute(text("INSERT INTO notifications (user_id, board_id, task_id, message, notif_type, type, is_read, created_at) VALUES (:uid, :bid, :tid, :msg, :ntype, :ntype, :is_read, :created)"),
-                   {"uid": user_id, "bid": board_id, "tid": task_id, "msg": message, "ntype": n_type, "is_read": False, "created": now_str()})
+        db2.execute(text("INSERT INTO notifications (user_id, board_id, task_id, message, notif_type, type, is_read, created_at) VALUES (:uid,:bid,:tid,:msg,:ntype,:ntype,:is_read,:created)"),
+                   {"uid":user_id,"bid":board_id,"tid":task_id,"msg":message,"ntype":n_type,"is_read":False,"created":now_str()})
         db2.commit(); db2.close()
-    except Exception as e:
-        print("notif safe err", e)
-        try: db2.rollback(); db2.close()
-        except: pass
+    except: pass
 
 @app.get("/")
 def root(): return {"ok":True}
@@ -175,16 +139,14 @@ def login(form_data:OAuth2PasswordRequestForm=Depends(), db:Session=Depends(get_
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), current_user=Depends(get_current_user)):
-    contents = await file.read()
+    contents=await file.read()
     if CLOUDINARY_ENABLED:
         try:
-            result = cloudinary.uploader.upload(contents, folder="workflow-saas", resource_type="auto")
+            result=cloudinary.uploader.upload(contents, folder="workflow-saas", resource_type="auto")
             return {"url": result.get("secure_url")}
         except Exception as e: print("cloudinary err", e)
-    b64 = base64.b64encode(contents).decode("utf-8")
-    data_url = f"data:{file.content_type};base64,{b64}"
-    if len(data_url) > 1500000: raise HTTPException(400, detail="File too big, add Cloudinary keys")
-    return {"url": data_url}
+    b64=base64.b64encode(contents).decode("utf-8")
+    return {"url": f"data:{file.content_type};base64,{b64}"}
 
 @app.get("/api/boards")
 def list_boards(current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -202,8 +164,7 @@ def create_board(payload:BoardCreate, current_user=Depends(get_current_user), db
 def rename_board(board_id:int, payload:BoardCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     b=db.query(models.Board).filter(models.Board.id==board_id, models.Board.owner_id==current_user.id).first()
     if not b: raise HTTPException(403)
-    b.name=payload.name; db.commit(); db.refresh(b)
-    log_activity_safe(board_id, current_user.name, f"renamed board to {payload.name}"); return b
+    b.name=payload.name; db.commit(); db.refresh(b); log_activity_safe(board_id, current_user.name, f"renamed board to {payload.name}"); return b
 
 @app.delete("/api/boards/{board_id}")
 async def delete_board(board_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -218,7 +179,6 @@ async def delete_board(board_id:int, current_user=Depends(get_current_user), db:
 
 @app.post("/api/boards/{board_id}/invite")
 def invite(board_id:int, payload:InviteRequest, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
-    if not board_id or str(board_id)=="null": raise HTTPException(422, detail="Select board first")
     board=db.query(models.Board).filter(models.Board.id==board_id, models.Board.owner_id==current_user.id).first()
     if not board: raise HTTPException(403)
     target=db.query(models.User).filter(models.User.email==payload.email).first()
@@ -254,9 +214,8 @@ def get_notifications(current_user=Depends(get_current_user), db:Session=Depends
         due_tasks = db.query(models.Task).filter(models.Task.assigned_to==current_user.email, models.Task.due_date==tomorrow).all()
         for t in due_tasks:
             exists = db.query(models.Notification).filter(models.Notification.user_id==current_user.id, models.Notification.task_id==t.id, models.Notification.notif_type=="due").first()
-            if not exists:
-                create_notification_safe(current_user.id, t.board_id, t.id, f"⚠️ Due tomorrow: '{t.title}'", "due")
-    except Exception as e: print("due check err", e)
+            if not exists: create_notification_safe(current_user.id, t.board_id, t.id, f"⚠️ Due tomorrow: '{t.title}'", "due")
+    except: pass
     return db.query(models.Notification).filter(models.Notification.user_id==current_user.id).order_by(models.Notification.id.desc()).limit(50).all()
 
 @app.put("/api/notifications/{notif_id}/read")
@@ -267,8 +226,7 @@ def mark_read(notif_id:int, current_user=Depends(get_current_user), db:Session=D
 
 @app.put("/api/notifications/read-all")
 def mark_all_read(current_user=Depends(get_current_user), db:Session=Depends(get_db)):
-    db.query(models.Notification).filter(models.Notification.user_id==current_user.id).update({"is_read": True})
-    db.commit(); return {"ok":True}
+    db.query(models.Notification).filter(models.Notification.user_id==current_user.id).update({"is_read": True}); db.commit(); return {"ok":True}
 
 @app.delete("/api/notifications/{notif_id}")
 def delete_notif(notif_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -287,7 +245,7 @@ def list_tasks(board_id:Optional[int]=None, current_user=Depends(get_current_use
 @app.post("/api/tasks")
 async def create_task(payload:TaskCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     boards=get_user_boards(current_user, db); bid=payload.board_id or (boards[0].id if boards else None)
-    t=models.Task(title=payload.title, status=payload.status, priority=payload.priority, description=payload.description, due_date=payload.due_date, user_id=current_user.id, board_id=bid, assigned_to=payload.assigned_to or "", assigned_to_name=payload.assigned_to_name or "", attachment_url=payload.attachment_url or "")
+    t=models.Task(title=payload.title, status=payload.status, priority=payload.priority, description=payload.description, due_date=payload.due_date, user_id=current_user.id, board_id=bid, assigned_to=payload.assigned_to or "", assigned_to_name=payload.assigned_to_name or "", attachment_url=payload.attachment_url or "", labels=payload.labels or "")
     db.add(t); db.commit(); db.refresh(t)
     if bid:
         log_activity_safe(bid, current_user.name, f"created task '{payload.title}'")
@@ -303,16 +261,12 @@ async def update_task(task_id:int, payload:dict, db:Session=Depends(get_db)):
         if hasattr(t,k): setattr(t,k,v)
     db.commit(); db.refresh(t)
     if t.board_id:
-        if old!=t.status:
-            log_activity_safe(t.board_id, "Someone", f"moved '{t.title}' {old}->{t.status}")
+        if old!=t.status: log_activity_safe(t.board_id, "Someone", f"moved '{t.title}' {old}->{t.status}")
         if old_assign!=t.assigned_to and t.assigned_to:
-            log_activity_safe(t.board_id, "Someone", f"assigned '{t.title}' to {t.assigned_to}")
             try:
                 db2=SessionLocal()
-                assigned_user = db2.query(models.User).filter(models.User.email==t.assigned_to).first()
-                db2.close()
-                if assigned_user:
-                    create_notification_safe(assigned_user.id, t.board_id, t.id, f"👤 You were assigned to '{t.title}'", "assign")
+                assigned_user = db2.query(models.User).filter(models.User.email==t.assigned_to).first(); db2.close()
+                if assigned_user: create_notification_safe(assigned_user.id, t.board_id, t.id, f"👤 You were assigned to '{t.title}'", "assign")
             except: pass
         await manager.broadcast(t.board_id, {"type":"update"})
     return t
@@ -336,41 +290,22 @@ async def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(g
     try:
         c=models.Comment(text=payload.text, task_id=task_id, user_id=current_user.id, user_name=current_user.name, created_at=now_str())
         db.add(c); db.commit(); db.refresh(c)
-
-        # side effects - isolated sessions, never fail main comment
-        task_board_id=None; task_title=""; task_assigned=""
         try:
             task=db.query(models.Task).filter(models.Task.id==task_id).first()
-            if task:
-                task_board_id=task.board_id
-                task_title=task.title
-                task_assigned=task.assigned_to
+            if task and task.board_id:
+                log_activity_safe(task.board_id, current_user.name, f"commented on '{task.title}'")
+                if task.assigned_to and task.assigned_to!=current_user.email:
+                    db2=SessionLocal(); au=db2.query(models.User).filter(models.User.email==task.assigned_to).first(); db2.close()
+                    if au: create_notification_safe(au.id, task.board_id, task_id, f"💬 {current_user.name} commented on '{task.title}'", "comment")
+                await manager.broadcast(task.board_id, {"type":"update"})
         except: pass
-
-        if task_board_id:
-            log_activity_safe(task_board_id, current_user.name, f"commented on '{task_title}'")
-            if task_assigned and task_assigned!= current_user.email:
-                try:
-                    db2=SessionLocal()
-                    assigned_user = db2.query(models.User).filter(models.User.email==task_assigned).first()
-                    db2.close()
-                    if assigned_user:
-                        create_notification_safe(assigned_user.id, task_board_id, task_id, f"💬 {current_user.name} commented on '{task_title}'", "comment")
-                except Exception as e: print("notif side err", e)
-            try: await manager.broadcast(task_board_id, {"type":"update"})
-            except: pass
-
         return c
     except Exception as e:
-        print("comment save err", e); traceback.print_exc()
-        try: db.rollback()
-        except: pass
-        raise HTTPException(500, detail=f"Comment save failed: {str(e)}")
+        print("comment err", e); traceback.print_exc(); db.rollback(); raise HTTPException(500, detail=f"Comment save failed: {str(e)}")
 
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: int):
     await manager.connect(websocket, board_id)
     try:
         while True: await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, board_id)
+    except WebSocketDisconnect: manager.disconnect(websocket, board_id)
