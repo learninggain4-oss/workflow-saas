@@ -290,7 +290,6 @@ function App(){
             </div>
             <select value={editing.status} onChange={e=>setEditing({...editing,status:e.target.value})} className={`border w-full p-2.5 mb-3 rounded-lg text-sm ${inputCls}`}><option value="todo">Todo</option><option value="doing">Doing</option><option value="done">Done</option></select>
 
-            {/* LABELS */}
             <div className={`border rounded-lg p-3 mb-3 ${subCard}`}>
               <label className="text- font-bold uppercase">Labels 🏷️ - Click to toggle</label>
               <div className="flex flex-wrap gap-2 mt-2">
@@ -305,7 +304,7 @@ function App(){
             </div>
 
             <div className={`border rounded-lg p-3 mb-3 ${subCard}`}>
-              <label className="text- font-bold uppercase">Assign To 🔔</label>
+              <label className="text- font-bold uppercase">Assign To 🔔 + 📧 Email</label>
               <select value={editing.assigned_to||""} onChange={e=>{
                 const sel=boardMembers.find(m=>m.email===e.target.value)
                 setEditing({...editing, assigned_to:e.target.value, assigned_to_name:sel?.name||""})

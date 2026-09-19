@@ -33,7 +33,7 @@ class Task(Base):
     assigned_to = Column(String, nullable=True, default="")
     assigned_to_name = Column(String, nullable=True, default="")
     attachment_url = Column(Text, nullable=True, default="")
-    labels = Column(String, nullable=True, default="") # NEW TAGS
+    labels = Column(String, nullable=True, default="")
 
 class Comment(Base):
     __tablename__ = "comments"

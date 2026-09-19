@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 import models
 from database import SessionLocal, engine
-import traceback, os, base64
+import traceback, os, base64, smtplib, ssl
+from email.message import EmailMessage
 
 try:
     import cloudinary, cloudinary.uploader
@@ -30,6 +31,34 @@ async def global_handler(request, exc):
 
 def now_str(): return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+# EMAIL SENDER - BREVO / GMAIL APP PASSWORD SUPPORT
+def send_email_safe(to_email: str, subject: str, html_body: str):
+    try:
+        host = os.getenv("SMTP_HOST") # e.g., smtp-relay.brevo.com or smtp.gmail.com
+        port = int(os.getenv("SMTP_PORT","587"))
+        user = os.getenv("SMTP_USER")
+        pwd = os.getenv("SMTP_PASS")
+        from_email = os.getenv("FROM_EMAIL", user or "noreply@workflow-saas.com")
+        if not host or not user or not pwd:
+            print(f"SMTP not configured, skip email to {to_email}")
+            return False
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = from_email
+        msg["To"] = to_email
+        msg.set_content(html_body, subtype='html')
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP(host, port) as server:
+            server.starttls(context=ctx)
+            server.login(user, pwd)
+            server.send_message(msg)
+        print(f"✅ Email sent to {to_email} - {subject}")
+        return True
+    except Exception as e:
+        print(f"❌ Email failed to {to_email}: {e}")
+        traceback.print_exc()
+        return False
+
 @app.on_event("startup")
 def fix_db():
     try:
@@ -41,19 +70,15 @@ def fix_db():
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_name VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS labels VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_name VARCHAR"))
-            conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS created_at VARCHAR"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR, notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR)"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notif_type VARCHAR DEFAULT 'info'"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR DEFAULT 'info'"))
             for tbl in ["comments","activities","notifications"]:
                 try: conn.execute(text(f"ALTER TABLE {tbl} ALTER COLUMN created_at TYPE VARCHAR(100) USING created_at::text"))
                 except:
                     try: conn.execute(text("ROLLBACK")); conn.commit()
                     except: pass
             conn.commit()
-            print("fix ok - labels + timestamp")
-    except Exception as e: print("fix err", e); traceback.print_exc()
+            print("fix ok - email + labels")
+    except Exception as e: print("fix err", e)
 
 class ConnectionManager:
     def __init__(self): self.active_connections: Dict[int, List[WebSocket]] = {}
@@ -114,16 +139,23 @@ def log_activity_safe(board_id, user_name, action):
         db2.add(a); db2.commit(); db2.close()
     except: pass
 
-def create_notification_safe(user_id, board_id, task_id, message, n_type="info"):
+def create_notification_safe(user_id, board_id, task_id, message, n_type="info", email_subject: Optional[str]=None):
     try:
         db2=SessionLocal()
+        user_email=None
+        try:
+            u=db2.query(models.User).filter(models.User.id==user_id).first()
+            if u: user_email=u.email
+        except: pass
         db2.execute(text("INSERT INTO notifications (user_id, board_id, task_id, message, notif_type, type, is_read, created_at) VALUES (:uid,:bid,:tid,:msg,:ntype,:ntype,:is_read,:created)"),
                    {"uid":user_id,"bid":board_id,"tid":task_id,"msg":message,"ntype":n_type,"is_read":False,"created":now_str()})
         db2.commit(); db2.close()
-    except: pass
+        if user_email and email_subject:
+            send_email_safe(user_email, email_subject, f"<h3>{email_subject}</h3><p>{message}</p><p>Open WorkFlow SaaS to view.</p>")
+    except Exception as e: print("notif safe err", e)
 
 @app.get("/")
-def root(): return {"ok":True}
+def root(): return {"ok":True, "email_enabled": bool(os.getenv("SMTP_HOST"))}
 
 @app.post("/api/register")
 def register(req:RegisterRequest, db:Session=Depends(get_db)):
@@ -186,7 +218,8 @@ def invite(board_id:int, payload:InviteRequest, current_user=Depends(get_current
     if not db.query(models.BoardMember).filter(models.BoardMember.board_id==board_id, models.BoardMember.user_id==target.id).first():
         db.add(models.BoardMember(board_id=board_id, user_id=target.id)); db.commit()
         log_activity_safe(board_id, current_user.name, f"invited {payload.email}")
-        create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}' by {current_user.name}", "invite")
+        create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}' by {current_user.name}", "invite", email_subject=f"📋 Invited to board: {board.name}")
+        send_email_safe(payload.email, f"📋 You were invited to {board.name}", f"<h2>Hi {target.name}!</h2><p><b>{current_user.name}</b> invited you to board <b>{board.name}</b> on WorkFlow SaaS.</p><p>Login to accept.</p>")
     return {"ok":True}
 
 @app.get("/api/boards/{board_id}/members")
@@ -214,8 +247,9 @@ def get_notifications(current_user=Depends(get_current_user), db:Session=Depends
         due_tasks = db.query(models.Task).filter(models.Task.assigned_to==current_user.email, models.Task.due_date==tomorrow).all()
         for t in due_tasks:
             exists = db.query(models.Notification).filter(models.Notification.user_id==current_user.id, models.Notification.task_id==t.id, models.Notification.notif_type=="due").first()
-            if not exists: create_notification_safe(current_user.id, t.board_id, t.id, f"⚠️ Due tomorrow: '{t.title}'", "due")
-    except: pass
+            if not exists:
+                create_notification_safe(current_user.id, t.board_id, t.id, f"⚠️ Due tomorrow: '{t.title}'", "due", email_subject=f"⏰ Due tomorrow: {t.title}")
+    except Exception as e: print("due check err", e)
     return db.query(models.Notification).filter(models.Notification.user_id==current_user.id).order_by(models.Notification.id.desc()).limit(50).all()
 
 @app.put("/api/notifications/{notif_id}/read")
@@ -266,7 +300,8 @@ async def update_task(task_id:int, payload:dict, db:Session=Depends(get_db)):
             try:
                 db2=SessionLocal()
                 assigned_user = db2.query(models.User).filter(models.User.email==t.assigned_to).first(); db2.close()
-                if assigned_user: create_notification_safe(assigned_user.id, t.board_id, t.id, f"👤 You were assigned to '{t.title}'", "assign")
+                if assigned_user:
+                    create_notification_safe(assigned_user.id, t.board_id, t.id, f"👤 You were assigned to '{t.title}'", "assign", email_subject=f"👤 Assigned: {t.title}")
             except: pass
         await manager.broadcast(t.board_id, {"type":"update"})
     return t
@@ -296,7 +331,7 @@ async def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(g
                 log_activity_safe(task.board_id, current_user.name, f"commented on '{task.title}'")
                 if task.assigned_to and task.assigned_to!=current_user.email:
                     db2=SessionLocal(); au=db2.query(models.User).filter(models.User.email==task.assigned_to).first(); db2.close()
-                    if au: create_notification_safe(au.id, task.board_id, task_id, f"💬 {current_user.name} commented on '{task.title}'", "comment")
+                    if au: create_notification_safe(au.id, task.board_id, task_id, f"💬 {current_user.name} commented on '{task.title}': {payload.text[:50]}", "comment", email_subject=f"💬 New comment on {task.title}")
                 await manager.broadcast(task.board_id, {"type":"update"})
         except: pass
         return c
