@@ -12,69 +12,54 @@ function App(){
   const [editing,setEditing]=useState(null)
   const [boards,setBoards]=useState([]); const [selectedBoard,setSelectedBoard]=useState(null)
   const [newBoardName,setNewBoardName]=useState(""); const [inviteEmail,setInviteEmail]=useState("")
-  const [taskComments, setTaskComments] = useState([]); const [newComment, setNewComment] = useState("");
-  const [activities, setActivities] = useState([]); const [renameValue, setRenameValue] = useState("");
-  const [boardMembers, setBoardMembers] = useState([])
-  const wsRef = useRef(null)
+  const [taskComments,setTaskComments]=useState([]); const [newComment,setNewComment]=useState("");
+  const [activities,setActivities]=useState([]); const [renameValue,setRenameValue]=useState("");
+  const [boardMembers,setBoardMembers]=useState([]); const [uploading,setUploading]=useState(false)
+  const wsRef=useRef(null)
   const authHeader={headers:{Authorization:`Bearer ${token}`}}
 
   const fetchBoards=async()=>{
     if(!token) return
-    try{
-      const r=await axios.get(`${API_URL}/api/boards`, authHeader)
-      setBoards(r.data)
-      if(r.data.length>0 &&!selectedBoard) setSelectedBoard(r.data[0].id)
-    }catch(e){console.log(e)}
+    try{ const r=await axios.get(`${API_URL}/api/boards`, authHeader); setBoards(r.data); if(r.data.length>0 &&!selectedBoard) setSelectedBoard(r.data[0].id) }catch{}
   }
   const fetchTasks=async()=>{
-    if(!token ||!selectedBoard) return
-    try{ const r=await axios.get(`${API_URL}/api/tasks?board_id=${selectedBoard}`, authHeader); setTasks(r.data) }catch(e){console.log(e)}
+    if(!token||!selectedBoard) return
+    try{ const r=await axios.get(`${API_URL}/api/tasks?board_id=${selectedBoard}`, authHeader); setTasks(r.data) }catch{}
   }
   const fetchComments=async(taskId)=>{
     if(!taskId) return
-    try{ const r=await axios.get(`${API_URL}/api/tasks/${taskId}/comments`, authHeader); setTaskComments(r.data) }catch(e){console.log(e)}
+    try{ const r=await axios.get(`${API_URL}/api/tasks/${taskId}/comments`, authHeader); setTaskComments(r.data) }catch{}
   }
   const fetchActivities=async()=>{
     if(!selectedBoard) return
-    try{ const r=await axios.get(`${API_URL}/api/boards/${selectedBoard}/activities`, authHeader); setActivities(r.data) }catch(e){}
+    try{ const r=await axios.get(`${API_URL}/api/boards/${selectedBoard}/activities`, authHeader); setActivities(r.data) }catch{}
   }
   const fetchBoardMembers=async()=>{
     if(!selectedBoard) return
-    try{ const r=await axios.get(`${API_URL}/api/boards/${selectedBoard}/members`, authHeader); setBoardMembers(r.data) }catch(e){console.log(e)}
+    try{ const r=await axios.get(`${API_URL}/api/boards/${selectedBoard}/members`, authHeader); setBoardMembers(r.data) }catch{}
   }
 
   useEffect(()=>{fetchBoards()},[token])
-  useEffect(()=>{
-    fetchTasks(); fetchActivities(); fetchBoardMembers();
-    if(selectedBoard) setRenameValue(boards.find(b=>b.id===selectedBoard)?.name||"")
-  },[selectedBoard])
+  useEffect(()=>{fetchTasks(); fetchActivities(); fetchBoardMembers(); if(selectedBoard) setRenameValue(boards.find(b=>b.id===selectedBoard)?.name||"")},[selectedBoard])
   useEffect(()=>{ if(editing) fetchComments(editing.id) },[editing])
 
   useEffect(()=>{
-    if(!selectedBoard ||!token) return
-    const wsBase = API_URL.replace("https://","wss://").replace("http://","ws://")
-    const ws = new WebSocket(`${wsBase}/ws/${selectedBoard}`)
-    wsRef.current=ws
-    ws.onmessage=(e)=>{
-      try{ const data=JSON.parse(e.data); if(data.type==="update"){ fetchTasks(); fetchActivities(); if(editing) fetchComments(editing.id) } }catch{}
-    }
+    if(!selectedBoard||!token) return
+    const wsBase=API_URL.replace("https://","wss://").replace("http://","ws://")
+    const ws=new WebSocket(`${wsBase}/ws/${selectedBoard}`); wsRef.current=ws
+    ws.onmessage=(e)=>{ try{ const d=JSON.parse(e.data); if(d.type==="update"){ fetchTasks(); fetchActivities(); if(editing) fetchComments(editing.id) } }catch{} }
     return ()=>ws.close()
   },[selectedBoard])
 
-  useEffect(()=>{
-    if(!selectedBoard) return
-    const id=setInterval(()=>{ fetchTasks(); fetchActivities() },5000)
-    return ()=>clearInterval(id)
-  },[selectedBoard])
+  useEffect(()=>{ if(!selectedBoard) return; const id=setInterval(()=>{ fetchTasks(); fetchActivities() },5000); return ()=>clearInterval(id) },[selectedBoard])
 
   const handleLogin=async()=>{
     const f=new URLSearchParams(); f.append("username",email); f.append("password",password)
     try{ const r=await axios.post(`${API_URL}/api/login`,f); localStorage.setItem("token",r.data.access_token); setToken(r.data.access_token) }catch{alert("Login failed")}
   }
   const handleRegister=async()=>{ try{ await axios.post(`${API_URL}/api/register`,{email,password,name}); alert("Registered!"); setIsRegister(false)}catch(e){alert(e.response?.data?.detail||"Failed")} }
-
   const addTask=async()=>{
-    if(!title.trim() ||!selectedBoard) return alert("Select board")
+    if(!title.trim()||!selectedBoard) return alert("Select board")
     let prio=title.toLowerCase().includes("urgent")||title.toLowerCase().includes("bug")?"high":"medium"
     await axios.post(`${API_URL}/api/tasks`,{title,status:"todo",priority:prio,description:"",due_date:"",board_id:selectedBoard, assigned_to:"", assigned_to_name:"", attachment_url:""},authHeader)
     setTitle("")
@@ -93,6 +78,20 @@ function App(){
   const deleteBoard=async()=>{ if(!selectedBoard) return; if(!confirm("Delete board?")) return; await axios.delete(`${API_URL}/api/boards/${selectedBoard}`,authHeader); setSelectedBoard(null); await fetchBoards() }
   const inviteUser=async()=>{ if(!inviteEmail.trim()||!selectedBoard) return; try{ await axios.post(`${API_URL}/api/boards/${selectedBoard}/invite`,{email:inviteEmail},authHeader); alert("Invited!"); setInviteEmail(""); fetchBoardMembers() }catch(e){alert(e.response?.data?.detail||"Failed")} }
   const addComment=async()=>{ if(!newComment.trim()||!editing) return; await axios.post(`${API_URL}/api/tasks/${editing.id}/comments`,{text:newComment},authHeader); setNewComment(""); fetchComments(editing.id) }
+
+  const handleFileUpload=async(e)=>{
+    const file=e.target.files[0]
+    if(!file) return
+    if(file.size>5*1024*1024){ alert("File too big, max 5MB"); return }
+    setUploading(true)
+    try{
+      const fd=new FormData(); fd.append("file",file)
+      const r=await axios.post(`${API_URL}/api/upload`, fd, { headers:{ Authorization:`Bearer ${token}`, "Content-Type":"multipart/form-data" } })
+      setEditing({...editing, attachment_url:r.data.url})
+      alert("Uploaded!")
+    }catch(err){ alert(err.response?.data?.detail||"Upload failed - add Cloudinary keys in Render") }
+    setUploading(false)
+  }
 
   const filtered=tasks.filter(t=>{
     const ms=t.title.toLowerCase().includes(search.toLowerCase()) || (t.description||"").toLowerCase().includes(search.toLowerCase())
@@ -143,12 +142,11 @@ function App(){
           <p className="text- text-gray-500 mb-2 truncate">Board: <b className="text-black">{currentBoardName}</b></p>
           <input value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="friend@gmail.com" className="border w-full p-2.5 rounded-lg text-sm mb-2"/>
           <button disabled={!selectedBoard} onClick={inviteUser} className="bg-blue-600 disabled:bg-gray-300 text-white w-full p-2.5 rounded-lg text-sm">Invite</button>
-          <p className="text- text-gray-400 mt-2">Members: {boardMembers.map(m=>m.name).join(", ")}</p>
+          <p className="text- text-gray-400 mt-2 truncate">{boardMembers.map(m=>m.name).join(", ")}</p>
         </div>
         <div className="border-t pt-4">
           <h3 className="font-bold text- uppercase mb-2">Activity Feed 🔥</h3>
           <div className="max-h- overflow-auto space-y-1">
-            {activities.length===0 && <p className="text- text-gray-400">No activity</p>}
             {activities.map(a=>(
               <div key={a.id} className="text- bg-gray-50 p-2 rounded border"><b className="text-blue-600">{a.user_name}</b> {a.action}<div className="text- text-gray-400">{a.created_at}</div></div>
             ))}
@@ -166,7 +164,7 @@ function App(){
           </div>
         </div>
         <div className="flex gap-3 mb-8">
-          <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTask()} placeholder="New task... (urgent=high)" className="border px-4 py-2.5 w-full max-w- rounded-lg bg-white text-sm"/>
+          <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTask()} placeholder="New task..." className="border px-4 py-2.5 w-full max-w- rounded-lg bg-white text-sm"/>
           <button onClick={addTask} className="bg-black text-white px-6 rounded-lg text-sm">Add</button>
         </div>
         <DragDropContext onDragEnd={onDragEnd}>
@@ -180,8 +178,7 @@ function App(){
                       <div ref={pr.innerRef} {...pr.draggableProps} {...pr.dragHandleProps} onClick={()=>openEditModal(t)} className="bg-[#f1f5f9] p-3 rounded-lg mb-3 border hover:shadow-sm cursor-pointer">
                         <div className="font-medium text- line-clamp-2">{t.title}</div>
                         {t.assigned_to && <div className="mt-1 text- bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full inline-block">👤 {t.assigned_to_name||t.assigned_to}</div>}
-                        {t.description && <div className="text- text-gray-500 mt-1 line-clamp-2">{t.description}</div>}
-                        {t.attachment_url && <div className="text- text-blue-500 mt-1 truncate">📎 {t.attachment_url}</div>}
+                        {t.attachment_url && (t.attachment_url.startsWith("data:image")||t.attachment_url.includes("cloudinary")? <img src={t.attachment_url} className="mt-2 w-full h-20 object-cover rounded border"/> : <div className="text- text-blue-500 mt-1 truncate">📎 {t.attachment_url}</div>)}
                         <div className="flex justify-between items-center mt-2">
                           <span className={`text- px-2 py-1 rounded-full font-bold ${t.priority==='high'?'bg-red-100 text-red-600':'bg-green-100 text-green-700'}`}>{t.priority}</span>
                           {t.due_date && <span className="text- text-gray-500">📅 {t.due_date}</span>}
@@ -209,7 +206,7 @@ function App(){
             <select value={editing.status} onChange={e=>setEditing({...editing,status:e.target.value})} className="border w-full p-2.5 mb-3 rounded-lg text-sm"><option value="todo">Todo</option><option value="doing">Doing</option><option value="done">Done</option></select>
 
             <div className="border rounded-lg p-3 mb-3 bg-blue-50/50">
-              <label className="text- font-bold uppercase text-gray-600">Assign To</label>
+              <label className="text- font-bold uppercase">Assign To</label>
               <select value={editing.assigned_to||""} onChange={e=>{
                 const sel=boardMembers.find(m=>m.email===e.target.value)
                 setEditing({...editing, assigned_to:e.target.value, assigned_to_name:sel?.name||""})
@@ -221,9 +218,17 @@ function App(){
               </select>
             </div>
 
-            <div className="mb-4">
-              <label className="text- font-bold uppercase text-gray-600">Attachment URL</label>
-              <input value={editing.attachment_url||""} onChange={e=>setEditing({...editing,attachment_url:e.target.value})} placeholder="https://..." className="border w-full p-2.5 rounded-lg text-sm mt-1"/>
+            <div className="border rounded-lg p-3 mb-4 bg-gray-50">
+              <label className="text- font-bold uppercase">File Upload (Real) 📎</label>
+              <input type="file" onChange={handleFileUpload} className="w-full text-xs mt-2 mb-2"/>
+              {uploading && <p className="text-xs text-blue-600">Uploading...</p>}
+              {editing.attachment_url && (
+                <div className="mt-2">
+                  {editing.attachment_url.startsWith("data:image")||editing.attachment_url.includes("image")? <img src={editing.attachment_url} className="w-full h-32 object-cover rounded border"/> : <a href={editing.attachment_url} target="_blank" className="text-xs text-blue-600 break-all">{editing.attachment_url}</a>}
+                  <button onClick={()=>setEditing({...editing,attachment_url:""})} className="text- text-red-500 mt-1">Remove file</button>
+                </div>
+              )}
+              <p className="text- text-gray-400 mt-2">Cloudinary added aayaal 5MB vare, illa engil base64 1MB vare work aakum.</p>
             </div>
 
             <div className="flex gap-3">

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
@@ -11,7 +11,19 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 import models
 from database import SessionLocal, engine
-import traceback
+import traceback, os, base64
+
+try:
+    import cloudinary
+    import cloudinary.uploader
+    cloudinary.config(
+        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.getenv("CLOUDINARY_API_KEY"),
+        api_secret=os.getenv("CLOUDINARY_API_SECRET")
+    )
+    CLOUDINARY_ENABLED = bool(os.getenv("CLOUDINARY_CLOUD_NAME"))
+except:
+    CLOUDINARY_ENABLED = False
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -106,10 +118,10 @@ def log_activity(board_id, user_name, action, db):
     try:
         a=models.Activity(board_id=board_id, user_name=user_name, action=action, created_at=datetime.now().strftime("%m/%d %H:%M"))
         db.add(a); db.commit()
-    except Exception as e: print("act err", e)
+    except: pass
 
 @app.get("/")
-def root(): return {"ok":True}
+def root(): return {"ok":True, "cloudinary": CLOUDINARY_ENABLED}
 
 @app.post("/api/register")
 def register(req:RegisterRequest, db:Session=Depends(get_db)):
@@ -122,6 +134,27 @@ def login(form_data:OAuth2PasswordRequestForm=Depends(), db:Session=Depends(get_
     user=db.query(models.User).filter(models.User.email==form_data.username).first()
     if not user or not pwd_context.verify(form_data.password, user.password_hash): raise HTTPException(401, detail="Wrong password")
     return {"access_token": create_token({"sub":user.email}), "token_type":"bearer"}
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...), current_user=Depends(get_current_user)):
+    try:
+        contents = await file.read()
+        if CLOUDINARY_ENABLED:
+            try:
+                result = cloudinary.uploader.upload(contents, folder="workflow-saas", resource_type="auto")
+                return {"url": result.get("secure_url")}
+            except Exception as e:
+                print("cloudinary err", e)
+        # Fallback: base64 data URL (works without cloudinary)
+        b64 = base64.b64encode(contents).decode("utf-8")
+        data_url = f"data:{file.content_type};base64,{b64}"
+        # if too big (>1MB), return warning
+        if len(data_url) > 1500000:
+            raise HTTPException(400, detail="File too big for base64 fallback, add Cloudinary keys in Render")
+        return {"url": data_url}
+    except HTTPException: raise
+    except Exception as e:
+        print("upload err", e); traceback.print_exc(); raise HTTPException(500, detail=str(e))
 
 @app.get("/api/boards")
 def list_boards(current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -212,8 +245,7 @@ async def create_task(payload:TaskCreate, current_user=Depends(get_current_user)
 async def update_task(task_id:int, payload:dict, db:Session=Depends(get_db)):
     t=db.query(models.Task).filter(models.Task.id==task_id).first()
     if not t: raise HTTPException(404)
-    old=t.status
-    old_assign=t.assigned_to
+    old=t.status; old_assign=t.assigned_to
     for k,v in payload.items():
         if hasattr(t,k): setattr(t,k,v)
     db.commit(); db.refresh(t)
@@ -232,7 +264,7 @@ async def delete_task(task_id:int, db:Session=Depends(get_db)):
     try:
         t=db.query(models.Task).filter(models.Task.id==task_id).first()
         if not t: raise HTTPException(404)
-        bid=t.board_id; title=t.title
+        bid=t.board_id
         db.query(models.Comment).filter(models.Comment.task_id==task_id).delete(synchronize_session=False)
         db.delete(t); db.commit()
         if bid: await manager.broadcast(bid, {"type":"update"})
