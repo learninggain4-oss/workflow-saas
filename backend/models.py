@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from database import Base
 
 class User(Base):
