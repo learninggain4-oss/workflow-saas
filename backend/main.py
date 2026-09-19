@@ -46,8 +46,12 @@ def fix_db():
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS text TEXT"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS task_id INTEGER"))
             conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INTEGER"))
+            conn.execute(text("ALTER TABLE activities ADD COLUMN IF NOT EXISTS board_id INTEGER"))
+            conn.execute(text("ALTER TABLE activities ADD COLUMN IF NOT EXISTS user_name VARCHAR"))
+            conn.execute(text("ALTER TABLE activities ADD COLUMN IF NOT EXISTS action VARCHAR"))
+            conn.execute(text("ALTER TABLE activities ADD COLUMN IF NOT EXISTS created_at VARCHAR"))
             conn.commit()
-            print("fix columns ok + comments fix ok")
+            print("fix columns ok")
     except Exception as e:
         print("fix columns err", e)
         traceback.print_exc()
@@ -132,10 +136,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         email = payload.get("sub")
         user = db.query(models.User).filter(models.User.email == email).first()
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid")
+            raise HTTPException(status_code=401, detail="Invalid token")
         return user
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 def get_user_boards(user, db):
     try:
@@ -149,6 +153,19 @@ def get_user_boards(user, db):
         m_boards = []
     merged = {b.id: b for b in owned + m_boards}
     return list(merged.values())
+
+def log_activity(board_id, user_name, action, db):
+    try:
+        a = models.Activity(
+            board_id=board_id,
+            user_name=user_name,
+            action=action,
+            created_at=datetime.now().strftime("%m/%d %H:%M")
+        )
+        db.add(a)
+        db.commit()
+    except Exception as e:
+        print("activity log err", e)
 
 @app.get("/")
 def root():
@@ -190,10 +207,33 @@ def create_board(payload: BoardCreate, current_user=Depends(get_current_user), d
     try:
         b = models.Board(name=payload.name, owner_id=current_user.id)
         db.add(b); db.commit(); db.refresh(b)
+        log_activity(b.id, current_user.name, f"created board {b.name}", db)
         return b
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/boards/{board_id}")
+def rename_board(board_id: int, payload: BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    b = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
+    if not b:
+        raise HTTPException(status_code=403, detail="Only owner can rename")
+    b.name = payload.name
+    db.commit(); db.refresh(b)
+    log_activity(board_id, current_user.name, f"renamed board to {payload.name}", db)
+    return b
+
+@app.delete("/api/boards/{board_id}")
+def delete_board(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    b = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
+    if not b:
+        raise HTTPException(status_code=403, detail="Only owner can delete")
+    db.query(models.Task).filter(models.Task.board_id == board_id).delete()
+    db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id).delete()
+    db.query(models.Comment).filter(models.Comment.task_id.in_([t.id for t in db.query(models.Task).filter(models.Task.board_id==board_id).all()])).delete(synchronize_session=False)
+    db.query(models.Activity).filter(models.Activity.board_id == board_id).delete()
+    db.delete(b); db.commit()
+    return {"ok": True}
 
 @app.post("/api/boards/{board_id}/invite")
 def invite(board_id: int, payload: InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
@@ -209,7 +249,16 @@ def invite(board_id: int, payload: InviteRequest, current_user=Depends(get_curre
     if not exists:
         db.add(models.BoardMember(board_id=board_id, user_id=target.id))
         db.commit()
+        log_activity(board_id, current_user.name, f"invited {payload.email}", db)
     return {"ok": True}
+
+@app.get("/api/boards/{board_id}/activities")
+def get_activities(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        return db.query(models.Activity).filter(models.Activity.board_id == board_id).order_by(models.Activity.id.desc()).limit(20).all()
+    except Exception as e:
+        print("activities err", e)
+        return []
 
 @app.get("/api/tasks")
 def list_tasks(board_id: Optional[int] = None, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
@@ -234,6 +283,7 @@ async def create_task(payload: TaskCreate, current_user=Depends(get_current_user
         t = models.Task(title=payload.title, status=payload.status, priority=payload.priority, description=payload.description, due_date=payload.due_date, user_id=current_user.id, board_id=bid)
         db.add(t); db.commit(); db.refresh(t)
         if bid:
+            log_activity(bid, current_user.name, f"created task '{payload.title}'", db)
             await manager.broadcast(bid, {"type": "update"})
         return t
     except Exception as e:
@@ -244,12 +294,20 @@ async def create_task(payload: TaskCreate, current_user=Depends(get_current_user
 async def update_task(task_id: int, payload: dict, db: Session = Depends(get_db)):
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Task not found")
+    old_status = t.status
     for k, v in payload.items():
         if hasattr(t, k):
             setattr(t, k, v)
     db.commit(); db.refresh(t)
     if t.board_id:
+        if old_status!= t.status:
+            # log move
+            db2 = SessionLocal()
+            user = db2.query(models.User).filter(models.User.id == t.user_id).first()
+            name = user.name if user else "Someone"
+            log_activity(t.board_id, name, f"moved '{t.title}' {old_status} -> {t.status}", db2)
+            db2.close()
         await manager.broadcast(t.board_id, {"type": "update"})
     return t
 
@@ -257,9 +315,13 @@ async def update_task(task_id: int, payload: dict, db: Session = Depends(get_db)
 async def delete_task(task_id: int, db: Session = Depends(get_db)):
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     bid = t.board_id if t else None
+    title = t.title if t else ""
     db.query(models.Task).filter(models.Task.id == task_id).delete()
     db.commit()
     if bid:
+        db2 = SessionLocal()
+        log_activity(bid, "Someone", f"deleted task '{title}'", db2)
+        db2.close()
         await manager.broadcast(bid, {"type": "update"})
     return {"ok": True}
 
@@ -280,6 +342,7 @@ async def add_comment(task_id: int, payload: CommentCreate, current_user=Depends
         db.add(c); db.commit(); db.refresh(c)
         task = db.query(models.Task).filter(models.Task.id == task_id).first()
         if task and task.board_id:
+            log_activity(task.board_id, current_user.name, f"commented on '{task.title}'", db)
             await manager.broadcast(task.board_id, {"type": "update"})
         return c
     except Exception as e:

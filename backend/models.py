@@ -40,3 +40,11 @@ class Comment(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     user_name = Column(String)
     created_at = Column(String)
+
+class Activity(Base):
+    __tablename__ = "activities"
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, ForeignKey("boards.id"))
+    user_name = Column(String)
+    action = Column(String)
+    created_at = Column(String)
