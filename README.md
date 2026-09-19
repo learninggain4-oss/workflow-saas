@@ -1,39 +1,64 @@
-# WorkFlow SaaS 🚀 - Trello Clone with AI Priority
+# WorkFlow SaaS - Real-time Collaborative Task Management
 
-Live Demo: **https://workflow-saas-xl.vercel.app**
-Backend API: https://workflow-saas-cofz.onrender.com/docs
+> Trello + Asana inspired SaaS built with FastAPI + React + WebSockets
 
-A full-stack Kanban board like Trello built for my portfolio.
+🔗 **Live Demo:** https://your-frontend.vercel.app
+🔗 **Backend API:** https://workflow-saas-cofz.onrender.com
 
-### Features
-- ✅ Drag & Drop (Todo / Doing / Done)
-- ✅ User Auth (JWT + bcrypt) - each user sees own tasks
-- ✅ Edit Task, Description, Due Date 📅
-- ✅ Search + Priority Filter 🔍
-- ✅ AI Priority - title-il "urgent/bug" ennu paranjal auto High priority
-- ✅ Permanent DB - PostgreSQL on Render (not local SQLite)
+## 🚀 Features
 
-### Tech Stack
-- Frontend: React + Vite + Tailwind + @hello-pangea/dnd + Axios
-- Backend: FastAPI + SQLAlchemy + PostgreSQL + JWT Auth
-- Deploy: Vercel (frontend) + Render (backend + DB)
+### Core SaaS
+- **Auth:** JWT login/register
+- **Boards:** Create / Rename / Delete boards (Workspace)
+- **Collaboration:** Invite teammates by email, shared boards
+- **Members:** View board members list
 
-### Run Locally
+### Task Management
+- **CRUD:** Create, Edit, Delete tasks
+- **Drag & Drop:** Todo → Doing → Done (hello-pangea/dnd)
+- **Priority:** Auto high if "urgent/bug" in title
+- **Fields:** Description, Due Date, Priority, Status
+- **Assignment:** Assign task to teammate (👤)
+- **Attachment:** Add file URL / image link
+
+### Real-time
+- **WebSocket:** Instant sync - oru aal move cheythal adutha aalkku 0.1sec-il kanam
+- **Comments:** Live discussion per task with user name
+- **Activity Feed:** aar enthu cheythu ennu live kanam
+
+## 🛠 Tech Stack
+
+**Backend:** FastAPI, SQLAlchemy, PostgreSQL (Render), WebSockets, JWT, passlib
+**Frontend:** React, Vite, TailwindCSS, Axios, Drag & Drop
+**Deploy:** Backend - Render, Frontend - Vercel
+
+## 📁 Architecture
+
+Frontend (Vercel) --REST+WS--> FastAPI (Render) --> PostgreSQL
+| |
+DragDrop, WS Client ConnectionManager (board_id based broadcast)
+
+
+## ⚙️ Local Setup
+
+Backend:
 ```bash
-# backend
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload
 
-# frontend
+
+Frontend:
+
 cd frontend
 npm install
 npm run dev
+# .env -> VITE_API_URL=http://localhost:8000
 
 
-#API Endpoints
-
-POST /api/register, POST /api/login, GET /api/tasks, POST /api/tasks, PUT /api/tasks/{id}, DELETE /api/tasks/{id}
-
-Built by Mihraj TK - Kochi
-
+🔮 Next Features
+ Real file upload (S3/Cloudinary)
+ Email notifications
+ Calendar / Gantt view
+ Dark mode
+Built by you - ready for resume! 🚀
