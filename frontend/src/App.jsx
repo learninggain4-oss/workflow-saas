@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import axios from 'axios'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 
@@ -23,6 +23,11 @@ function App(){
   const authHeader={headers:{Authorization:`Bearer ${token}`}}
 
   useEffect(()=>{ localStorage.setItem("darkMode", darkMode) },[darkMode])
+
+  const getCurrentEmail=()=>{
+    try{ const payload=JSON.parse(atob(token.split('.')[1])); return payload.sub||"" }catch{ return "" }
+  }
+  const currentEmail=getCurrentEmail()
 
   const fetchBoards=async()=>{ if(!token) return; try{ const r=await axios.get(`${API_URL}/api/boards`, authHeader); setBoards(r.data); if(r.data.length>0 &&!selectedBoard) setSelectedBoard(r.data[0].id) }catch{} }
   const fetchTasks=async()=>{ if(!token||!selectedBoard) return; try{ const r=await axios.get(`${API_URL}/api/tasks?board_id=${selectedBoard}`, authHeader); setTasks(r.data) }catch{} }
@@ -64,6 +69,22 @@ function App(){
   const formatDate=(d)=>{ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }
   const tasksByDate=(dateStr)=>tasks.filter(t=>t.due_date===dateStr)
 
+  const analytics=useMemo(()=>{
+    const total=tasks.length
+    const todo=tasks.filter(t=>t.status==="todo").length
+    const doing=tasks.filter(t=>t.status==="doing").length
+    const done=tasks.filter(t=>t.status==="done").length
+    const high=tasks.filter(t=>t.priority==="high").length
+    const my=tasks.filter(t=>t.assigned_to===currentEmail).length
+    const todayStr=formatDate(new Date())
+    const overdue=tasks.filter(t=>t.due_date && t.due_date < todayStr && t.status!=="done").length
+    const dueToday=tasks.filter(t=>t.due_date===todayStr).length
+    const progress= total===0?0: Math.round((done/total)*100)
+    const byMember={}
+    tasks.forEach(t=>{ if(t.assigned_to){ byMember[t.assigned_to]=(byMember[t.assigned_to]||0)+1 } })
+    return {total,todo,doing,done,high,my,overdue,dueToday,progress,byMember}
+  },[tasks,currentEmail])
+
   const filtered=tasks.filter(t=>{
     const ms=t.title.toLowerCase().includes(search.toLowerCase()) || (t.description||"").toLowerCase().includes(search.toLowerCase())
     const mp=filterPrio==="all" || t.priority===filterPrio
@@ -74,13 +95,13 @@ function App(){
   const y=calDate.getFullYear(); const m=calDate.getMonth(); const daysInMonth=getDaysInMonth(y,m); const firstDay=getFirstDay(y,m)
   const monthName=calDate.toLocaleString('default',{month:'long',year:'numeric'})
 
-  // theme helpers
   const bgMain = darkMode? "bg-[#0f1115] text-gray-100" : "bg-[#f8fafc] text-gray-900"
   const bgSide = darkMode? "bg-[#16181d] border-gray-700 text-gray-100" : "bg-white border-gray-200"
   const bgCard = darkMode? "bg-[#1e2128] border-gray-700" : "bg-white border-gray-200"
   const bgTask = darkMode? "bg-[#2a2e38] border-gray-700" : "bg-[#f1f5f9] border-gray-200"
   const inputCls = darkMode? "bg-[#2a2e38] border-gray-600 text-white placeholder-gray-400" : "bg-white border-gray-300 text-gray-900"
   const subCard = darkMode? "bg-[#252a33] border-gray-700" : "bg-gray-50 border-gray-200"
+  const statCard = darkMode? "bg-[#1e2128] border-gray-700" : "bg-white border-gray-200"
 
   if(!token) return (
     <div className={`min-h-screen flex items-center justify-center p-4 ${bgMain}`}>
@@ -100,7 +121,7 @@ function App(){
       <div className={`w- min-w- border-r p-5 flex flex-col h-screen sticky top-0 overflow-y-auto ${bgSide}`}>
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-bold text-lg">WorkFlow SaaS 🚀</h1>
-          <button onClick={()=>setDarkMode(!darkMode)} className={`border px-3 py-1.5 rounded-lg text-sm ${darkMode?"bg-white text-black":"bg-black text-white"}`}>{darkMode?"☀️ Light":"🌙 Dark"}</button>
+          <button onClick={()=>setDarkMode(!darkMode)} className={`border px-3 py-1.5 rounded-lg text-sm ${darkMode?"bg-white text-black":"bg-black text-white"}`}>{darkMode?"☀️":"🌙"}</button>
         </div>
         <h2 className="font-bold text- uppercase tracking-wider text-gray-500 mb-3">Your Boards</h2>
         <div className="space-y-2 mb-4 max-h- overflow-auto">
@@ -126,7 +147,6 @@ function App(){
           <h3 className="font-bold text- uppercase mb-3">Invite Teammate</h3>
           <input value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="friend@gmail.com" className={`border w-full p-2.5 rounded-lg text-sm mb-2 ${inputCls}`}/>
           <button disabled={!selectedBoard} onClick={inviteUser} className="bg-blue-600 disabled:bg-gray-600 text-white w-full p-2.5 rounded-lg text-sm">Invite</button>
-          <p className="text- text-gray-400 mt-2 truncate">{boardMembers.map(m=>m.name).join(", ")}</p>
         </div>
         <div className="border-t border-gray-700/20 pt-4">
           <h3 className="font-bold text- uppercase mb-2">Activity Feed 🔥</h3>
@@ -155,7 +175,7 @@ function App(){
                   <div className="overflow-auto flex-1">
                     {notifications.map(n=>(
                       <div key={n.id} className={`p-3 border-b flex gap-2 ${!n.is_read? darkMode?'bg-[#252a33]':'bg-blue-50':''}`}>
-                        <div className="flex-1"><p className="text-">{n.message}</p><p className="text- text-gray-400">{n.created_at} • {n.notif_type||n.type}</p></div>
+                        <div className="flex-1"><p className="text-">{n.message}</p><p className="text- text-gray-400">{n.created_at}</p></div>
                         <div className="flex flex-col gap-1">
                           {!n.is_read && <button onClick={()=>markRead(n.id)} className="text- bg-black text-white px-2 py-1 rounded dark:bg-white dark:text-black">Read</button>}
                           <button onClick={()=>deleteNotif(n.id)} className="text- text-red-500">✕</button>
@@ -170,6 +190,27 @@ function App(){
             <select value={filterPrio} onChange={e=>setFilterPrio(e.target.value)} className={`border px-3 py-2.5 rounded-lg text-sm ${inputCls}`}><option value="all">All</option><option value="high">High</option><option value="medium">Medium</option></select>
           </div>
         </div>
+
+        {/* DASHBOARD ANALYTICS */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
+          <div className={`rounded-xl border p-4 ${statCard}`}><p className="text- uppercase tracking-wider text-gray-500 font-bold">Total</p><p className="text-2xl font-bold mt-1">{analytics.total}</p><div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden"><div className="bg-black dark:bg-white h-1.5" style={{width:`${analytics.progress}%`}}></div></div><p className="text- text-gray-400 mt-1">{analytics.progress}% done</p></div>
+          <div className={`rounded-xl border p-4 ${statCard}`}><p className="text- uppercase text-gray-500 font-bold">Todo</p><p className="text-2xl font-bold mt-1">{analytics.todo}</p><p className="text- text-gray-400 mt-2">To start</p></div>
+          <div className={`rounded-xl border p-4 ${statCard}`}><p className="text- uppercase text-gray-500 font-bold">Doing</p><p className="text-2xl font-bold mt-1 text-blue-600">{analytics.doing}</p><p className="text- text-gray-400 mt-2">In progress</p></div>
+          <div className={`rounded-xl border p-4 ${statCard}`}><p className="text- uppercase text-gray-500 font-bold">Done</p><p className="text-2xl font-bold mt-1 text-green-600">{analytics.done}</p><p className="text- text-gray-400 mt-2">Completed</p></div>
+          <div className={`rounded-xl border p-4 ${statCard}`}><p className="text- uppercase text-gray-500 font-bold">High 🔥</p><p className="text-2xl font-bold mt-1 text-red-600">{analytics.high}</p><p className="text- text-gray-400 mt-2">Urgent</p></div>
+          <div className={`rounded-xl border p-4 ${statCard}`}><p className="text- uppercase text-gray-500 font-bold">My Tasks 👤</p><p className="text-2xl font-bold mt-1">{analytics.my}</p><p className="text- text-gray-400 mt-2 truncate">{currentEmail.split('@')[0]}</p></div>
+          <div className={`rounded-xl border p-4 ${statCard} ${analytics.overdue>0?'ring-1 ring-red-400':''}`}><p className="text- uppercase text-gray-500 font-bold">Overdue ⚠️</p><p className={`text-2xl font-bold mt-1 ${analytics.overdue>0?'text-red-600':''}`}>{analytics.overdue}</p><p className="text- text-gray-400 mt-2">Due today: {analytics.dueToday}</p></div>
+        </div>
+
+        {/* Member breakdown */}
+        {Object.keys(analytics.byMember).length>0 && (
+          <div className={`rounded-xl border p-4 mb-8 flex flex-wrap gap-2 items-center ${statCard}`}>
+            <span className="text- font-bold uppercase mr-2">Workload:</span>
+            {Object.entries(analytics.byMember).map(([em,cnt])=>(
+              <span key={em} className={`text- px-3 py-1 rounded-full border ${darkMode?'bg-[#2a2e38] border-gray-600':'bg-gray-50'}`}>{em.split('@')[0]}: <b>{cnt}</b></span>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-3 mb-8">
           <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTask()} placeholder="New task... (urgent=high)" className={`border px-4 py-2.5 w-full max-w- rounded-lg text-sm ${inputCls}`}/>
@@ -187,11 +228,11 @@ function App(){
                       <Draggable key={t.id} draggableId={String(t.id)} index={i}>{(pr)=>(
                         <div ref={pr.innerRef} {...pr.draggableProps} {...pr.dragHandleProps} onClick={()=>openEditModal(t)} className={`p-3 rounded-lg mb-3 border hover:shadow-sm cursor-pointer ${bgTask}`}>
                           <div className="font-medium text- line-clamp-2">{t.title}</div>
-                          {t.assigned_to && <div className="mt-1 text- bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full inline-block dark:bg-blue-900 dark:text-blue-200">👤 {t.assigned_to_name||t.assigned_to}</div>}
+                          {t.assigned_to && <div className="mt-1 text- bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full inline-block dark:bg-blue-900 dark:text-blue-200">👤 {t.assigned_to_name||t.assigned_to.split('@')[0]}</div>}
                           {t.attachment_url && <div className="text- text-blue-500 mt-1 truncate">📎 file attached</div>}
                           <div className="flex justify-between items-center mt-2">
                             <span className={`text- px-2 py-1 rounded-full font-bold ${t.priority==='high'?'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-200':'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'}`}>{t.priority}</span>
-                            {t.due_date && <span className="text- text-gray-500">📅 {t.due_date}</span>}
+                            {t.due_date && <span className={`text- ${t.due_date < formatDate(new Date()) && t.status!=='done'? 'text-red-500 font-bold': 'text-gray-500'}`}>📅 {t.due_date}</span>}
                           </div>
                         </div>
                       )}</Draggable>
