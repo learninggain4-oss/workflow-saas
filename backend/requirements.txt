@@ -7,3 +7,4 @@ passlib
 python-multipart
 cloudinary
 python-dotenv
+requests
