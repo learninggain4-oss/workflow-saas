@@ -58,6 +58,6 @@ class Notification(Base):
     board_id = Column(Integer, nullable=True)
     task_id = Column(Integer, nullable=True)
     message = Column(String)
-    notif_type = Column(String, default="info") # assign, comment, invite, due
+    notif_type = Column(String, default="info")
     is_read = Column(Boolean, default=False)
     created_at = Column(String)
