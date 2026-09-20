@@ -85,8 +85,9 @@ async def custom_docs():
                 </div>
             </div>
             <div class="wf-actions">
-                <button class="wf-btn wf-btn-secondary">Docs</button>
-                <button class="wf-btn wf-btn-primary">Authorize</button>
+                <button class="wf-btn wf-btn-secondary" type="button">Docs</button>
+                <button class="wf-btn wf-btn-primary" type="button">Authorize</button>
+                <button class="wf-btn wf-btn-toggle" id="wfThemeToggle" type="button">Dark</button>
             </div>
         </header>
 
@@ -132,13 +133,46 @@ async def custom_docs():
             --wf-btn-light: rgba(255, 255, 255, 0.8);
             --wf-card-dark: rgba(15, 23, 42, 0.9);
             --wf-card-light: rgba(255, 255, 255, 0.8);
+            --wf-body-bg: linear-gradient(180deg, #f5f7fb 0%, #eef2ff 100%);
+            --wf-body-shade-a: rgba(59,130,246,0.10);
+            --wf-body-shade-b: rgba(168,85,247,0.08);
+            --wf-topbar-bg: rgba(255, 255, 255, 0.12);
+            --wf-card-bg: rgba(255, 255, 255, 0.8);
+            --wf-input-bg: rgba(255, 255, 255, 0.8);
+        }
+
+        body[data-theme="dark"] {
+            --wf-bg: #0a1020;
+            --wf-bg-2: #0b1220;
+            --wf-panel: rgba(15, 23, 42, 0.82);
+            --wf-panel-strong: rgba(17, 24, 39, 0.96);
+            --wf-border: rgba(148, 163, 184, 0.22);
+            --wf-primary: #f8fafc;
+            --wf-accent: #60a5fa;
+            --wf-accent-2: #3b82f6;
+            --wf-accent-soft: rgba(96, 165, 250, 0.14);
+            --wf-success: #34d399;
+            --wf-warning: #fbbf24;
+            --wf-danger: #f87171;
+            --wf-text: #e5e7eb;
+            --wf-muted: #94a3b8;
+            --wf-btn-dark: rgba(15, 23, 42, 0.9);
+            --wf-btn-light: rgba(15, 23, 42, 0.8);
+            --wf-card-dark: rgba(15, 23, 42, 0.9);
+            --wf-card-light: rgba(15, 23, 42, 0.8);
+            --wf-body-bg: linear-gradient(180deg, #050b16 0%, #0b1220 100%);
+            --wf-body-shade-a: rgba(59,130,246,0.18);
+            --wf-body-shade-b: rgba(168,85,247,0.15);
+            --wf-topbar-bg: rgba(9, 14, 24, 0.4);
+            --wf-card-bg: rgba(15, 23, 42, 0.8);
+            --wf-input-bg: rgba(15, 23, 42, 0.8);
         }
 
         body {
             background:
-                radial-gradient(circle at top left, rgba(59,130,246,0.10), transparent 30%),
-                radial-gradient(circle at top right, rgba(168,85,247,0.08), transparent 30%),
-                linear-gradient(180deg, var(--wf-bg) 0%, var(--wf-bg-2) 100%);
+                radial-gradient(circle at top left, var(--wf-body-shade-a), transparent 30%),
+                radial-gradient(circle at top right, var(--wf-body-shade-b), transparent 30%),
+                var(--wf-body-bg);
             font-family: Inter, "Segoe UI", sans-serif;
             color: var(--wf-text);
             margin: 0;
@@ -159,7 +193,7 @@ async def custom_docs():
             justify-content: space-between;
             gap: 20px;
             border-bottom: 1px solid var(--wf-border);
-            background: rgba(255, 255, 255, 0.12);
+            background: var(--wf-topbar-bg);
             backdrop-filter: blur(8px);
         }
 
@@ -228,6 +262,12 @@ async def custom_docs():
             border-color: var(--wf-border);
         }
 
+        .wf-btn-toggle {
+            background: var(--wf-btn-dark);
+            color: var(--wf-text);
+            border-color: var(--wf-border);
+        }
+
         .wf-btn:hover {
             transform: translateY(-1px);
         }
@@ -278,7 +318,7 @@ async def custom_docs():
             min-width: 280px;
             padding: 22px 20px;
             border-radius: 18px;
-            background: var(--wf-panel);
+            background: var(--wf-card-bg);
             border: 1px solid var(--wf-border);
             box-shadow: 0 18px 35px rgba(15, 23, 42, 0.06);
             display: flex;
@@ -429,7 +469,7 @@ async def custom_docs():
         .swagger-ui select {
             border-radius: 10px;
             border: 1px solid var(--wf-border);
-            background: rgba(255, 255, 255, 0.8);
+            background: var(--wf-input-bg);
             color: var(--wf-primary);
         }
 
@@ -475,6 +515,26 @@ async def custom_docs():
     </style>
     """
     html = html.replace("</head>", css + "</head>")
+    html = html.replace("</body>", """
+    <script>
+        const toggle = document.getElementById('wfThemeToggle');
+        const applyTheme = (theme) => {
+            document.body.setAttribute('data-theme', theme);
+            if (toggle) {
+                toggle.textContent = theme === 'dark' ? 'Light' : 'Dark';
+            }
+        };
+        const saved = localStorage.getItem('wf_theme');
+        if (saved === 'dark') applyTheme('dark');
+        if (toggle) {
+            toggle.addEventListener('click', () => {
+                const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('wf_theme', next);
+                applyTheme(next);
+            });
+        }
+    </script>
+    </body>""")
     return HTMLResponse(content=html)
 
 
