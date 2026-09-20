@@ -68,10 +68,11 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
             <h2 className="font-semibold text-xs uppercase tracking-widest text-gray-500">Projects</h2>
             <span className="text-[10px] font-bold bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-600 dark:text-gray-400">{myRole}</span>
           </div>
-          <div className="space-y-1 mb-4">
+          <div className="space-y-1.5 mb-4">
             {boardsList.map(b => (
-              <button key={b.id} onClick={() => setSelectedBoard(b.id)} className={`w-full text-left px-3 py-2.5 rounded-lg text-sm truncate transition-all duration-200 flex items-center gap-2 ${selectedBoard === b.id ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/20 dark:text-indigo-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800/50 text-gray-600 dark:text-gray-400'}`}>
-                <span className="opacity-70">❖</span> {b.name}
+              <button key={b.id} onClick={() => setSelectedBoard(b.id)} className={`w-full text-left px-3 py-2.5 rounded-xl text-sm truncate transition-all duration-200 flex items-center gap-2 ${selectedBoard === b.id ? 'bg-indigo-50 text-indigo-700 font-medium shadow-sm shadow-indigo-500/5 dark:bg-indigo-900/20 dark:text-indigo-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800/50 text-gray-600 dark:text-gray-400'}`}>
+                <span className={`inline-flex h-6 w-6 items-center justify-center rounded-lg text-[11px] ${selectedBoard === b.id ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>◈</span>
+                <span className="truncate">{b.name}</span>
               </button>
             ))}
           </div>

@@ -26,7 +26,7 @@ export default function Dashboard({ analytics, activities, bgCard, userData, set
 
   return (
     <div className="mx-auto max-w-7xl space-y-8">
-      <div className={`rounded-2xl border p-6 shadow-sm ${bgCard}`}>
+      <div className={`rounded-[26px] border p-6 shadow-sm bg-gradient-to-r from-indigo-500/8 via-white to-violet-500/5 ${bgCard}`}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-500">Workspace overview</p>
@@ -34,7 +34,7 @@ export default function Dashboard({ analytics, activities, bgCard, userData, set
             <p className="mt-2 text-sm text-gray-500">Your team is progressing well across the active workflow.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => setViewMode('board')} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+            <button onClick={() => setViewMode('board')} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/20">
               Open board
             </button>
             <button onClick={() => setViewMode('settings')} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-indigo-300 hover:text-indigo-600 dark:border-gray-700 dark:text-gray-200 dark:hover:text-indigo-400">
