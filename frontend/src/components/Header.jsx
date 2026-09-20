@@ -18,7 +18,7 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
   ];
 
   return (
-    <header className="flex-shrink-0 px-8 py-6 border-b border-gray-200 dark:border-gray-800 bg-transparent">
+    <header className="flex-shrink-0 px-6 py-5 border-b border-gray-200 dark:border-gray-800 bg-transparent">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
           <div className="hidden md:flex items-center gap-2 rounded-full border border-indigo-200/70 bg-indigo-50/70 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300">
@@ -68,7 +68,7 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
 
       <div className="mt-5 flex flex-wrap gap-4">
         {navGroups.map((group) => (
-          <div key={group.title} className={`flex flex-wrap gap-2 rounded-2xl border p-2 shadow-sm ${bgCard}`}>
+          <div key={group.title} className={`flex flex-wrap items-center gap-2 rounded-2xl border p-2 shadow-sm ${bgCard}`}>
             <span className="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-400">{group.title}</span>
             {group.items.map((m) => (
               <button

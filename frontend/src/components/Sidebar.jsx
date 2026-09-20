@@ -2,11 +2,14 @@ import React from 'react';
 
 export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }) {
   return (
-    <aside className={`w-64 flex-shrink-0 border-r flex flex-col transition-colors duration-200 ${bgSide}`}>
-      <div className="p-6 flex justify-between items-center shrink-0">
+    <aside className={`w-72 flex-shrink-0 border-r soft-divider flex flex-col transition-colors duration-200 ${bgSide}`}>
+      <div className="p-5 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center text-sm font-black shadow-lg shadow-indigo-500/20">W</div>
-          <h1 className="font-extrabold text-xl tracking-tight">WorkFlow<span className="text-indigo-500">.</span></h1>
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center text-sm font-black shadow-lg shadow-indigo-500/20">W</div>
+          <div>
+            <h1 className="font-extrabold text-xl tracking-tight">WorkFlow<span className="text-indigo-500">.</span></h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400">Workspace</p>
+          </div>
         </div>
         <button onClick={() => setDarkMode(!darkMode)} className={`p-2.5 rounded-xl border transition-all ${darkMode ? 'bg-gray-800 border-gray-700 text-yellow-400 hover:bg-gray-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'}`}>
           {darkMode ? "☀" : "🌙"}

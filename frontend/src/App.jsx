@@ -578,13 +578,14 @@ export default function App() {
   }
 
   return (
-    <div className={`h-screen w-full flex overflow-hidden transition-colors duration-200 ${bgMain}`}>
-      <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }} />
+    <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
+      <div className="app-shell h-full w-full overflow-hidden rounded-[28px] border border-white/10 flex">
+        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }} />
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }} />
+        <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+          <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }} />
 
-        <div className="flex-1 overflow-auto p-8 custom-scrollbar">
+          <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar">
           {viewMode === "settings" ? (
             <AccountSettingsPage {...{
               userData,
@@ -657,6 +658,7 @@ export default function App() {
         .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}} />
+      </div>
     </div>
   );
 }
