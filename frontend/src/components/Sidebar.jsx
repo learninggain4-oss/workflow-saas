@@ -37,6 +37,29 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
           </div>
         )}
 
+        <div className={`border rounded-xl p-4 shadow-sm ${subCard}`}>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-semibold text-xs uppercase tracking-widest text-gray-500">Quick access</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { label: 'Overview', value: 'dashboard' },
+              { label: 'Board', value: 'board' },
+              { label: 'Reports', value: 'reports' },
+              { label: 'Team', value: 'team' },
+            ].map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setViewMode(item.value)}
+                className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${selectedBoard ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:border-indigo-300 dark:border-indigo-900/60 dark:bg-indigo-900/20 dark:text-indigo-300' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:bg-transparent dark:text-gray-200'}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <div className="flex items-center justify-between mb-3 px-2">
             <h2 className="font-semibold text-xs uppercase tracking-widest text-gray-500">Projects</h2>

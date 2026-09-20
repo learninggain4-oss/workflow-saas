@@ -16,6 +16,12 @@ export default function Dashboard({ analytics, activities, bgCard, userData, set
     { title: 'Client pipeline', desc: 'Sales workflow', tone: 'bg-amber-500/10 text-amber-600 dark:text-amber-300' },
   ];
 
+  const featureCards = [
+    { title: 'Delivery', value: `${analytics.todo + analytics.doing} active`, subtitle: 'Project momentum', tone: 'from-indigo-500/15 to-indigo-500/5', accent: 'bg-indigo-500' },
+    { title: 'Quality', value: `${analytics.done} closed`, subtitle: 'Issue resolution', tone: 'from-emerald-500/15 to-emerald-500/5', accent: 'bg-emerald-500' },
+    { title: 'Risk', value: `${analytics.overdue} overdue`, subtitle: 'Needs attention', tone: 'from-rose-500/15 to-rose-500/5', accent: 'bg-rose-500' },
+  ];
+
   const workload = Object.entries(analytics.byMember || {}).slice(0, 4);
 
   return (
@@ -38,27 +44,20 @@ export default function Dashboard({ analytics, activities, bgCard, userData, set
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-        <div className={`rounded-2xl border p-6 shadow-sm ${bgCard}`}>
-          <p className="mb-2 text-sm font-semibold text-gray-500">Total Tasks</p>
-          <p className="text-4xl font-extrabold">{analytics.total}</p>
-          <p className="mt-2 text-xs text-emerald-500">+12% this week</p>
-        </div>
-        <div className={`rounded-2xl border p-6 shadow-sm ${bgCard}`}>
-          <p className="mb-2 text-sm font-semibold text-gray-500">Completed</p>
-          <p className="text-4xl font-extrabold text-emerald-500">{analytics.done}</p>
-          <p className="mt-2 text-xs text-gray-500">Healthy completion rate</p>
-        </div>
-        <div className={`rounded-2xl border p-6 shadow-sm ${bgCard}`}>
-          <p className="mb-2 text-sm font-semibold text-gray-500">In Progress</p>
-          <p className="text-4xl font-extrabold text-blue-500">{analytics.doing}</p>
-          <p className="mt-2 text-xs text-gray-500">Currently active</p>
-        </div>
-        <div className={`rounded-2xl border p-6 shadow-sm ${bgCard}`}>
-          <p className="mb-2 text-sm font-semibold text-gray-500">Overdue</p>
-          <p className="text-4xl font-extrabold text-red-500">{analytics.overdue}</p>
-          <p className="mt-2 text-xs text-gray-500">Needs attention</p>
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {featureCards.map((card) => (
+          <div key={card.title} className={`rounded-2xl border bg-gradient-to-br ${card.tone} p-[1px] shadow-sm`}>
+            <div className={`h-full rounded-2xl bg-white/90 p-5 dark:bg-[#111827]/90 ${bgCard}`}>
+              <div className="mb-4 flex items-center justify-between">
+                <div className={`h-2.5 w-2.5 rounded-full ${card.accent}`} />
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Focus</span>
+              </div>
+              <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">{card.title}</p>
+              <p className="mt-3 text-3xl font-extrabold tracking-tight">{card.value}</p>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{card.subtitle}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
