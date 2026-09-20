@@ -1,13 +1,14 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean
 from database import Base
 
-# 1. Users Table - login/register
+# 1. Users Table - login/register + SaaS Subscription
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, default="")
     password_hash = Column(String, nullable=False)
+    subscription_tier = Column(String, default="free") # NEW: free or pro
 
 # 2. Boards Table - workspace / project boards
 class Board(Base):

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from jose import jwt, JWTError
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 import models
 from database import SessionLocal, engine
-import traceback, os, base64, smtplib, ssl, threading, re
+import traceback, os, base64, smtplib, ssl, threading, re, io, csv
 from email.message import EmailMessage
 
 # Cloudinary optional
@@ -130,6 +130,7 @@ def send_email_safe(to_email: str, subject: str, html_body: str) -> bool:
 def fix_db():
     try:
         with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR DEFAULT 'free'"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date VARCHAR DEFAULT ''"))
@@ -259,6 +260,23 @@ def root():
     cfg=get_smtp_config()
     return {"ok":True, "email_host":cfg["host"], "from":cfg["from"], "has_brevo_key": cfg["brevo_key"].startswith("xkeysib-"), "cloudinary":CLOUDINARY_ENABLED}
 
+# NEW: Current user profile route
+@app.get("/api/users/me")
+def get_user_profile(current_user=Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "subscription_tier": current_user.subscription_tier
+    }
+
+# NEW: Mock upgrade to PRO
+@app.post("/api/upgrade")
+def upgrade_to_pro(current_user=Depends(get_current_user), db:Session=Depends(get_db)):
+    current_user.subscription_tier = "pro"
+    db.commit()
+    return {"ok": True, "message": "Upgraded to Pro successfully!"}
+
 @app.post("/api/test-email")
 def test_email(current_user=Depends(get_current_user)):
     cfg=get_smtp_config()
@@ -312,6 +330,12 @@ def list_boards(current_user=Depends(get_current_user), db:Session=Depends(get_d
 
 @app.post("/api/boards")
 def create_board(payload:BoardCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
+    # SaaS Limit Check: Free users can only create 3 boards max
+    if current_user.subscription_tier == "free":
+        owned_count = db.query(models.Board).filter(models.Board.owner_id == current_user.id).count()
+        if owned_count >= 3:
+            raise HTTPException(status_code=402, detail="Free plan limit reached (Max 3 boards). Please upgrade to Pro.")
+
     b=models.Board(name=payload.name, owner_id=current_user.id)
     db.add(b)
     db.commit()
@@ -344,6 +368,26 @@ async def delete_board(board_id:int, current_user=Depends(get_current_user), db:
     db.delete(b)
     db.commit()
     return {"ok":True}
+
+# NEW: Export board data to CSV
+@app.get("/api/boards/{board_id}/export")
+def export_board_csv(board_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
+    boards = get_user_boards(current_user, db)
+    if board_id not in [b.id for b in boards]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    tasks = db.query(models.Task).filter(models.Task.board_id == board_id).all()
+    
+    stream = io.StringIO()
+    writer = csv.writer(stream)
+    writer.writerow(["ID", "Title", "Status", "Priority", "Assigned To", "Start Date", "Due Date", "Time Est", "Time Spent", "Labels"])
+    
+    for t in tasks:
+        writer.writerow([t.id, t.title, t.status, t.priority, t.assigned_to_name or t.assigned_to, t.start_date, t.due_date, t.time_estimated, t.time_spent, t.labels])
+    
+    response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
+    response.headers["Content-Disposition"] = f"attachment; filename=board_{board_id}_export.csv"
+    return response
 
 @app.post("/api/boards/{board_id}/invite")
 def invite(board_id:int, payload:InviteRequest, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -442,6 +486,17 @@ def list_tasks(board_id:Optional[int]=None, current_user=Depends(get_current_use
 async def create_task(payload:TaskCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     boards=get_user_boards(current_user, db)
     bid=payload.board_id or (boards[0].id if boards else None)
+    
+    if bid:
+        # SaaS Limit Check: Free users limited to 20 tasks per board
+        board_owner = db.query(models.Board).filter(models.Board.id == bid).first()
+        if board_owner:
+            owner_u = db.query(models.User).filter(models.User.id == board_owner.owner_id).first()
+            if owner_u and owner_u.subscription_tier == "free":
+                task_count = db.query(models.Task).filter(models.Task.board_id == bid).count()
+                if task_count >= 20:
+                    raise HTTPException(status_code=402, detail="Board limit reached (20 tasks for Free plan). Board owner must upgrade to Pro.")
+
     t=models.Task(
         title=payload.title, status=payload.status, priority=payload.priority,
         description=payload.description, start_date=payload.start_date, due_date=payload.due_date,

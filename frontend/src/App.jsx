@@ -15,8 +15,9 @@ const AVAILABLE_LABELS = [
 const getLabelCls = (name) => AVAILABLE_LABELS.find(l=>l.name===name)?.cls || "bg-gray-100 text-gray-600 border-gray-200"
 
 export default function App(){
-  // Auth
+  // Auth & Profile (SaaS)
   const [token,setToken]=useState(localStorage.getItem("token")||"")
+  const [userData, setUserData] = useState(null)
   const [email,setEmail]=useState("")
   const [password,setPassword]=useState("")
   const [name,setName]=useState("")
@@ -69,6 +70,13 @@ export default function App(){
   const canEdit = myRole === "admin" || myRole === "member"
 
   // Fetchers
+  const fetchUserProfile = async () => {
+    if(!token) return
+    try {
+      const r = await axios.get(`${API_URL}/api/users/me`, authHeader)
+      setUserData(r.data)
+    } catch {}
+  }
   const fetchBoards=async()=>{
     if(!token) return
     try{
@@ -115,7 +123,7 @@ export default function App(){
     }catch{}
   }
 
-  useEffect(()=>{ fetchBoards(); fetchNotifications() },[token])
+  useEffect(()=>{ fetchUserProfile(); fetchBoards(); fetchNotifications() },[token])
   useEffect(()=>{
     fetchTasks(); fetchActivities(); fetchBoardMembers()
     const b=boards.find(x=>x.id===selectedBoard)
@@ -161,13 +169,43 @@ export default function App(){
     }catch(e){ alert(e.response?.data?.detail||"Register failed") }
   }
 
+  // SaaS Features Handlers
+  const handleUpgrade = async () => {
+    try {
+      const r = await axios.post(`${API_URL}/api/upgrade`, {}, authHeader)
+      alert(r.data.message)
+      fetchUserProfile()
+    } catch { alert("Upgrade failed") }
+  }
+
+  const exportCSV = async () => {
+    if(!selectedBoard) return;
+    try {
+      const response = await axios.get(`${API_URL}/api/boards/${selectedBoard}/export`, {
+        ...authHeader, responseType: 'blob'
+      })
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `board_${selectedBoard}_export.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (e) { alert("Failed to export data"); }
+  }
+
   // Task handlers
   const addTask=async()=>{
     if(!canEdit) return alert("Viewers cannot add tasks")
     if(!title.trim()||!selectedBoard) return alert("Select board and enter title")
     const prio=(title.toLowerCase().includes("urgent")||title.toLowerCase().includes("bug"))?"high":"medium"
-    await axios.post(`${API_URL}/api/tasks`,{title,status:"todo",priority:prio,description:"",start_date:"",due_date:"",time_estimated:0,time_spent:0,board_id:selectedBoard,assigned_to:"",assigned_to_name:"",attachment_url:"",labels:""},authHeader)
-    setTitle("")
+    try {
+      await axios.post(`${API_URL}/api/tasks`,{title,status:"todo",priority:prio,description:"",start_date:"",due_date:"",time_estimated:0,time_spent:0,board_id:selectedBoard,assigned_to:"",assigned_to_name:"",attachment_url:"",labels:""},authHeader)
+      setTitle("")
+    } catch (e) {
+      if(e.response?.status === 402) alert(e.response.data.detail)
+      else alert("Error adding task")
+    }
   }
   const onDragEnd=async(r)=>{
     if(!canEdit) return
@@ -207,8 +245,12 @@ export default function App(){
   // Board handlers
   const createBoard=async()=>{
     if(!newBoardName.trim()) return
-    const r=await axios.post(`${API_URL}/api/boards`,{name:newBoardName},authHeader)
-    setNewBoardName(""); await fetchBoards(); setSelectedBoard(r.data.id)
+    try {
+      const r=await axios.post(`${API_URL}/api/boards`,{name:newBoardName},authHeader)
+      setNewBoardName(""); await fetchBoards(); setSelectedBoard(r.data.id)
+    } catch (e) {
+      if (e.response?.status === 402) alert(e.response.data.detail)
+    }
   }
   const renameBoard=async()=>{
     if(!renameValue.trim()||!selectedBoard || myRole!=='admin') return
@@ -354,6 +396,23 @@ export default function App(){
           <h1 className="font-bold text-lg">WorkFlow 🚀</h1>
           <button onClick={()=>setDarkMode(!darkMode)} className="border px-3 py-1.5 rounded-lg text-sm bg-black text-white dark:bg-white dark:text-black">{darkMode?"☀":"🌙"}</button>
         </div>
+        
+        {/* NEW SaaS Profile UI */}
+        {userData && (
+          <div className={`border p-3 rounded-xl mb-4 ${subCard}`}>
+            <p className="font-bold text-sm truncate">{userData.name || userData.email.split('@')[0]}</p>
+            <p className="text-xs text-gray-500 truncate">{userData.email}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${userData.subscription_tier === 'pro' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-gray-200 text-gray-600 border-gray-300'}`}>
+                {userData.subscription_tier} Plan
+              </span>
+              {userData.subscription_tier === 'free' && (
+                <button onClick={handleUpgrade} className="text-[10px] font-bold bg-purple-600 text-white px-2 py-0.5 rounded hover:bg-purple-700">Upgrade</button>
+              )}
+            </div>
+          </div>
+        )}
+
         <p className="text-xs text-blue-500 font-bold mb-4">Role: {myRole.toUpperCase()}</p>
 
         <h2 className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-3">Your Boards</h2>
@@ -398,13 +457,18 @@ export default function App(){
           </div>
         </div>
 
-        <button onClick={()=>{localStorage.clear(); setToken(""); setSelectedBoard(null); setBoards([]); setTasks([])}} className={`mt-auto text-xs border p-2.5 rounded-lg font-bold ${bgCard} hover:bg-red-50 hover:text-red-600 hover:border-red-200`}>Logout</button>
+        <button onClick={()=>{localStorage.clear(); setToken(""); setSelectedBoard(null); setBoards([]); setTasks([]); setUserData(null)}} className={`mt-auto text-xs border p-2.5 rounded-lg font-bold ${bgCard} hover:bg-red-50 hover:text-red-600 hover:border-red-200`}>Logout</button>
       </div>
 
       {/* MAIN */}
       <div className="flex-1 p-6 lg:p-8 overflow-auto">
         <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
-          <h2 className="text-2xl font-bold truncate">{currentBoardName||"Select a board"}</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold truncate">{currentBoardName||"Select a board"}</h2>
+            {selectedBoard && (
+              <button onClick={exportCSV} className={`px-3 py-1.5 border rounded-lg text-xs font-bold hover:shadow-sm ${bgCard}`}>⬇ CSV</button>
+            )}
+          </div>
           <div className="flex gap-2 items-center flex-wrap">
             <div className={`flex border rounded-lg p-1 ${bgCard}`}>
               <button onClick={()=>setViewMode("dashboard")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="dashboard"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📊 Dash</button>
