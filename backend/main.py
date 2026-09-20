@@ -114,23 +114,29 @@ async def custom_docs():
     css = """
     <style>
         :root {
-            --wf-bg: #f5f7fb;
-            --wf-panel: rgba(255,255,255,0.9);
-            --wf-border: #dfe7f3;
-            --wf-primary: #0f172a;
-            --wf-accent: #2563eb;
-            --wf-accent-soft: #dbeafe;
-            --wf-success: #10b981;
-            --wf-warning: #f59e0b;
-            --wf-danger: #ef4444;
-            --wf-text: #1f2937;
-            --wf-muted: #64748b;
+            --wf-bg: #0a1020;
+            --wf-bg-2: #111827;
+            --wf-panel: rgba(15, 23, 42, 0.82);
+            --wf-panel-strong: rgba(17, 24, 39, 0.95);
+            --wf-border: rgba(148, 163, 184, 0.22);
+            --wf-primary: #f8fafc;
+            --wf-accent: #60a5fa;
+            --wf-accent-2: #3b82f6;
+            --wf-accent-soft: rgba(96, 165, 250, 0.14);
+            --wf-success: #34d399;
+            --wf-warning: #fbbf24;
+            --wf-danger: #f87171;
+            --wf-text: #e5e7eb;
+            --wf-muted: #94a3b8;
         }
 
         * { box-sizing: border-box; }
 
         body {
-            background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+            background:
+                radial-gradient(circle at top left, rgba(59,130,246,0.18), transparent 28%),
+                radial-gradient(circle at top right, rgba(168,85,247,0.15), transparent 32%),
+                linear-gradient(180deg, #050b16 0%, #0b1220 100%);
             font-family: Inter, "Segoe UI", sans-serif;
             color: var(--wf-text);
             margin: 0;
@@ -150,7 +156,9 @@ async def custom_docs():
             align-items: center;
             justify-content: space-between;
             gap: 20px;
-            border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+            border-bottom: 1px solid var(--wf-border);
+            background: rgba(9, 14, 24, 0.4);
+            backdrop-filter: blur(8px);
         }
 
         .wf-brand {
@@ -163,14 +171,14 @@ async def custom_docs():
             width: 42px;
             height: 42px;
             border-radius: 12px;
-            background: linear-gradient(135deg, #1d4ed8, #60a5fa);
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: 800;
             font-size: 1.15rem;
-            box-shadow: 0 12px 22px rgba(37, 99, 235, 0.22);
+            box-shadow: 0 12px 24px rgba(59, 130, 246, 0.35);
         }
 
         .wf-brand-text {
@@ -185,7 +193,7 @@ async def custom_docs():
         }
 
         .wf-brand-text strong {
-            color: #2563eb;
+            color: #93c5fd;
             font-weight: 800;
         }
 
@@ -196,7 +204,7 @@ async def custom_docs():
         }
 
         .wf-btn {
-            border: 1px solid rgba(37, 99, 235, 0.4);
+            border: 1px solid rgba(148, 163, 184, 0.26);
             border-radius: 10px;
             padding: 10px 18px;
             font-size: 0.9rem;
@@ -206,15 +214,16 @@ async def custom_docs():
         }
 
         .wf-btn-primary {
-            background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
             color: #fff;
             border-color: transparent;
-            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.28);
         }
 
         .wf-btn-secondary {
-            background: rgba(255,255,255,0.5);
-            color: var(--wf-primary);
+            background: rgba(15, 23, 42, 0.8);
+            color: var(--wf-text);
+            border-color: var(--wf-border);
         }
 
         .wf-btn:hover {
@@ -239,8 +248,8 @@ async def custom_docs():
             display: inline-block;
             padding: 7px 12px;
             border-radius: 999px;
-            background: var(--wf-accent-soft);
-            color: #1d4ed8;
+            background: rgba(96, 165, 250, 0.12);
+            color: #bfdbfe;
             font-weight: 700;
             font-size: 0.75rem;
             letter-spacing: 0.06em;
@@ -267,9 +276,9 @@ async def custom_docs():
             min-width: 280px;
             padding: 22px 20px;
             border-radius: 18px;
-            background: rgba(255,255,255,0.8);
+            background: rgba(15, 23, 42, 0.8);
             border: 1px solid var(--wf-border);
-            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.06);
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.24);
             display: flex;
             flex-direction: column;
             gap: 18px;
@@ -299,8 +308,8 @@ async def custom_docs():
             display: inline-block;
             border-radius: 999px;
             padding: 8px 10px;
-            background: #ecfdf5;
-            color: #047857;
+            background: rgba(52, 211, 153, 0.12);
+            color: #a7f3d0;
             font-size: 0.8rem;
             font-weight: 700;
         }
@@ -316,11 +325,11 @@ async def custom_docs():
         }
 
         .swagger-ui .info {
-            background: rgba(255,255,255,0.72);
+            background: rgba(15, 23, 42, 0.76);
             border: 1px solid var(--wf-border);
             border-radius: 18px;
             padding: 28px 30px;
-            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
             margin: 0 0 20px;
         }
 
@@ -338,19 +347,19 @@ async def custom_docs():
         }
 
         .swagger-ui .scheme-container {
-            background: rgba(255,255,255,0.8);
+            background: rgba(15, 23, 42, 0.82);
             border: 1px solid var(--wf-border);
             border-radius: 16px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
             padding: 18px 20px;
             margin-bottom: 20px;
         }
 
         .swagger-ui .opblock {
             border-radius: 14px !important;
-            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
             border: 1px solid var(--wf-border) !important;
-            background: rgba(255,255,255,0.9);
+            background: rgba(15, 23, 42, 0.9);
             overflow: hidden;
         }
 
@@ -394,7 +403,7 @@ async def custom_docs():
         }
 
         .swagger-ui .authorization__btn {
-            background: white;
+            background: rgba(15, 23, 42, 0.85);
             border: 1px solid var(--wf-border);
             color: var(--wf-primary);
             box-shadow: none;
@@ -404,12 +413,13 @@ async def custom_docs():
             border: 1px solid var(--wf-border);
             border-radius: 16px;
             overflow: hidden;
-            background: rgba(255,255,255,0.8);
+            background: rgba(15, 23, 42, 0.8);
         }
 
         .swagger-ui .model-box {
             border-radius: 10px;
             border: 1px solid var(--wf-border);
+            background: rgba(15, 23, 42, 0.75);
         }
 
         .swagger-ui textarea,
@@ -417,7 +427,8 @@ async def custom_docs():
         .swagger-ui select {
             border-radius: 10px;
             border: 1px solid var(--wf-border);
-            background: #fff;
+            background: rgba(15, 23, 42, 0.8);
+            color: var(--wf-text);
         }
 
         @media (max-width: 768px) {
