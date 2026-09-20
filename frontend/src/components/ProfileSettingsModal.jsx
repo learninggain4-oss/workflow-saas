@@ -10,6 +10,8 @@ export default function ProfileSettingsModal({
   savingProfile,
   profilePreferences,
   setProfilePreferences,
+  workspaceDefaults,
+  setWorkspaceDefaults,
   resetProfilePreferences,
   darkMode,
   setDarkMode,
@@ -34,6 +36,10 @@ export default function ProfileSettingsModal({
 
   const togglePreference = (key) => {
     setProfilePreferences((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleWorkspaceDefault = (key) => {
+    setWorkspaceDefaults((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -207,21 +213,69 @@ export default function ProfileSettingsModal({
                   Delete account
                 </button>
               </div>
+
+              <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Workspace defaults</p>
+
+                {[
+                  { key: "openLastBoard", label: "Open last board" },
+                  { key: "showCompletedTasks", label: "Show completed tasks" },
+                  { key: "autoSaveEdits", label: "Auto-save edits" },
+                  { key: "previewFiles", label: "Preview attachments" },
+                  { key: "hideArchived", label: "Hide archived items" },
+                ].map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-3">
+                    <span className="text-sm">{item.label}</span>
+                    <button
+                      type="button"
+                      aria-label={`Toggle ${item.label}`}
+                      onClick={() => toggleWorkspaceDefault(item.key)}
+                      className={`relative h-7 w-12 rounded-full transition-colors ${workspaceDefaults[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
+                    >
+                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${workspaceDefaults[item.key] ? "left-6" : "left-1"}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recent activity</p>
-              <span className="text-[10px] text-gray-400">Last 5</span>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recent activity</p>
+                <span className="text-[10px] text-gray-400">Last 5</span>
+              </div>
+              <div className="space-y-2">
+                {accountActivity?.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
+                    <span className="text-sm">{item.title}</span>
+                    <span className="text-[10px] text-gray-500">{item.time}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="space-y-2">
-              {accountActivity?.map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
-                  <span className="text-sm">{item.title}</span>
-                  <span className="text-[10px] text-gray-500">{item.time}</span>
-                </div>
-              ))}
+
+            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Session controls</p>
+              <div className="mt-3 space-y-3">
+                {[
+                  { key: "rememberMe", label: "Remember this device" },
+                  { key: "showSessions", label: "Show active sessions" },
+                ].map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-3">
+                    <span className="text-sm">{item.label}</span>
+                    <button
+                      type="button"
+                      aria-label={`Toggle ${item.label}`}
+                      onClick={() => togglePreference(`${item.key}`)}
+                      className={`relative h-7 w-12 rounded-full transition-colors ${profilePreferences[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
+                    >
+                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${profilePreferences[item.key] ? "left-6" : "left-1"}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

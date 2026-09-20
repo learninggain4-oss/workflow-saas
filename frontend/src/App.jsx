@@ -69,6 +69,15 @@ export default function App() {
     taskReminders: true,
     weeklyDigest: false,
     compactMode: false,
+    rememberMe: true,
+    showSessions: false,
+  };
+  const defaultWorkspaceDefaults = {
+    openLastBoard: true,
+    showCompletedTasks: true,
+    autoSaveEdits: true,
+    previewFiles: true,
+    hideArchived: false,
   };
   const [profilePreferences, setProfilePreferences] = useState(() => {
     try {
@@ -76,6 +85,14 @@ export default function App() {
       return saved ? { ...defaultProfilePreferences, ...saved } : defaultProfilePreferences;
     } catch {
       return defaultProfilePreferences;
+    }
+  });
+  const [workspaceDefaults, setWorkspaceDefaults] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("workspaceDefaults") || "null");
+      return saved ? { ...defaultWorkspaceDefaults, ...saved } : defaultWorkspaceDefaults;
+    } catch {
+      return defaultWorkspaceDefaults;
     }
   });
 
@@ -98,6 +115,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("profilePreferences", JSON.stringify(profilePreferences));
   }, [profilePreferences]);
+
+  useEffect(() => {
+    localStorage.setItem("workspaceDefaults", JSON.stringify(workspaceDefaults));
+  }, [workspaceDefaults]);
 
   useEffect(() => {
     localStorage.setItem("profileAvatar", profileAvatar || "");
@@ -334,6 +355,7 @@ export default function App() {
 
   const resetProfilePreferences = () => {
     setProfilePreferences(defaultProfilePreferences);
+    setWorkspaceDefaults(defaultWorkspaceDefaults);
   };
 
   const handleAvatarUpload = async (event) => {
@@ -452,6 +474,8 @@ export default function App() {
         savingProfile={savingProfile}
         profilePreferences={profilePreferences}
         setProfilePreferences={setProfilePreferences}
+        workspaceDefaults={workspaceDefaults}
+        setWorkspaceDefaults={setWorkspaceDefaults}
         resetProfilePreferences={resetProfilePreferences}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
