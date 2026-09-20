@@ -21,6 +21,7 @@ import AuditLogPage from './components/views/AuditLogPage';
 import TemplatesPage from './components/views/TemplatesPage';
 import OnboardingPage from './components/views/OnboardingPage';
 import ResourcesPage from './components/views/ResourcesPage';
+import FeedbackPage from './components/views/FeedbackPage';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -609,6 +610,8 @@ export default function App() {
             <OnboardingPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "resources" ? (
             <ResourcesPage {...{ bgCard, setViewMode }} />
+          ) : viewMode === "feedback" ? (
+            <FeedbackPage {...{ bgCard, setViewMode }} />
           ) : (
             <>
               {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard }} />}
