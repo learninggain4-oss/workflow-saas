@@ -63,7 +63,6 @@ def send_email_via_brevo_api(to_email: str, subject: str, html_body: str) -> boo
     if not api_key.startswith("xkeysib-"):
         return False
     if not cfg["from"]:
-        print("Brevo API: FROM_EMAIL missing")
         return False
     try:
         import requests
@@ -75,13 +74,10 @@ def send_email_via_brevo_api(to_email: str, subject: str, html_body: str) -> boo
             "subject": subject,
             "htmlContent": f"<html><body>{html_body}</body></html>"
         }
-        print(f"Trying Brevo API to {to_email} from {cfg['from']}")
         resp = requests.post(url, json=payload, headers=headers, timeout=20)
-        print(f"Brevo API response {resp.status_code}: {resp.text[:1000]}")
         return resp.status_code in [200,201,202]
     except Exception as e:
         print(f"Brevo API fail: {e}")
-        traceback.print_exc()
         return False
 
 def try_smtp_once(host, port, user, pwd, from_email, to_email, subject, html_body, use_ssl=False):
@@ -93,19 +89,16 @@ def try_smtp_once(host, port, user, pwd, from_email, to_email, subject, html_bod
         msg.set_content(html_body, subtype='html')
         ctx = ssl.create_default_context()
         if use_ssl:
-            print(f"Trying SMTP SSL {host}:{port}")
             with smtplib.SMTP_SSL(host, port, context=ctx, timeout=15) as server:
                 server.login(user, pwd)
                 server.send_message(msg)
         else:
-            print(f"Trying SMTP {host}:{port} STARTTLS")
             with smtplib.SMTP(host, port, timeout=15) as server:
                 server.ehlo()
                 server.starttls(context=ctx)
                 server.ehlo()
                 server.login(user, pwd)
                 server.send_message(msg)
-        print(f"✅ EMAIL SENT via {host}:{port}")
         return True
     except Exception as e:
         print(f"❌ SMTP {host}:{port} failed: {e}")
@@ -117,13 +110,11 @@ def send_email_safe(to_email: str, subject: str, html_body: str) -> bool:
         if send_email_via_brevo_api(to_email, subject, html_body):
             return True
     if not cfg["host"] or not cfg["user"] or not cfg["pass"] or not cfg["from"]:
-        print(f"SMTP CONFIG MISSING host:{cfg['host']} user:{cfg['user']} from:{cfg['from']}")
         return False
     for p in [2525, 587, 465]:
         use_ssl = (p == 465)
         if try_smtp_once(cfg["host"], p, cfg["user"], cfg["pass"], cfg["from"], to_email, subject, html_body, use_ssl=use_ssl):
             return True
-    print("❌ ALL EMAIL METHODS FAILED")
     return False
 
 @app.on_event("startup")
@@ -135,6 +126,8 @@ def fix_db():
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_estimated INTEGER DEFAULT 0"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_spent INTEGER DEFAULT 0"))
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT 0"))
+            conn.execute(text("ALTER TABLE boards ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_name VARCHAR DEFAULT ''"))
@@ -145,11 +138,7 @@ def fix_db():
             conn.execute(text("ALTER TABLE board_members ADD COLUMN IF NOT EXISTS role VARCHAR DEFAULT 'member'"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id SERIAL PRIMARY KEY, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notif_type VARCHAR DEFAULT 'info'"))
-            conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR DEFAULT 'info'"))
             conn.commit()
-            cfg=get_smtp_config()
-            print(f"fix_db ok - host:{cfg['host']} from:{cfg['from']} has_brevo:{cfg['brevo_key'][:10]}... cloud:{CLOUDINARY_ENABLED}")
     except Exception as e:
         print("fix_db err", e)
 
@@ -182,11 +171,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 class RegisterRequest(BaseModel):
     email:str; password:str; name:str
 class BoardCreate(BaseModel):
-    name:str
+    name:str; description:str=""
 class InviteRequest(BaseModel):
     email:str; role:str="member"
 class TaskCreate(BaseModel):
-    title:str; status:str="todo"; priority:str="medium"; description:str=""; start_date:str=""; due_date:str=""; time_estimated:int=0; time_spent:int=0; board_id:Optional[int]=None; assigned_to:str=""; assigned_to_name:str=""; attachment_url:str=""; labels:str=""
+    title:str; status:str="todo"; priority:str="medium"; description:str=""; start_date:str=""; due_date:str=""; time_estimated:int=0; time_spent:int=0; position:int=0; board_id:Optional[int]=None; assigned_to:str=""; assigned_to_name:str=""; attachment_url:str=""; labels:str=""
 class CommentCreate(BaseModel):
     text:str
 class SubtaskCreate(BaseModel):
@@ -214,13 +203,7 @@ def get_current_user(token:str=Depends(oauth2_scheme), db:Session=Depends(get_db
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         return user
-    except JWTError as e:
-        print(f"JWT Error: {e}")
-        raise HTTPException(status_code=401, detail=f"Token invalid: {e}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Auth error: {e}")
+    except Exception:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 def get_user_boards(user, db):
@@ -262,9 +245,9 @@ def root():
 @app.post("/api/test-email")
 def test_email(current_user=Depends(get_current_user)):
     cfg=get_smtp_config()
-    html_body = f"<h2>Hi {current_user.name}!</h2><p>Your email config works!</p><p>Host:{cfg['host']} From:{cfg['from']} HasBrevo:{cfg['brevo_key'].startswith('xkeysib-')}</p>"
+    html_body = f"<h2>Hi {current_user.name}!</h2><p>Your email config works!</p>"
     threading.Thread(target=send_email_safe, args=(current_user.email, "✅ WorkFlow SaaS - Email Test", html_body)).start()
-    return {"sent":True, "to":current_user.email, "config": {"host":cfg["host"], "port":cfg["port"], "user":cfg["user"], "from":cfg["from"], "has_brevo_key": cfg["brevo_key"].startswith("xkeysib-")}, "hint": "Check your inbox in 1 minute."}
+    return {"sent":True, "to":current_user.email}
 
 @app.post("/api/register")
 def register(req:RegisterRequest, db:Session=Depends(get_db)):
@@ -294,8 +277,8 @@ async def upload_file(file: UploadFile = File(...), current_user=Depends(get_cur
             import cloudinary.uploader
             result=cloudinary.uploader.upload(contents, folder="workflow-saas", resource_type="auto")
             return {"url": result.get("secure_url")}
-        except Exception as e:
-            print("cloudinary err", e)
+        except:
+            pass
     b64=base64.b64encode(contents).decode("utf-8")
     return {"url": f"data:{file.content_type};base64,{b64}"}
 
@@ -312,7 +295,7 @@ def list_boards(current_user=Depends(get_current_user), db:Session=Depends(get_d
 
 @app.post("/api/boards")
 def create_board(payload:BoardCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
-    b=models.Board(name=payload.name, owner_id=current_user.id)
+    b=models.Board(name=payload.name, description=payload.description, owner_id=current_user.id)
     db.add(b)
     db.commit()
     db.refresh(b)
@@ -325,6 +308,7 @@ def rename_board(board_id:int, payload:BoardCreate, current_user=Depends(get_cur
     if not b:
         raise HTTPException(status_code=403, detail="Not owner")
     b.name=payload.name
+    b.description=payload.description
     db.commit()
     db.refresh(b)
     return b
@@ -350,9 +334,7 @@ def invite(board_id:int, payload:InviteRequest, current_user=Depends(get_current
     board=db.query(models.Board).filter(models.Board.id==board_id, models.Board.owner_id==current_user.id).first()
     if not board:
         raise HTTPException(status_code=403, detail="Not owner")
-        
     target=db.query(models.User).filter(models.User.email==payload.email).first()
-    
     if target:
         bm = db.query(models.BoardMember).filter(models.BoardMember.board_id==board_id, models.BoardMember.user_id==target.id).first()
         if not bm:
@@ -368,7 +350,6 @@ def invite(board_id:int, payload:InviteRequest, current_user=Depends(get_current
         html_body = f"<h2>Hi there!</h2><p><b>{current_user.name}</b> has invited you to join their board <b>{board.name}</b> as a {payload.role}.</p><p>Please register on WorkFlow SaaS using this email address ({payload.email}) to collaborate!</p>"
         threading.Thread(target=send_email_safe, args=(payload.email, subject, html_body)).start()
         log_activity_safe(board_id, current_user.name, f"sent email invite to new user {payload.email}")
-        
     return {"ok":True, "message": "Invite sent successfully"}
 
 @app.get("/api/boards/{board_id}/members")
@@ -430,13 +411,10 @@ def delete_notif(notif_id:int, current_user=Depends(get_current_user), db:Sessio
 @app.get("/api/tasks")
 def list_tasks(board_id:Optional[int]=None, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     boards=get_user_boards(current_user, db)
-    if not boards:
-        return []
-    if board_id is None:
-        board_id=boards[0].id
-    if board_id not in [b.id for b in boards]:
-        return []
-    return db.query(models.Task).filter(models.Task.board_id==board_id).all()
+    if not boards: return []
+    if board_id is None: board_id=boards[0].id
+    if board_id not in [b.id for b in boards]: return []
+    return db.query(models.Task).filter(models.Task.board_id==board_id).order_by(models.Task.position.asc(), models.Task.id.desc()).all()
 
 @app.post("/api/tasks")
 async def create_task(payload:TaskCreate, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
@@ -445,7 +423,7 @@ async def create_task(payload:TaskCreate, current_user=Depends(get_current_user)
     t=models.Task(
         title=payload.title, status=payload.status, priority=payload.priority,
         description=payload.description, start_date=payload.start_date, due_date=payload.due_date,
-        time_estimated=payload.time_estimated, time_spent=payload.time_spent,
+        time_estimated=payload.time_estimated, time_spent=payload.time_spent, position=payload.position,
         user_id=current_user.id, board_id=bid,
         assigned_to=payload.assigned_to or "", assigned_to_name=payload.assigned_to_name or "",
         attachment_url=payload.attachment_url or "", labels=payload.labels or ""
@@ -461,42 +439,35 @@ async def create_task(payload:TaskCreate, current_user=Depends(get_current_user)
 @app.put("/api/tasks/{task_id}")
 async def update_task(task_id:int, payload:dict, db:Session=Depends(get_db)):
     t=db.query(models.Task).filter(models.Task.id==task_id).first()
-    if not t:
-        raise HTTPException(status_code=404)
+    if not t: raise HTTPException(status_code=404)
     old_status=t.status
     old_assign=t.assigned_to
     for k,v in payload.items():
-        if hasattr(t,k):
-            setattr(t,k,v)
+        if hasattr(t,k): setattr(t,k,v)
     db.commit()
     db.refresh(t)
     if t.board_id:
-        if old_status!=t.status:
-            log_activity_safe(t.board_id, "Someone", f"moved '{t.title}' {old_status}->{t.status}")
+        if old_status!=t.status: log_activity_safe(t.board_id, "Someone", f"moved '{t.title}' {old_status}->{t.status}")
         if old_assign!=t.assigned_to and t.assigned_to:
             db2=SessionLocal()
             au=db2.query(models.User).filter(models.User.email==t.assigned_to).first()
             db2.close()
-            if au:
-                create_notification_safe(au.id, t.board_id, t.id, f"You were assigned to '{t.title}'", "assign", f"Assigned: {t.title}")
+            if au: create_notification_safe(au.id, t.board_id, t.id, f"You were assigned to '{t.title}'", "assign", f"Assigned: {t.title}")
         await manager.broadcast(t.board_id, {"type":"update"})
     return t
 
 @app.delete("/api/tasks/{task_id}")
 async def delete_task(task_id:int, db:Session=Depends(get_db)):
     t=db.query(models.Task).filter(models.Task.id==task_id).first()
-    if not t:
-        raise HTTPException(status_code=404)
+    if not t: raise HTTPException(status_code=404)
     bid=t.board_id
     db.query(models.Comment).filter(models.Comment.task_id==task_id).delete(synchronize_session=False)
     db.query(models.Subtask).filter(models.Subtask.task_id==task_id).delete(synchronize_session=False)
     db.delete(t)
     db.commit()
-    if bid:
-        await manager.broadcast(bid, {"type":"update"})
+    if bid: await manager.broadcast(bid, {"type":"update"})
     return {"ok":True}
 
-# Subtasks API
 @app.get("/api/tasks/{task_id}/subtasks")
 def get_subtasks(task_id:int, db:Session=Depends(get_db)):
     return db.query(models.Subtask).filter(models.Subtask.task_id==task_id).order_by(models.Subtask.id.asc()).all()
@@ -548,27 +519,20 @@ async def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(g
         task=db.query(models.Task).filter(models.Task.id==task_id).first()
         if task and task.board_id:
             log_activity_safe(task.board_id, current_user.name, f"commented on '{task.title}'")
-            
-            # Mentions Logic (find emails like @user@gmail.com)
             mentions = re.findall(r'@([\w\.-]+@[\w\.-]+)', payload.text)
             db2=SessionLocal()
             for m_email in set(mentions):
                 au=db2.query(models.User).filter(models.User.email==m_email).first()
                 if au and au.id != current_user.id:
                     create_notification_safe(au.id, task.board_id, task_id, f"{current_user.name} mentioned you in '{task.title}'", "mention", f"You were mentioned in {task.title}")
-            
-            # Normal assign notification
             if task.assigned_to and task.assigned_to!=current_user.email and task.assigned_to not in mentions:
                 au=db2.query(models.User).filter(models.User.email==task.assigned_to).first()
                 if au:
                     create_notification_safe(au.id, task.board_id, task_id, f"{current_user.name} commented on '{task.title}'", "comment", f"New comment on {task.title}")
             db2.close()
-            
             await manager.broadcast(task.board_id, {"type":"update"})
         return c
     except Exception as e:
-        print("comment err", e)
-        traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -576,7 +540,6 @@ async def add_comment(task_id:int, payload:CommentCreate, current_user=Depends(g
 async def websocket_endpoint(websocket: WebSocket, board_id: int):
     await manager.connect(websocket, board_id)
     try:
-        while True:
-            await websocket.receive_text()
+        while True: await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, board_id)
