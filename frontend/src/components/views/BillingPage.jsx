@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 
-export default function BillingPage({ userData, bgCard, setViewMode, handleUpgrade }) {
+export default function BillingPage({ userData, bgCard, setViewMode, handleUpgrade, handlePlanSelection }) {
   const [billingCycle, setBillingCycle] = useState('monthly');
 
   const currentTier = userData?.subscription_tier || 'free';
@@ -185,7 +185,8 @@ export default function BillingPage({ userData, bgCard, setViewMode, handleUpgra
                   <button
                     type="button"
                     onClick={() => {
-                      if (plan.name === 'Pro' && currentTier !== 'pro') handleUpgrade();
+                      if (plan.active) return;
+                      handlePlanSelection(plan.name);
                     }}
                     className={`mt-6 w-full rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
                       plan.active

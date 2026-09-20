@@ -261,10 +261,32 @@ export default function App() {
   const handleUpgrade = async () => {
     try {
       await auth.upgrade();
+      const userRes = await auth.getMe();
+      setUserData(userRes.data);
       alert("Upgraded to Pro!");
-      auth.getMe().then(r => setUserData(r.data));
       addAccountActivity("Upgraded to Pro");
     } catch { alert("Upgrade failed"); }
+  };
+
+  const handlePlanSelection = async (planName) => {
+    const tier = (planName || '').toLowerCase();
+
+    if (tier === 'pro') {
+      await handleUpgrade();
+      return;
+    }
+
+    if (tier === 'free') {
+      alert("You are already on the free plan or can stay on it without any upgrade.");
+      return;
+    }
+
+    if (tier === 'enterprise') {
+      alert("Enterprise pricing is handled through sales. Please contact support to set up a custom workspace plan.");
+      return;
+    }
+
+    alert("This plan is not currently available from the app.");
   };
 
   const exportCSV = async () => {
@@ -593,7 +615,7 @@ export default function App() {
               setViewMode,
             }} />
           ) : viewMode === "billing" ? (
-            <BillingPage {...{ userData, bgCard, setViewMode, handleUpgrade }} />
+            <BillingPage {...{ userData, bgCard, setViewMode, handleUpgrade, handlePlanSelection }} />
           ) : viewMode === "reports" ? (
             <ReportsPage {...{ analytics, bgCard, setViewMode }} />
           ) : viewMode === "team" ? (
