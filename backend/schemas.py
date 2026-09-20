@@ -1,17 +1,32 @@
-from pydantic import BaseModel
 from typing import Optional
+from pydantic import BaseModel
+
+# ==========================================
+#               AUTH SCHEMAS
+# ==========================================
 
 class RegisterRequest(BaseModel):
     email: str
     password: str
     name: str
 
+
+# ==========================================
+#              BOARD SCHEMAS
+# ==========================================
+
 class BoardCreate(BaseModel):
     name: str
+
 
 class InviteRequest(BaseModel):
     email: str
     role: str = "member"
+
+
+# ==========================================
+#               TASK SCHEMAS
+# ==========================================
 
 class TaskCreate(BaseModel):
     title: str
@@ -28,10 +43,10 @@ class TaskCreate(BaseModel):
     attachment_url: str = ""
     labels: str = ""
 
-class CommentCreate(BaseModel):
-    text: str
 
 class SubtaskCreate(BaseModel):
     title: str
 
-#(Pydantic Data Validation Models)
+
+class CommentCreate(BaseModel):
+    text: str
