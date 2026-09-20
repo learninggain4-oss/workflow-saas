@@ -47,7 +47,11 @@ export default function App() {
   const [calDate, setCalDate] = useState(new Date());
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode") === "true");
 
-  useEffect(() => { localStorage.setItem("darkMode", String(darkMode)); }, [darkMode]);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    document.documentElement.style.colorScheme = darkMode ? 'dark' : 'light';
+    localStorage.setItem("darkMode", String(darkMode));
+  }, [darkMode]);
 
   const currentEmail = useMemo(() => {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }

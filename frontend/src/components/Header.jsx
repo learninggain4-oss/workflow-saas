@@ -5,6 +5,9 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
   return (
     <header className="flex-shrink-0 h-20 px-8 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-transparent">
       <div className="flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-2 rounded-full border border-indigo-200/70 bg-indigo-50/70 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300">
+          Workspace
+        </div>
         <h2 className="text-2xl font-extrabold tracking-tight truncate">
           {boardsList.find(b => b.id === selectedBoard)?.name || "Select a project"}
         </h2>
@@ -16,9 +19,9 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
       </div>
       
       <div className="flex gap-4 items-center">
-        <div className={`flex border rounded-lg p-1 shadow-sm ${bgCard}`}>
+        <div className={`flex border rounded-xl p-1 shadow-sm ${bgCard}`}>
           {["dashboard", "board", "timeline", "calendar"].map(m => (
-            <button key={m} onClick={() => setViewMode(m)} className={`px-4 py-1.5 rounded-md text-sm font-semibold capitalize transition-all duration-200 ${viewMode === m ? "bg-indigo-50 text-indigo-700 shadow-sm dark:bg-indigo-900/40 dark:text-indigo-300" : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"}`}>
+            <button key={m} onClick={() => setViewMode(m)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold capitalize transition-all duration-200 ${viewMode === m ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"}`}>
               {m}
             </button>
           ))}

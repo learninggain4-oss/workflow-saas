@@ -2,17 +2,20 @@ import React from 'react';
 
 export default function Auth({ email, setEmail, password, setPassword, name, setName, isRegister, setIsRegister, handleLogin, handleRegister, bgMain, bgCard, inputCls, primaryBtn }) {
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-200 ${bgMain}`}>
-      <div className={`p-10 rounded-2xl border w-full max-w-md shadow-2xl ${bgCard}`}>
+    <div className={`min-h-screen flex items-center justify-center p-4 sm:p-6 transition-colors duration-200 ${bgMain}`}>
+      <div className={`glass-panel w-full max-w-md rounded-[28px] p-8 sm:p-10 ${bgCard}`}>
         <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xl font-black shadow-lg shadow-indigo-500/20 mb-4">
+            W
+          </div>
           <h1 className="font-extrabold text-3xl tracking-tight mb-2">WorkFlow<span className="text-indigo-500">.</span></h1>
-          <p className="text-sm text-gray-500 font-medium">Team Task Management + Email</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Team Task Management + Email</p>
         </div>
         <div className="space-y-4">
-          {isRegister && <input value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" className={`border w-full p-3 rounded-xl text-sm ${inputCls}`} />}
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" className={`border w-full p-3 rounded-xl text-sm ${inputCls}`} />
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className={`border w-full p-3 rounded-xl text-sm ${inputCls}`} />
-          <button onClick={isRegister ? handleRegister : handleLogin} className={`w-full p-3 rounded-xl text-sm font-semibold shadow-md mt-2 ${primaryBtn}`}>
+          {isRegister && <input value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" className={`border w-full p-3.5 rounded-xl text-sm shadow-sm ${inputCls}`} />}
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" className={`border w-full p-3.5 rounded-xl text-sm shadow-sm ${inputCls}`} />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className={`border w-full p-3.5 rounded-xl text-sm shadow-sm ${inputCls}`} />
+          <button onClick={isRegister ? handleRegister : handleLogin} className={`w-full p-3.5 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-500/20 mt-2 ${primaryBtn}`}>
             {isRegister ? "Create Account" : "Sign In"}
           </button>
         </div>
