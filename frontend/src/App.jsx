@@ -593,7 +593,7 @@ export default function App() {
               setViewMode,
             }} />
           ) : viewMode === "billing" ? (
-            <BillingPage {...{ userData, bgCard, setViewMode }} />
+            <BillingPage {...{ userData, bgCard, setViewMode, handleUpgrade }} />
           ) : viewMode === "reports" ? (
             <ReportsPage {...{ analytics, bgCard, setViewMode }} />
           ) : viewMode === "team" ? (
