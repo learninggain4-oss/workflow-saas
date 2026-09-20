@@ -45,8 +45,8 @@ app = FastAPI(
     title="WorkFlow SaaS",
     version="0.1.0",
     description="Professional API documentation for WorkFlow SaaS",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,
+    redoc_url=None,
 )
 
 app.swagger_ui_parameters = {
