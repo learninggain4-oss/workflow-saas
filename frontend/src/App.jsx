@@ -584,7 +584,7 @@ export default function App() {
             }} />
           ) : (
             <>
-              {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard }} />}
+              {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard }} />}
 
               {viewMode === "board" && <BoardView {...{ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask }} />}
 
