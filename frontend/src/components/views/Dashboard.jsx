@@ -5,6 +5,7 @@ export default function Dashboard({ analytics, activities, bgCard, userData, set
     { label: 'New task', action: () => setViewMode('board') },
     { label: 'Invite teammates', action: () => setViewMode('board') },
     { label: 'Open settings', action: () => setViewMode('settings') },
+    { label: 'Billing & plans', action: () => setViewMode('billing') },
     { label: 'Export board', action: () => setViewMode('dashboard') },
   ];
 

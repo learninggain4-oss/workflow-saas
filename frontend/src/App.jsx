@@ -12,6 +12,7 @@ import Timeline from './components/views/Timeline';
 import CalendarView from './components/views/CalendarView';
 import TaskModal from './components/TaskModal';
 import AccountSettingsPage from './components/views/AccountSettingsPage';
+import BillingPage from './components/views/BillingPage';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -582,6 +583,8 @@ export default function App() {
               primaryBtn,
               setViewMode,
             }} />
+          ) : viewMode === "billing" ? (
+            <BillingPage {...{ userData, bgCard, setViewMode }} />
           ) : (
             <>
               {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard }} />}
