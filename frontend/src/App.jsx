@@ -167,7 +167,23 @@ export default function App() {
   const fetchInitialData = async () => {
     if (!token) return;
     try {
-      const uRes = await auth.getMe(); setUserData(uRes.data);
+      const uRes = await auth.getMe();
+      const user = uRes.data;
+      setUserData(user);
+      if (user?.profile_preferences) {
+        setProfilePreferences({ ...defaultProfilePreferences, ...user.profile_preferences });
+      }
+      if (user?.workspace_defaults) {
+        setWorkspaceDefaults({ ...defaultWorkspaceDefaults, ...user.workspace_defaults });
+      }
+      if (user?.security_settings) {
+        setSecuritySettings({
+          ...defaultSecuritySettings,
+          ...user.security_settings,
+          connectedApps: user.security_settings.connectedApps || defaultSecuritySettings.connectedApps,
+        });
+      }
+      if (user?.avatar_url) setProfileAvatar(user.avatar_url);
       const bRes = await boards.getAll(); setBoards(bRes.data);
       if (bRes.data.length > 0 && !selectedBoard) setSelectedBoard(bRes.data[0].id);
       const nRes = await notifs.getAll(); setNotifications(nRes.data);
@@ -356,18 +372,41 @@ export default function App() {
         name,
         email: emailValue,
         password: passwordValue || "",
+        avatar_url: profileAvatar || "",
+        profile_preferences: profilePreferences,
+        workspace_defaults: workspaceDefaults,
+        security_settings: {
+          emailVerified: securitySettings.emailVerified,
+          twoFactorEnabled: securitySettings.twoFactorEnabled,
+          connectedApps: securitySettings.connectedApps,
+        },
       };
       const res = await auth.updateProfile(payload);
-      setUserData(res.data.user);
+      const updatedUser = res.data.user || res.data;
+      setUserData(updatedUser);
+      if (updatedUser?.profile_preferences) {
+        setProfilePreferences({ ...defaultProfilePreferences, ...updatedUser.profile_preferences });
+      }
+      if (updatedUser?.workspace_defaults) {
+        setWorkspaceDefaults({ ...defaultWorkspaceDefaults, ...updatedUser.workspace_defaults });
+      }
+      if (updatedUser?.security_settings) {
+        setSecuritySettings({
+          ...defaultSecuritySettings,
+          ...updatedUser.security_settings,
+          connectedApps: updatedUser.security_settings.connectedApps || defaultSecuritySettings.connectedApps,
+        });
+      }
       if (res.data.access_token) {
         localStorage.setItem("token", res.data.access_token);
         setToken(res.data.access_token);
       }
       setProfileForm({
-        name: res.data.user?.name || name,
-        email: res.data.user?.email || emailValue,
+        name: updatedUser?.name || name,
+        email: updatedUser?.email || emailValue,
         password: "",
       });
+      if (updatedUser?.avatar_url) setProfileAvatar(updatedUser.avatar_url);
       addAccountActivity("Updated profile settings");
       alert("Profile updated successfully");
     } catch (err) {
@@ -395,7 +434,23 @@ export default function App() {
       const formData = new FormData();
       formData.append("file", file);
       const res = await uploadFile(formData);
-      setProfileAvatar(res.data?.url || "");
+      const avatarUrl = res.data?.url || "";
+      setProfileAvatar(avatarUrl);
+      if (userData) {
+        await auth.updateProfile({
+          name: userData.name || profileForm.name,
+          email: userData.email || profileForm.email,
+          password: "",
+          avatar_url: avatarUrl,
+          profile_preferences: profilePreferences,
+          workspace_defaults: workspaceDefaults,
+          security_settings: {
+            emailVerified: securitySettings.emailVerified,
+            twoFactorEnabled: securitySettings.twoFactorEnabled,
+            connectedApps: securitySettings.connectedApps,
+          },
+        });
+      }
       addAccountActivity("Updated profile photo");
       alert("Profile photo updated");
     } catch {

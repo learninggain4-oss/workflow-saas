@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
 # ==========================================
@@ -15,6 +15,13 @@ class UserProfileUpdate(BaseModel):
     name: str = ""
     email: str = ""
     password: str = ""
+    avatar_url: str = ""
+    email_verified: Optional[bool] = None
+    two_factor_enabled: Optional[bool] = None
+    profile_preferences: Optional[dict] = None
+    workspace_defaults: Optional[dict] = None
+    connected_apps: Optional[List[dict]] = None
+    security_settings: Optional[dict] = None
 
 
 # ==========================================

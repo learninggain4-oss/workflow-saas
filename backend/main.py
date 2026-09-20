@@ -2,6 +2,7 @@ import os
 import io
 import re
 import csv
+import json
 import base64
 import traceback
 import threading
@@ -38,6 +39,22 @@ except Exception:
 
 # --- DATABASE INITIALIZATION ---
 models.Base.metadata.create_all(bind=engine)
+
+def _parse_json(value, default):
+    if value in (None, "", "null"):
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return default
+
+
+def _dump_json(value, default):
+    if value is None:
+        return json.dumps(default, ensure_ascii=False)
+    return json.dumps(value, ensure_ascii=False)
 
 
 # --- FASTAPI APP SETUP ---
@@ -550,6 +567,12 @@ def fix_db():
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR DEFAULT 'free'"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR DEFAULT ''"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_preferences TEXT DEFAULT '{}'"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS workspace_defaults TEXT DEFAULT '{}'"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS connected_apps TEXT DEFAULT '[]'"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
             conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date VARCHAR DEFAULT ''"))
@@ -620,10 +643,21 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @app.get("/api/users/me")
 def get_user_profile(current_user=Depends(get_current_user)):
     return {
-        "id": current_user.id, 
-        "email": current_user.email, 
-        "name": current_user.name, 
-        "subscription_tier": current_user.subscription_tier
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "subscription_tier": current_user.subscription_tier,
+        "avatar_url": current_user.avatar_url or "",
+        "email_verified": bool(current_user.email_verified),
+        "two_factor_enabled": bool(current_user.two_factor_enabled),
+        "profile_preferences": _parse_json(current_user.profile_preferences, {}),
+        "workspace_defaults": _parse_json(current_user.workspace_defaults, {}),
+        "connected_apps": _parse_json(current_user.connected_apps, []),
+        "security_settings": {
+            "emailVerified": bool(current_user.email_verified),
+            "twoFactorEnabled": bool(current_user.two_factor_enabled),
+            "connectedApps": _parse_json(current_user.connected_apps, []),
+        },
     }
 
 
@@ -646,6 +680,26 @@ def update_user_profile(payload: schemas.UserProfileUpdate, current_user=Depends
 
     current_user.name = new_name
     current_user.email = new_email
+    if payload.avatar_url is not None:
+        current_user.avatar_url = payload.avatar_url or ""
+    if payload.email_verified is not None:
+        current_user.email_verified = bool(payload.email_verified)
+    if payload.two_factor_enabled is not None:
+        current_user.two_factor_enabled = bool(payload.two_factor_enabled)
+    if payload.profile_preferences is not None:
+        current_user.profile_preferences = _dump_json(payload.profile_preferences, {})
+    if payload.workspace_defaults is not None:
+        current_user.workspace_defaults = _dump_json(payload.workspace_defaults, {})
+    if payload.connected_apps is not None:
+        current_user.connected_apps = _dump_json(payload.connected_apps, [])
+    if payload.security_settings is not None:
+        security_settings = payload.security_settings or {}
+        if "emailVerified" in security_settings:
+            current_user.email_verified = bool(security_settings.get("emailVerified"))
+        if "twoFactorEnabled" in security_settings:
+            current_user.two_factor_enabled = bool(security_settings.get("twoFactorEnabled"))
+        if "connectedApps" in security_settings:
+            current_user.connected_apps = _dump_json(security_settings.get("connectedApps"), [])
     if new_password:
         current_user.password_hash = pwd_context.hash(new_password)
 
@@ -653,6 +707,11 @@ def update_user_profile(payload: schemas.UserProfileUpdate, current_user=Depends
     db.refresh(current_user)
 
     new_token = create_token({"sub": current_user.email})
+    security_payload = {
+        "emailVerified": bool(current_user.email_verified),
+        "twoFactorEnabled": bool(current_user.two_factor_enabled),
+        "connectedApps": _parse_json(current_user.connected_apps, []),
+    }
     return {
         "ok": True,
         "message": "Profile updated successfully",
@@ -662,6 +721,13 @@ def update_user_profile(payload: schemas.UserProfileUpdate, current_user=Depends
             "email": current_user.email,
             "name": current_user.name,
             "subscription_tier": current_user.subscription_tier,
+            "avatar_url": current_user.avatar_url or "",
+            "email_verified": bool(current_user.email_verified),
+            "two_factor_enabled": bool(current_user.two_factor_enabled),
+            "profile_preferences": _parse_json(current_user.profile_preferences, {}),
+            "workspace_defaults": _parse_json(current_user.workspace_defaults, {}),
+            "connected_apps": _parse_json(current_user.connected_apps, []),
+            "security_settings": security_payload,
         }
     }
 

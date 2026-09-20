@@ -13,6 +13,12 @@ class User(Base):
     name = Column(String, default="")
     password_hash = Column(String, nullable=False)
     subscription_tier = Column(String, default="free")
+    avatar_url = Column(String, default="")
+    email_verified = Column(Boolean, default=True)
+    two_factor_enabled = Column(Boolean, default=False)
+    profile_preferences = Column(Text, default="{}")
+    workspace_defaults = Column(Text, default="{}")
+    connected_apps = Column(Text, default="[]")
 
 
 # ==========================================
