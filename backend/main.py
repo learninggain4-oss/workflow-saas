@@ -9,8 +9,9 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -40,7 +41,21 @@ models.Base.metadata.create_all(bind=engine)
 
 
 # --- FASTAPI APP SETUP ---
-app = FastAPI(title="WorkFlow SaaS")
+app = FastAPI(
+    title="WorkFlow SaaS",
+    version="0.1.0",
+    description="Professional API documentation for WorkFlow SaaS",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+app.swagger_ui_parameters = {
+    "persistAuthorization": True,
+    "deepLinking": True,
+    "filter": True,
+    "showExtensions": True,
+    "layout": "BaseLayout",
+}
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,6 +64,168 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_docs():
+    swagger = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - API Docs",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+    )
+    html = swagger.body.decode("utf-8")
+    css = """
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --panel: #ffffff;
+            --panel-soft: #eef4ff;
+            --primary: #0f172a;
+            --accent: #2563eb;
+            --accent-soft: #dbeafe;
+            --success: #10b981;
+            --border: #dfe7f3;
+            --text: #1f2937;
+            --muted: #64748b;
+        }
+        body {
+            background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+            font-family: Inter, "Segoe UI", sans-serif;
+            color: var(--text);
+        }
+        .swagger-ui .topbar {
+            background: rgba(255,255,255,0.96);
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+            position: sticky;
+            top: 0;
+            z-index: 9;
+        }
+        .swagger-ui .topbar .download-url-wrapper {
+            display: none;
+        }
+        .swagger-ui .topbar-wrapper .link {
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--primary);
+            font-size: 2rem;
+        }
+        .swagger-ui .topbar-wrapper .link::before {
+            content: "WorkFlow SaaS";
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            letter-spacing: -0.04em;
+        }
+        .swagger-ui .topbar-wrapper .link > span,
+        .swagger-ui .topbar-wrapper .link > svg {
+            display: none;
+        }
+        .swagger-ui .info {
+            background: rgba(255,255,255,0.72);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 28px 30px;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+            margin: 28px 0 20px;
+        }
+        .swagger-ui .info .title {
+            font-size: 2.15rem;
+            color: var(--primary);
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+        .swagger-ui .info .description {
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+        .swagger-ui .opblock {
+            border-radius: 14px !important;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--border) !important;
+            background: rgba(255,255,255,0.9);
+        }
+        .swagger-ui .opblock.opblock-get {
+            border-left: 5px solid #60a5fa !important;
+        }
+        .swagger-ui .opblock.opblock-post {
+            border-left: 5px solid #34d399 !important;
+        }
+        .swagger-ui .opblock.opblock-put {
+            border-left: 5px solid #fbbf24 !important;
+        }
+        .swagger-ui .opblock.opblock-delete {
+            border-left: 5px solid #f87171 !important;
+        }
+        .swagger-ui .opblock-summary {
+            padding: 16px 18px;
+        }
+        .swagger-ui .opblock .opblock-summary-method {
+            min-width: 72px;
+            border-radius: 8px;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .swagger-ui .opblock .opblock-summary-path {
+            color: var(--primary);
+            font-weight: 600;
+        }
+        .swagger-ui .opblock .opblock-summary-description {
+            color: var(--muted);
+        }
+        .swagger-ui .scheme-container {
+            background: rgba(255,255,255,0.8);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+            padding: 18px 20px;
+        }
+        .swagger-ui .btn {
+            border-radius: 10px;
+            font-weight: 700;
+        }
+        .swagger-ui .btn.execute {
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            border: none;
+            box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
+        }
+        .swagger-ui .authorization__btn {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--text);
+            box-shadow: none;
+        }
+        .swagger-ui section.models {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            background: rgba(255,255,255,0.8);
+        }
+        .swagger-ui .model-box {
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .swagger-ui textarea,
+        .swagger-ui input,
+        .swagger-ui select {
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+        @media (max-width: 768px) {
+            .swagger-ui .topbar-wrapper .link::before {
+                font-size: 1.5rem;
+            }
+            .swagger-ui .info {
+                padding: 18px 18px;
+            }
+        }
+    </style>
+    """
+    return HTMLResponse(content=html.replace("</head>", css + "</head>"))
 
 
 # --- EXCEPTION HANDLING ---
