@@ -4,30 +4,36 @@
 
 :root {
   color-scheme: light;
-  --page-bg: #f8fafc;
+  --page-bg: #f5f7ff;
   --page-bg-2: #eef2ff;
-  --panel: rgba(255, 255, 255, 0.85);
+  --panel: rgba(255, 255, 255, 0.76);
   --panel-strong: #ffffff;
-  --surface-muted: #f1f5f9;
+  --surface-muted: #f8fafc;
   --surface-soft: #eef2ff;
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --border-soft: rgba(148, 163, 184, 0.35);
-  --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.08);
+  --border-soft: rgba(148, 163, 184, 0.25);
+  --shadow-soft: 0 24px 60px rgba(15, 23, 42, 0.08);
+  --primary-1: #4f46e5;
+  --primary-2: #8b5cf6;
+  --primary-3: #38bdf8;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
 }
 
 html.dark {
   color-scheme: dark;
-  --page-bg: #09090b;
+  --page-bg: #090b14;
   --page-bg-2: #111827;
-  --panel: rgba(24, 24, 27, 0.92);
-  --panel-strong: #18181b;
+  --panel: rgba(17, 24, 39, 0.82);
+  --panel-strong: #111827;
   --surface-muted: #111827;
   --surface-soft: rgba(79, 70, 229, 0.18);
   --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
-  --border-soft: rgba(82, 88, 102, 0.8);
-  --shadow-soft: 0 18px 40px rgba(2, 6, 23, 0.5);
+  --border-soft: rgba(148, 163, 184, 0.2);
+  --shadow-soft: 0 24px 60px rgba(2, 6, 23, 0.45);
 }
 
 * {
@@ -43,9 +49,9 @@ body {
   margin: 0;
   font-family: Inter, 'Segoe UI', sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(99, 102, 241, 0.16), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.08), transparent 24%),
-    var(--page-bg);
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.12), transparent 22%),
+    linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-2) 100%);
   color: var(--text-primary);
   transition: background 0.2s ease, color 0.2s ease;
 }
@@ -66,7 +72,7 @@ button {
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.25);
+  background: rgba(79, 70, 229, 0.2);
 }
 
 .custom-scrollbar {
@@ -93,7 +99,7 @@ button {
 }
 
 html.dark .custom-scrollbar {
-  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
 }
 
 html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -109,38 +115,49 @@ html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--panel);
     border: 1px solid var(--border-soft);
     box-shadow: var(--shadow-soft);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(16px);
   }
 
   .app-shell {
     background:
-      linear-gradient(135deg, rgba(99, 102, 241, 0.08), transparent 30%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.42));
-    border: 1px solid rgba(148, 163, 184, 0.2);
+      linear-gradient(135deg, rgba(99, 102, 241, 0.08), transparent 28%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.5));
+    border: 1px solid rgba(148, 163, 184, 0.18);
     box-shadow: 0 30px 90px rgba(15, 23, 42, 0.08);
   }
 
   html.dark .app-shell {
     background:
-      linear-gradient(135deg, rgba(99, 102, 241, 0.12), transparent 30%),
-      rgba(15, 23, 42, 0.82);
+      linear-gradient(135deg, rgba(79, 70, 229, 0.12), transparent 30%),
+      rgba(15, 23, 42, 0.8);
     border-color: rgba(82, 88, 102, 0.7);
-    box-shadow: 0 30px 90px rgba(2, 6, 23, 0.4);
+    box-shadow: 0 30px 90px rgba(2, 6, 23, 0.45);
   }
 
   .soft-divider {
-    border-color: rgba(148, 163, 184, 0.18);
+    border-color: rgba(148, 163, 184, 0.16);
   }
 
   .surface-card {
-    border: 1px solid rgba(148, 163, 184, 0.18);
     background: rgba(255, 255, 255, 0.72);
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
   }
 
   html.dark .surface-card {
-    background: rgba(24, 24, 27, 0.9);
+    background: rgba(17, 24, 39, 0.9);
     border-color: rgba(82, 88, 102, 0.7);
-    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.22);
+    box-shadow: 0 14px 34px rgba(2, 6, 23, 0.25);
+  }
+
+  .premium-panel {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.09), rgba(255, 255, 255, 0.86));
+    border: 1px solid rgba(99, 102, 241, 0.14);
+    box-shadow: 0 18px 40px rgba(79, 70, 229, 0.08);
+  }
+
+  html.dark .premium-panel {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(15, 23, 42, 0.7));
+    border-color: rgba(99, 102, 241, 0.24);
   }
 }
