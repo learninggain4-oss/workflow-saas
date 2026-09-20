@@ -50,6 +50,21 @@ export default function App() {
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
   const [savingProfile, setSavingProfile] = useState(false);
+  const defaultProfilePreferences = {
+    emailNotifications: true,
+    boardUpdates: true,
+    taskReminders: true,
+    weeklyDigest: false,
+    compactMode: false,
+  };
+  const [profilePreferences, setProfilePreferences] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("profilePreferences") || "null");
+      return saved ? { ...defaultProfilePreferences, ...saved } : defaultProfilePreferences;
+    } catch {
+      return defaultProfilePreferences;
+    }
+  });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -66,6 +81,10 @@ export default function App() {
       });
     }
   }, [userData]);
+
+  useEffect(() => {
+    localStorage.setItem("profilePreferences", JSON.stringify(profilePreferences));
+  }, [profilePreferences]);
 
   const currentEmail = useMemo(() => {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
@@ -282,6 +301,10 @@ export default function App() {
     }
   };
 
+  const resetProfilePreferences = () => {
+    setProfilePreferences(defaultProfilePreferences);
+  };
+
   const toggleLabel = (lb) => {
     if (!canEdit || !editing) return;
     const cur = (editing.labels || "").split(",").filter(Boolean);
@@ -360,6 +383,11 @@ export default function App() {
         handleProfileUpdate={handleProfileUpdate}
         userData={userData}
         savingProfile={savingProfile}
+        profilePreferences={profilePreferences}
+        setProfilePreferences={setProfilePreferences}
+        resetProfilePreferences={resetProfilePreferences}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
         bgCard={bgCard}
         inputCls={inputCls}
         primaryBtn={primaryBtn}
