@@ -19,6 +19,7 @@ import AutomationPage from './components/views/AutomationPage';
 import IntegrationsPage from './components/views/IntegrationsPage';
 import AuditLogPage from './components/views/AuditLogPage';
 import TemplatesPage from './components/views/TemplatesPage';
+import OnboardingPage from './components/views/OnboardingPage';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -603,6 +604,8 @@ export default function App() {
             <AuditLogPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "templates" ? (
             <TemplatesPage {...{ bgCard, setViewMode }} />
+          ) : viewMode === "onboarding" ? (
+            <OnboardingPage {...{ bgCard, setViewMode }} />
           ) : (
             <>
               {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard }} />}
