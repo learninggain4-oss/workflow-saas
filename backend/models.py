@@ -14,7 +14,6 @@ class Board(Base):
     __tablename__ = "boards"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, default="My Workspace")
-    description = Column(Text, default="") # NEW: Board description
     owner_id = Column(Integer, ForeignKey("users.id"))
 
 # 3. Board Members - invite cheytha users + Role permissions
@@ -37,7 +36,6 @@ class Task(Base):
     due_date = Column(String, default="")  # YYYY-MM-DD for calendar/Gantt
     time_estimated = Column(Integer, default=0) # in minutes or hours
     time_spent = Column(Integer, default=0) # in minutes or hours
-    position = Column(Integer, default=0) # NEW: For drag and drop order
     user_id = Column(Integer, ForeignKey("users.id"))  # creator
     board_id = Column(Integer, nullable=True)  # which board
     assigned_to = Column(String, default="")  # email of assigned user

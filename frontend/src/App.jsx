@@ -28,18 +28,15 @@ export default function App(){
   const [search,setSearch]=useState("")
   const [filterPrio,setFilterPrio]=useState("all")
   const [filterLabel,setFilterLabel]=useState("all")
-  const [filterAssignee,setFilterAssignee]=useState("all") // NEW: Filter by assignee
   const [editing,setEditing]=useState(null)
 
   // Boards
   const [boards,setBoards]=useState([])
   const [selectedBoard,setSelectedBoard]=useState(null)
   const [newBoardName,setNewBoardName]=useState("")
-  const [newBoardDesc,setNewBoardDesc]=useState("") // NEW: Board desc
   const [inviteEmail,setInviteEmail]=useState("")
   const [inviteRole,setInviteRole]=useState("member")
   const [renameValue,setRenameValue]=useState("")
-  const [renameDesc,setRenameDesc]=useState("") // NEW: Rename desc
 
   // Extras
   const [taskComments,setTaskComments]=useState([])
@@ -51,7 +48,7 @@ export default function App(){
   const [uploading,setUploading]=useState(false)
   const [notifications,setNotifications]=useState([])
   const [showNotif,setShowNotif]=useState(false)
-  const [viewMode,setViewMode]=useState("board") 
+  const [viewMode,setViewMode]=useState("board") // board, calendar, timeline, dashboard
   const [calDate,setCalDate]=useState(new Date())
   const [darkMode,setDarkMode]=useState(localStorage.getItem("darkMode")==="true")
 
@@ -122,11 +119,11 @@ export default function App(){
   useEffect(()=>{
     fetchTasks(); fetchActivities(); fetchBoardMembers()
     const b=boards.find(x=>x.id===selectedBoard)
-    if(b){ setRenameValue(b.name); setRenameDesc(b.description||"") }
+    if(b) setRenameValue(b.name)
   },[selectedBoard])
   useEffect(()=>{ if(editing) fetchCommentsAndSubtasks(editing.id) },[editing])
 
-  // WebSocket
+  // WebSocket realtime
   useEffect(()=>{
     if(!selectedBoard||!token) return
     const wsBase=API_URL.replace("https://","wss://").replace("http://","ws://")
@@ -148,16 +145,19 @@ export default function App(){
 
   // Auth handlers
   const handleLogin=async()=>{
-    const f=new URLSearchParams(); f.append("username",email); f.append("password",password)
+    const f=new URLSearchParams()
+    f.append("username",email); f.append("password",password)
     try{
       const r=await axios.post(`${API_URL}/api/login`,f)
-      localStorage.setItem("token",r.data.access_token); setToken(r.data.access_token)
+      localStorage.setItem("token",r.data.access_token)
+      setToken(r.data.access_token)
     }catch{ alert("Login failed - check email/password") }
   }
   const handleRegister=async()=>{
     try{
       await axios.post(`${API_URL}/api/register`,{email,password,name})
-      alert("Registered! Now login"); setIsRegister(false)
+      alert("Registered! Now login")
+      setIsRegister(false)
     }catch(e){ alert(e.response?.data?.detail||"Register failed") }
   }
 
@@ -166,27 +166,16 @@ export default function App(){
     if(!canEdit) return alert("Viewers cannot add tasks")
     if(!title.trim()||!selectedBoard) return alert("Select board and enter title")
     const prio=(title.toLowerCase().includes("urgent")||title.toLowerCase().includes("bug"))?"high":"medium"
-    await axios.post(`${API_URL}/api/tasks`,{title,status:"todo",priority:prio,description:"",start_date:"",due_date:"",time_estimated:0,time_spent:0,position:tasks.length,board_id:selectedBoard,assigned_to:"",assigned_to_name:"",attachment_url:"",labels:""},authHeader)
+    await axios.post(`${API_URL}/api/tasks`,{title,status:"todo",priority:prio,description:"",start_date:"",due_date:"",time_estimated:0,time_spent:0,board_id:selectedBoard,assigned_to:"",assigned_to_name:"",attachment_url:"",labels:""},authHeader)
     setTitle("")
   }
-  
-  const onDragEnd = async(r) => {
-    if(!canEdit || !r.destination) return
-    const id = r.draggableId; const ns = r.destination.droppableId; const newIdx = r.destination.index;
-    
-    // Optimistic UI Update & Reordering
-    setTasks(prev => {
-      const updated = [...prev];
-      const taskIndex = updated.findIndex(t => String(t.id) === id);
-      if(taskIndex > -1) {
-        updated[taskIndex].status = ns;
-        updated[taskIndex].position = newIdx;
-      }
-      return updated;
-    })
-    try{ await axios.put(`${API_URL}/api/tasks/${id}`,{status:ns, position:newIdx},authHeader) }catch{}
+  const onDragEnd=async(r)=>{
+    if(!canEdit) return
+    if(!r.destination) return
+    const id=r.draggableId; const ns=r.destination.droppableId
+    setTasks(p=>p.map(t=>String(t.id)===id?{...t,status:ns}:t))
+    try{ await axios.put(`${API_URL}/api/tasks/${id}`,{status:ns},authHeader) }catch{}
   }
-  
   const openEditModal=(t)=>setEditing({...t, labels:t.labels||""})
   const saveEdit=async()=>{ 
     if(!canEdit) return alert("Viewers cannot edit")
@@ -198,15 +187,32 @@ export default function App(){
     await axios.delete(`${API_URL}/api/tasks/${id}`,authHeader); setEditing(null) 
   }
 
+  // Subtask handlers
+  const addSubtask=async()=>{
+    if(!canEdit || !newSubtask.trim() || !editing) return
+    await axios.post(`${API_URL}/api/tasks/${editing.id}/subtasks`,{title:newSubtask},authHeader)
+    setNewSubtask(""); fetchCommentsAndSubtasks(editing.id)
+  }
+  const toggleSubtask=async(s)=>{
+    if(!canEdit) return
+    await axios.put(`${API_URL}/api/subtasks/${s.id}`,{is_completed:!s.is_completed},authHeader)
+    fetchCommentsAndSubtasks(editing.id)
+  }
+  const delSubtask=async(sId)=>{
+    if(!canEdit) return
+    await axios.delete(`${API_URL}/api/subtasks/${sId}`,authHeader)
+    fetchCommentsAndSubtasks(editing.id)
+  }
+
   // Board handlers
   const createBoard=async()=>{
     if(!newBoardName.trim()) return
-    const r=await axios.post(`${API_URL}/api/boards`,{name:newBoardName, description:newBoardDesc},authHeader)
-    setNewBoardName(""); setNewBoardDesc(""); await fetchBoards(); setSelectedBoard(r.data.id)
+    const r=await axios.post(`${API_URL}/api/boards`,{name:newBoardName},authHeader)
+    setNewBoardName(""); await fetchBoards(); setSelectedBoard(r.data.id)
   }
   const renameBoard=async()=>{
     if(!renameValue.trim()||!selectedBoard || myRole!=='admin') return
-    await axios.put(`${API_URL}/api/boards/${selectedBoard}`,{name:renameValue, description:renameDesc},authHeader)
+    await axios.put(`${API_URL}/api/boards/${selectedBoard}`,{name:renameValue},authHeader)
     await fetchBoards()
   }
   const deleteBoard=async()=>{
@@ -215,79 +221,82 @@ export default function App(){
     await axios.delete(`${API_URL}/api/boards/${selectedBoard}`,authHeader)
     setSelectedBoard(null); await fetchBoards()
   }
+  
   const inviteUser=async()=>{
     if(!inviteEmail.trim()||!selectedBoard || myRole!=='admin') return alert("Only admins can invite")
     try{
       const res = await axios.post(`${API_URL}/api/boards/${selectedBoard}/invite`,{email:inviteEmail, role:inviteRole},authHeader)
-      alert(res.data.message || "Invited + Email sent!"); setInviteEmail(""); fetchBoardMembers()
+      alert(res.data.message || "Invited + Email sent!")
+      setInviteEmail(""); fetchBoardMembers()
     }catch(e){ alert(e.response?.data?.detail||"Invite failed") }
   }
 
-  // Extras
-  const addSubtask=async()=>{
-    if(!canEdit || !newSubtask.trim() || !editing) return
-    await axios.post(`${API_URL}/api/tasks/${editing.id}/subtasks`,{title:newSubtask},authHeader)
-    setNewSubtask(""); fetchCommentsAndSubtasks(editing.id)
-  }
-  const toggleSubtask=async(s)=>{
-    if(!canEdit) return
-    await axios.put(`${API_URL}/api/subtasks/${s.id}`,{is_completed:!s.is_completed},authHeader); fetchCommentsAndSubtasks(editing.id)
-  }
-  const delSubtask=async(sId)=>{
-    if(!canEdit) return
-    await axios.delete(`${API_URL}/api/subtasks/${sId}`,authHeader); fetchCommentsAndSubtasks(editing.id)
-  }
+  // Comment / Upload / Notif
   const addComment=async()=>{
     if(!newComment.trim()||!editing) return
-    try{ await axios.post(`${API_URL}/api/tasks/${editing.id}/comments`,{text:newComment},authHeader); setNewComment(""); fetchCommentsAndSubtasks(editing.id) }catch{ alert("Comment failed") }
+    try{
+      await axios.post(`${API_URL}/api/tasks/${editing.id}/comments`,{text:newComment},authHeader)
+      setNewComment(""); fetchCommentsAndSubtasks(editing.id)
+    }catch{ alert("Comment failed") }
   }
   const handleFileUpload=async(e)=>{
     if(!canEdit) return
-    const file=e.target.files[0]; if(!file) return
-    if(file.size>5*1024*1024) return alert("Max 5MB")
+    const file=e.target.files[0]
+    if(!file) return
+    if(file.size>5*1024*1024){ alert("Max 5MB"); return }
     setUploading(true)
     try{
       const fd=new FormData(); fd.append("file",file)
       const r=await axios.post(`${API_URL}/api/upload`, fd, { headers:{ Authorization:`Bearer ${token}`, "Content-Type":"multipart/form-data" } })
-      setEditing({...editing, attachment_url:r.data.url}); alert("Uploaded!")
+      setEditing({...editing, attachment_url:r.data.url})
+      alert("Uploaded!")
     }catch{ alert("Upload failed") }
     setUploading(false)
   }
   const markRead=async(id)=>{ await axios.put(`${API_URL}/api/notifications/${id}/read`,{},authHeader); fetchNotifications() }
   const markAllRead=async()=>{ await axios.put(`${API_URL}/api/notifications/read-all`,{},authHeader); fetchNotifications() }
   const deleteNotif=async(id)=>{ await axios.delete(`${API_URL}/api/notifications/${id}`,authHeader); fetchNotifications() }
+  const testEmail=async()=>{
+    try{
+      const r=await axios.post(`${API_URL}/api/test-email`,{},authHeader)
+      alert(r.data.sent? `✅ Email request sent to background.` : `❌ Failed`)
+    }catch{ alert("Test failed") }
+  }
   const toggleLabel=(lb)=>{
     if(!canEdit || !editing) return
     const cur=(editing.labels||"").split(",").filter(Boolean)
     const next=cur.includes(lb)? cur.filter(x=>x!==lb): [...cur,lb]
     setEditing({...editing, labels:next.join(",")})
   }
-  
-  // NEW: CSV Export
-  const downloadCSV = () => {
-    const headers = "ID,Title,Status,Priority,Estimated Time,Time Spent,Start Date,Due Date,Assignee\n";
-    const rows = tasks.map(t => `${t.id},"${t.title.replace(/"/g, '""')}",${t.status},${t.priority},${t.time_estimated},${t.time_spent},${t.start_date},${t.due_date},${t.assigned_to}`).join("\n");
-    const blob = new Blob([headers+rows], {type: "text/csv"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${currentBoardName}-Tasks.csv`; a.click();
-  }
 
-  // Formatters & Analytics
+  // Formatters
   const getDaysInMonth=(y,m)=>new Date(y,m+1,0).getDate()
   const getFirstDay=(y,m)=>new Date(y,m,1).getDay()
   const formatDate=(d)=>{ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }
   const tasksByDate=(ds)=>tasks.filter(t=>t.due_date===ds)
-  const formatMentions = (text) => text.split(/(@[\w\.-]+@[\w\.-]+)/g).map((p,i)=> p.startsWith("@") ? <b key={i} className="text-blue-500">{p}</b> : p)
+  const formatMentions = (text) => {
+    const parts = text.split(/(@[\w\.-]+@[\w\.-]+)/g)
+    return parts.map((p,i)=> p.startsWith("@") ? <b key={i} className="text-blue-500">{p}</b> : p)
+  }
 
+  // Analytics
   const analytics=useMemo(()=>{
-    const total=tasks.length; const todo=tasks.filter(t=>t.status==="todo").length; const doing=tasks.filter(t=>t.status==="doing").length; const done=tasks.filter(t=>t.status==="done").length
-    const high=tasks.filter(t=>t.priority==="high").length; const my=tasks.filter(t=>t.assigned_to===currentEmail).length
-    const todayStr=formatDate(new Date()); const overdue=tasks.filter(t=>t.due_date && t.due_date < todayStr && t.status!=="done").length; const dueToday=tasks.filter(t=>t.due_date===todayStr).length
+    const total=tasks.length
+    const todo=tasks.filter(t=>t.status==="todo").length
+    const doing=tasks.filter(t=>t.status==="doing").length
+    const done=tasks.filter(t=>t.status==="done").length
+    const high=tasks.filter(t=>t.priority==="high").length
+    const my=tasks.filter(t=>t.assigned_to===currentEmail).length
+    const todayStr=formatDate(new Date())
+    const overdue=tasks.filter(t=>t.due_date && t.due_date < todayStr && t.status!=="done").length
+    const dueToday=tasks.filter(t=>t.due_date===todayStr).length
     const progress=total===0?0:Math.round((done/total)*100)
-    let totalTimeEst = 0; let totalTimeSpent = 0; const labelCount={}; const byMember={}
+    let totalTimeEst = 0; let totalTimeSpent = 0;
+    const labelCount={}
+    const byMember={}
     tasks.forEach(t=>{
-      totalTimeEst += (t.time_estimated||0); totalTimeSpent += (t.time_spent||0)
+      totalTimeEst += (t.time_estimated||0)
+      totalTimeSpent += (t.time_spent||0)
       ;(t.labels||"").split(",").filter(Boolean).forEach(l=>{ labelCount[l]=(labelCount[l]||0)+1 })
       if(t.assigned_to){ byMember[t.assigned_to]=(byMember[t.assigned_to]||0)+1 }
     })
@@ -298,18 +307,21 @@ export default function App(){
     const ms=t.title.toLowerCase().includes(search.toLowerCase()) || (t.description||"").toLowerCase().includes(search.toLowerCase())
     const mp=filterPrio==="all"||t.priority===filterPrio
     const ml=filterLabel==="all"||(t.labels||"").split(",").includes(filterLabel)
-    const ma=filterAssignee==="all"||t.assigned_to===filterAssignee
-    return ms&&mp&&ml&&ma
+    return ms&&mp&&ml
   })
 
   const currentBoardName=boards.find(b=>b.id===selectedBoard)?.name||""
-  const currentBoardDesc=boards.find(b=>b.id===selectedBoard)?.description||""
   const unread=notifications.filter(n=>!n.is_read).length
   const y=calDate.getFullYear(); const m=calDate.getMonth()
   const daysInMonth=getDaysInMonth(y,m); const firstDay=getFirstDay(y,m)
   const monthName=calDate.toLocaleString('default',{month:'long',year:'numeric'})
-  const timelineDays = Array.from({length:14}).map((_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return formatDate(d) })
 
+  // Timeline Generate (next 14 days)
+  const timelineDays = Array.from({length:14}).map((_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()+i); return formatDate(d)
+  })
+
+  // Theme classes
   const bgMain=darkMode?"bg-[#0f1115] text-gray-100":"bg-[#f8fafc] text-gray-900"
   const bgSide=darkMode?"bg-[#16181d] border-gray-700 text-gray-100":"bg-white border-gray-200"
   const bgCard=darkMode?"bg-[#1e2128] border-gray-700":"bg-white border-gray-200"
@@ -336,6 +348,7 @@ export default function App(){
 
   return(
     <div className={`min-h-screen flex ${bgMain}`}>
+      {/* SIDEBAR */}
       <div className={`w-64 min-w-[16rem] border-r p-5 flex flex-col h-screen sticky top-0 overflow-y-auto ${bgSide}`}>
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-bold text-lg">WorkFlow 🚀</h1>
@@ -348,22 +361,19 @@ export default function App(){
           {boards.map(b=>(
             <button key={b.id} onClick={()=>setSelectedBoard(b.id)} className={`w-full text-left p-2.5 rounded-lg text-sm border truncate transition ${selectedBoard===b.id?'bg-black text-white border-black dark:bg-white dark:text-black font-bold':'hover:bg-gray-100 dark:hover:bg-[#2a2e38] '+bgCard}`}>📋 {b.name}</button>
           ))}
+          {boards.length===0 && <p className="text-xs text-gray-400">No boards - create one</p>}
         </div>
-        <div className="flex flex-col gap-2 mb-6 border-t pt-4">
-          <input value={newBoardName} onChange={e=>setNewBoardName(e.target.value)} placeholder="New board name..." className={`border p-2 rounded-lg text-sm w-full ${inputCls}`}/>
-          <div className="flex gap-2">
-            <input value={newBoardDesc} onChange={e=>setNewBoardDesc(e.target.value)} placeholder="Short desc (opt)" className={`border p-2 rounded-lg text-sm flex-1 min-w-0 ${inputCls}`}/>
-            <button onClick={createBoard} className="bg-black text-white px-3 rounded-lg text-sm font-bold dark:bg-white dark:text-black">+</button>
-          </div>
+        <div className="flex gap-2 mb-6">
+          <input value={newBoardName} onChange={e=>setNewBoardName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createBoard()} placeholder="New board" className={`border p-2 rounded-lg text-sm flex-1 min-w-0 ${inputCls}`}/>
+          <button onClick={createBoard} className="bg-black text-white px-3 rounded-lg text-sm font-bold dark:bg-white dark:text-black">+</button>
         </div>
 
         {selectedBoard && myRole==='admin' && (
           <div className={`border rounded-lg p-3 mb-4 ${subCard}`}>
             <p className="text-xs font-bold uppercase mb-2 opacity-60">Manage Board</p>
             <input value={renameValue} onChange={e=>setRenameValue(e.target.value)} className={`border w-full p-2 rounded text-xs mb-2 ${inputCls}`}/>
-            <input value={renameDesc} onChange={e=>setRenameDesc(e.target.value)} placeholder="Description" className={`border w-full p-2 rounded text-xs mb-2 ${inputCls}`}/>
             <div className="flex gap-2">
-              <button onClick={renameBoard} className={`border flex-1 p-2 rounded text-xs font-bold ${bgCard}`}>Save</button>
+              <button onClick={renameBoard} className={`border flex-1 p-2 rounded text-xs font-bold ${bgCard}`}>Rename</button>
               <button onClick={deleteBoard} className="bg-red-50 text-red-600 border border-red-200 flex-1 p-2 rounded text-xs font-bold hover:bg-red-100">Delete</button>
             </div>
           </div>
@@ -388,16 +398,13 @@ export default function App(){
           </div>
         </div>
 
-        <button onClick={()=>{localStorage.clear(); window.location.reload()}} className={`mt-auto text-xs border p-2.5 rounded-lg font-bold ${bgCard} hover:bg-red-50 hover:text-red-600`}>Logout</button>
+        <button onClick={()=>{localStorage.clear(); setToken(""); setSelectedBoard(null); setBoards([]); setTasks([])}} className={`mt-auto text-xs border p-2.5 rounded-lg font-bold ${bgCard} hover:bg-red-50 hover:text-red-600 hover:border-red-200`}>Logout</button>
       </div>
 
+      {/* MAIN */}
       <div className="flex-1 p-6 lg:p-8 overflow-auto">
-        <div className="flex justify-between items-start mb-6 flex-wrap gap-3">
-          <div>
-            <h2 className="text-2xl font-bold truncate">{currentBoardName||"Select a board"}</h2>
-            {currentBoardDesc && <p className="text-sm text-gray-500 mt-1">{currentBoardDesc}</p>}
-          </div>
-          
+        <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
+          <h2 className="text-2xl font-bold truncate">{currentBoardName||"Select a board"}</h2>
           <div className="flex gap-2 items-center flex-wrap">
             <div className={`flex border rounded-lg p-1 ${bgCard}`}>
               <button onClick={()=>setViewMode("dashboard")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="dashboard"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📊 Dash</button>
@@ -405,14 +412,12 @@ export default function App(){
               <button onClick={()=>setViewMode("timeline")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="timeline"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>⏳ Timeline</button>
               <button onClick={()=>setViewMode("calendar")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="calendar"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📅 Calendar</button>
             </div>
-            
-            <button onClick={downloadCSV} className={`border px-3 py-2 rounded-lg text-sm font-bold ${bgCard} hover:bg-green-50 hover:text-green-700 hover:border-green-300 transition`} title="Export Tasks to CSV">⬇ CSV</button>
 
             <div className="relative">
-              <button onClick={()=>setShowNotif(!showNotif)} className={`relative border px-4 py-2 rounded-lg text-sm font-bold ${bgCard} hover:shadow-sm`}>🔔 {unread>0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold animate-pulse">{unread}</span>}</button>
+              <button onClick={()=>setShowNotif(!showNotif)} className={`relative border px-4 py-2.5 rounded-lg text-sm font-bold ${bgCard} hover:shadow-sm`}>🔔 {unread>0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold animate-pulse">{unread}</span>}</button>
               {showNotif && (
                 <div className={`absolute right-0 top-12 w-80 border rounded-xl shadow-2xl z-50 max-h-96 overflow-hidden flex flex-col ${bgCard}`}>
-                  <div className={`p-3 border-b flex justify-between items-center ${subCard}`}><span className="font-bold text-sm">Notifications {unread>0 && `(${unread} unread)`}</span><button onClick={markAllRead} className="text-xs text-blue-600 font-bold">Mark all read</button></div>
+                  <div className={`p-3 border-b flex justify-between items-center ${subCard}`}><span className="font-bold text-sm">Notifications {unread>0 && `(${unread} unread)`}</span><div className="flex gap-2"><button onClick={markAllRead} className="text-xs text-blue-600 font-bold">Mark all read</button></div></div>
                   <div className="overflow-auto flex-1">
                     {notifications.length===0 && <p className="text-xs text-gray-400 p-6 text-center">No notifications</p>}
                     {notifications.map(n=>(
@@ -428,14 +433,14 @@ export default function App(){
 
             {viewMode==="board" && (
               <>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search..." className={`border px-4 py-2 w-40 rounded-lg text-sm ${inputCls}`}/>
-                <select value={filterPrio} onChange={e=>setFilterPrio(e.target.value)} className={`border px-2 py-2 rounded-lg text-sm font-bold ${inputCls}`}><option value="all">Prio: All</option><option value="high">High 🔥</option><option value="medium">Medium</option></select>
-                <select value={filterAssignee} onChange={e=>setFilterAssignee(e.target.value)} className={`border px-2 py-2 rounded-lg text-sm font-bold ${inputCls}`}><option value="all">Assigned: All</option>{boardMembers.map(m=><option key={m.email} value={m.email}>{m.name||m.email.split('@')[0]}</option>)}</select>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search..." className={`border px-4 py-2.5 w-48 rounded-lg text-sm ${inputCls}`}/>
+                <select value={filterPrio} onChange={e=>setFilterPrio(e.target.value)} className={`border px-3 py-2.5 rounded-lg text-sm font-bold ${inputCls}`}><option value="all">All Prio</option><option value="high">High 🔥</option><option value="medium">Medium</option></select>
               </>
             )}
           </div>
         </div>
 
+        {/* Dashboard View */}
         {viewMode==="dashboard" && (
           <div className="space-y-6">
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -474,6 +479,7 @@ export default function App(){
           </div>
         )}
 
+        {/* Board View */}
         {viewMode==="board" && (
           <>
             {canEdit && (
@@ -512,6 +518,7 @@ export default function App(){
           </>
         )}
 
+        {/* Timeline (Gantt) View */}
         {viewMode==="timeline" && (
           <div className={`rounded-xl border p-5 shadow-sm overflow-x-auto ${bgCard}`}>
             <h3 className="font-bold text-lg mb-4">Timeline (Next 14 Days)</h3>
@@ -521,9 +528,11 @@ export default function App(){
                 {timelineDays.map(d=><div key={d} className="text-xs text-center text-gray-500 border-l px-1">{d.slice(5)}</div>)}
               </div>
               {tasks.filter(t=>t.start_date && t.due_date).map(t=>{
-                const startIdx = timelineDays.indexOf(t.start_date); const endIdx = timelineDays.indexOf(t.due_date)
+                const startIdx = timelineDays.indexOf(t.start_date)
+                const endIdx = timelineDays.indexOf(t.due_date)
                 if(startIdx===-1 && endIdx===-1) return null;
-                const renderStart = startIdx===-1 ? 0 : startIdx; const renderEnd = endIdx===-1 ? 13 : endIdx
+                const renderStart = startIdx===-1 ? 0 : startIdx
+                const renderEnd = endIdx===-1 ? 13 : endIdx
                 const colSpan = (renderEnd - renderStart) + 1
                 return (
                   <div key={t.id} onClick={()=>openEditModal(t)} className="grid grid-cols-[200px_repeat(14,1fr)] gap-1 mb-2 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 py-1">
@@ -532,10 +541,12 @@ export default function App(){
                   </div>
                 )
               })}
+              {tasks.filter(t=>!t.start_date || !t.due_date).length > 0 && <p className="text-xs text-gray-400 mt-4 italic">Some tasks are hidden because they lack a Start Date or Due Date.</p>}
             </div>
           </div>
         )}
 
+        {/* Calendar View */}
         {viewMode==="calendar" && (
           <div className={`rounded-xl border p-5 shadow-sm ${bgCard}`}>
             <div className="flex justify-between items-center mb-6">
@@ -568,6 +579,7 @@ export default function App(){
         )}
       </div>
 
+      {/* EDIT MODAL */}
       {editing && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className={`rounded-2xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border ${bgCard}`}>
@@ -577,6 +589,7 @@ export default function App(){
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column */}
               <div>
                 <input disabled={!canEdit} value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})} placeholder="Task title" className={`border w-full p-2.5 mb-3 rounded-xl text-sm font-medium ${inputCls}`}/>
                 <textarea disabled={!canEdit} value={editing.description||""} onChange={e=>setEditing({...editing,description:e.target.value})} className={`border w-full p-2.5 mb-3 rounded-xl h-24 text-sm ${inputCls}`} placeholder="Description..."/>
@@ -609,6 +622,7 @@ export default function App(){
                 </div>
               </div>
 
+              {/* Right Column */}
               <div>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div><label className="text-xs font-bold uppercase opacity-60">Status</label><select disabled={!canEdit} value={editing.status} onChange={e=>setEditing({...editing,status:e.target.value})} className={`border w-full p-2.5 rounded-xl text-sm mt-1 font-bold ${inputCls}`}><option value="todo">📋 Todo</option><option value="doing">⚡ Doing</option><option value="done">✅ Done</option></select></div>
@@ -616,25 +630,13 @@ export default function App(){
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div><label className="text-xs font-bold uppercase opacity-60">Start Date</label><input disabled={!canEdit} type="date" value={editing.start_date||""} onChange={e=>setEditing({...editing,start_date:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
+                  <div><label className="text-xs font-bold uppercase opacity-60">Start Date (Gantt)</label><input disabled={!canEdit} type="date" value={editing.start_date||""} onChange={e=>setEditing({...editing,start_date:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
                   <div><label className="text-xs font-bold uppercase opacity-60">Due Date</label><input disabled={!canEdit} type="date" value={editing.due_date||""} onChange={e=>setEditing({...editing,due_date:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
                 </div>
 
-                {/* NEW: Quick Time Tracker Buttons */}
                 <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div><label className="text-xs font-bold uppercase opacity-60">Est. Time (Hrs)</label><input disabled={!canEdit} type="number" value={editing.time_estimated||0} onChange={e=>setEditing({...editing,time_estimated:parseInt(e.target.value)})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
-                  <div>
-                    <label className="text-xs font-bold uppercase opacity-60">Time Spent (Hrs)</label>
-                    <div className="flex gap-1 mt-1">
-                       <input disabled={!canEdit} type="number" value={editing.time_spent||0} onChange={e=>setEditing({...editing,time_spent:parseInt(e.target.value)})} className={`border p-2.5 rounded-xl w-full text-sm flex-1 ${inputCls}`}/>
-                       {canEdit && (
-                         <div className="flex flex-col gap-1">
-                           <button onClick={()=>setEditing({...editing, time_spent:(editing.time_spent||0)+1})} className={`border px-2 text-xs rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 font-bold`}>+1h</button>
-                           <button onClick={()=>setEditing({...editing, time_spent:Math.max(0,(editing.time_spent||0)-1)})} className={`border px-2 text-xs rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 font-bold`}>-1h</button>
-                         </div>
-                       )}
-                    </div>
-                  </div>
+                  <div><label className="text-xs font-bold uppercase opacity-60">Est. Time (Hours)</label><input disabled={!canEdit} type="number" value={editing.time_estimated||0} onChange={e=>setEditing({...editing,time_estimated:parseInt(e.target.value)})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
+                  <div><label className="text-xs font-bold uppercase opacity-60">Time Spent (Hours)</label><input disabled={!canEdit} type="number" value={editing.time_spent||0} onChange={e=>setEditing({...editing,time_spent:parseInt(e.target.value)})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
                 </div>
 
                 <div className={`border rounded-xl p-3 mb-3 ${subCard}`}>
