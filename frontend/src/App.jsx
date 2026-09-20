@@ -13,6 +13,9 @@ import CalendarView from './components/views/CalendarView';
 import TaskModal from './components/TaskModal';
 import AccountSettingsPage from './components/views/AccountSettingsPage';
 import BillingPage from './components/views/BillingPage';
+import ReportsPage from './components/views/ReportsPage';
+import TeamPage from './components/views/TeamPage';
+import AutomationPage from './components/views/AutomationPage';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -585,6 +588,12 @@ export default function App() {
             }} />
           ) : viewMode === "billing" ? (
             <BillingPage {...{ userData, bgCard, setViewMode }} />
+          ) : viewMode === "reports" ? (
+            <ReportsPage {...{ analytics, bgCard, setViewMode }} />
+          ) : viewMode === "team" ? (
+            <TeamPage {...{ bgCard, setViewMode }} />
+          ) : viewMode === "automations" ? (
+            <AutomationPage {...{ bgCard, setViewMode }} />
           ) : (
             <>
               {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard }} />}
