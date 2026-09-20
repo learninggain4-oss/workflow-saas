@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from jose import jwt, JWTError
@@ -12,6 +12,7 @@ from typing import Optional, Dict, List
 import models
 from database import SessionLocal, engine
 import traceback, os, base64, smtplib, ssl, threading
+import csv, io
 from email.message import EmailMessage
 
 # Cloudinary optional
@@ -384,6 +385,30 @@ def get_board_members(board_id:int, current_user=Depends(get_current_user), db:S
 @app.get("/api/boards/{board_id}/activities")
 def get_activities(board_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     return db.query(models.Activity).filter(models.Activity.board_id==board_id).order_by(models.Activity.id.desc()).limit(20).all()
+
+# EXPORT CSV FEATURE ADDED HERE
+@app.get("/api/boards/{board_id}/export-csv")
+def export_tasks_csv(board_id: int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
+    boards = get_user_boards(current_user, db)
+    if board_id not in [b.id for b in boards]:
+        raise HTTPException(status_code=403, detail="Not authorized for this board")
+    
+    tasks = db.query(models.Task).filter(models.Task.board_id == board_id).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # Headers
+    writer.writerow(['ID', 'Title', 'Status', 'Priority', 'Description', 'Due Date', 'Assigned To', 'Labels', 'Attachment URL'])
+    
+    # Task data rows
+    for t in tasks:
+        writer.writerow([t.id, t.title, t.status, t.priority, t.description, t.due_date, t.assigned_to_name or t.assigned_to, t.labels, t.attachment_url])
+        
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=board_{board_id}_tasks.csv"}
+    )
 
 @app.get("/api/notifications")
 def get_notifications(current_user=Depends(get_current_user), db:Session=Depends(get_db)):

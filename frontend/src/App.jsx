@@ -204,6 +204,26 @@ export default function App(){
     }catch(e){ alert(e.response?.data?.detail||"Invite failed") }
   }
 
+  // EXPORT CSV HANDLER ADDED HERE
+  const handleExportCSV = async () => {
+    if (!selectedBoard) return;
+    try {
+      const response = await axios.get(`${API_URL}/api/boards/${selectedBoard}/export-csv`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob', // Important to handle binary data/files
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `tasks_board_${selectedBoard}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      alert("Failed to export CSV. Please try again.");
+    }
+  };
+
   // Comment / Upload / Notif / Email
   const addComment=async()=>{
     if(!newComment.trim()||!editing) return
@@ -381,6 +401,11 @@ export default function App(){
               <button onClick={()=>setViewMode("board")} className={`px-4 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="board"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📋 Board</button>
               <button onClick={()=>setViewMode("calendar")} className={`px-4 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="calendar"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📅 Calendar</button>
             </div>
+            
+            {/* EXPORT CSV BUTTON ADDED HERE */}
+            <button onClick={handleExportCSV} disabled={!selectedBoard} className={`px-4 py-2.5 rounded-lg text-sm font-bold border transition ${bgCard} hover:bg-green-50 hover:text-green-700 hover:border-green-200 disabled:opacity-50`}>
+              📤 Export CSV
+            </button>
 
             <div className="relative">
               <button onClick={()=>setShowNotif(!showNotif)} className={`relative border px-4 py-2.5 rounded-lg text-sm font-bold ${bgCard} hover:shadow-sm`}>🔔 {unread>0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold animate-pulse">{unread}</span>}</button>
