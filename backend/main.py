@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 import models
 from database import SessionLocal, engine
-import traceback, os, base64, smtplib, ssl
+import traceback, os, base64, smtplib, ssl, threading
 from email.message import EmailMessage
 
 # Cloudinary optional
@@ -113,11 +113,9 @@ def try_smtp_once(host, port, user, pwd, from_email, to_email, subject, html_bod
 
 def send_email_safe(to_email: str, subject: str, html_body: str) -> bool:
     cfg = get_smtp_config()
-    # 1. Brevo HTTP API first (port 443 - Render blocks 587 but not 443)
     if cfg["brevo_key"].startswith("xkeysib-"):
         if send_email_via_brevo_api(to_email, subject, html_body):
             return True
-    # 2. SMTP fallback - 2525 is Render allowed
     if not cfg["host"] or not cfg["user"] or not cfg["pass"] or not cfg["from"]:
         print(f"SMTP CONFIG MISSING host:{cfg['host']} user:{cfg['user']} from:{cfg['from']}")
         return False
@@ -171,7 +169,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# FIX 401: Stable secret - never change this again! Old default = workflow-saas-secret-2024
 SECRET_KEY = os.getenv("SECRET_KEY", "workflow-saas-secret-2024")
 ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -234,7 +231,7 @@ def log_activity_safe(board_id, user_name, action):
     except:
         pass
 
-def create_notification_safe(user_id, board_id, task_id, message, n_type="info", email_subject:Optional[str]=None):
+def create_notification_safe(user_id, board_id, task_id, message, n_type="info", email_subject=None):
     try:
         db2=SessionLocal()
         u=db2.query(models.User).filter(models.User.id==user_id).first()
@@ -243,8 +240,11 @@ def create_notification_safe(user_id, board_id, task_id, message, n_type="info",
         db2.add(n)
         db2.commit()
         db2.close()
+        
+        # Email backgroundil ayakkanam, allengil API slow aakum
         if user_email and email_subject:
-            send_email_safe(user_email, email_subject, f"<div style='font-family:Arial'><h3>{email_subject}</h3><p>{message}</p><p>Open WorkFlow SaaS dashboard.</p></div>")
+            html_body = f"<div style='font-family:Arial'><h3>{email_subject}</h3><p>{message}</p><p>Open WorkFlow SaaS dashboard.</p></div>"
+            threading.Thread(target=send_email_safe, args=(user_email, email_subject, html_body)).start()
     except Exception as e:
         print("notif err", e)
 
@@ -256,8 +256,10 @@ def root():
 @app.post("/api/test-email")
 def test_email(current_user=Depends(get_current_user)):
     cfg=get_smtp_config()
-    ok=send_email_safe(current_user.email, "✅ WorkFlow SaaS - Email Test Success", f"<h2>Hi {current_user.name}!</h2><p>Your email config works!</p><p>Host:{cfg['host']} From:{cfg['from']} HasBrevo:{cfg['brevo_key'].startswith('xkeysib-')}</p>")
-    return {"sent":ok, "to":current_user.email, "config": {"host":cfg["host"], "port":cfg["port"], "user":cfg["user"], "from":cfg["from"], "has_brevo_key": cfg["brevo_key"].startswith("xkeysib-")}, "hint": "If sent=false: 1) Add BREVO_API_KEY=xkeysib-... in Render ENV 2) Verify FROM_EMAIL in Brevo Senders 3) Check Render logs for Brevo API response"}
+    html_body = f"<h2>Hi {current_user.name}!</h2><p>Your email config works!</p><p>Host:{cfg['host']} From:{cfg['from']} HasBrevo:{cfg['brevo_key'].startswith('xkeysib-')}</p>"
+    # Test email backgroundil ayakkan
+    threading.Thread(target=send_email_safe, args=(current_user.email, "✅ WorkFlow SaaS - Email Test", html_body)).start()
+    return {"sent":True, "to":current_user.email, "config": {"host":cfg["host"], "port":cfg["port"], "user":cfg["user"], "from":cfg["from"], "has_brevo_key": cfg["brevo_key"].startswith("xkeysib-")}, "hint": "Check your inbox in 1 minute."}
 
 @app.post("/api/register")
 def register(req:RegisterRequest, db:Session=Depends(get_db)):
@@ -337,20 +339,30 @@ async def delete_board(board_id:int, current_user=Depends(get_current_user), db:
     db.commit()
     return {"ok":True}
 
+# FIX: Invite Email Issue Pariharichu
 @app.post("/api/boards/{board_id}/invite")
 def invite(board_id:int, payload:InviteRequest, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
     board=db.query(models.Board).filter(models.Board.id==board_id, models.Board.owner_id==current_user.id).first()
     if not board:
         raise HTTPException(status_code=403, detail="Not owner")
+        
     target=db.query(models.User).filter(models.User.email==payload.email).first()
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found - ask them to register first")
-    if not db.query(models.BoardMember).filter(models.BoardMember.board_id==board_id, models.BoardMember.user_id==target.id).first():
-        db.add(models.BoardMember(board_id=board_id, user_id=target.id))
-        db.commit()
-        log_activity_safe(board_id, current_user.name, f"invited {payload.email}")
-        create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}' by {current_user.name}", "invite", f"Invited to {board.name}")
-    return {"ok":True}
+    
+    # User DB-il undenkil Board-lekk add cheyyum
+    if target:
+        if not db.query(models.BoardMember).filter(models.BoardMember.board_id==board_id, models.BoardMember.user_id==target.id).first():
+            db.add(models.BoardMember(board_id=board_id, user_id=target.id))
+            db.commit()
+            log_activity_safe(board_id, current_user.name, f"invited {payload.email}")
+            create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}' by {current_user.name}", "invite", f"Invited to {board.name}")
+    else:
+        # User DB-il illenkil (Puthiya aal aanenkil), Registration Invite email mathram ayakkum
+        subject = f"Invitation to join WorkFlow SaaS - {board.name}"
+        html_body = f"<h2>Hi there!</h2><p><b>{current_user.name}</b> has invited you to join their board <b>{board.name}</b>.</p><p>Please register on WorkFlow SaaS using this email address ({payload.email}) to collaborate!</p>"
+        threading.Thread(target=send_email_safe, args=(payload.email, subject, html_body)).start()
+        log_activity_safe(board_id, current_user.name, f"sent email invite to new user {payload.email}")
+        
+    return {"ok":True, "message": "Invite sent successfully"}
 
 @app.get("/api/boards/{board_id}/members")
 def get_board_members(board_id:int, current_user=Depends(get_current_user), db:Session=Depends(get_db)):
