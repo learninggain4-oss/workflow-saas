@@ -627,6 +627,45 @@ def get_user_profile(current_user=Depends(get_current_user)):
     }
 
 
+@app.put("/api/users/me")
+def update_user_profile(payload: schemas.UserProfileUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    old_email = current_user.email
+    new_name = payload.name.strip() if payload.name else current_user.name
+    new_email = payload.email.strip() if payload.email else current_user.email
+    new_password = payload.password.strip() if payload.password else None
+
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    if not new_email:
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    if new_email != old_email:
+        existing = db.query(models.User).filter(models.User.email == new_email, models.User.id != current_user.id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use")
+
+    current_user.name = new_name
+    current_user.email = new_email
+    if new_password:
+        current_user.password_hash = pwd_context.hash(new_password)
+
+    db.commit()
+    db.refresh(current_user)
+
+    new_token = create_token({"sub": current_user.email})
+    return {
+        "ok": True,
+        "message": "Profile updated successfully",
+        "access_token": new_token,
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "name": current_user.name,
+            "subscription_tier": current_user.subscription_tier,
+        }
+    }
+
+
 @app.post("/api/upgrade")
 def upgrade_to_pro(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     current_user.subscription_tier = "pro"

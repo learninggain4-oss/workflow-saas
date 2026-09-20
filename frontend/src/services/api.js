@@ -16,6 +16,7 @@ export const auth = {
   login: (data) => api.post('/api/login', data, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }),
   register: (data) => api.post('/api/register', data),
   getMe: () => api.get('/api/users/me'),
+  updateProfile: (data) => api.put('/api/users/me', data),
   upgrade: () => api.post('/api/upgrade'),
 };
 

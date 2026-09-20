@@ -46,12 +46,24 @@ export default function App() {
   const [viewMode, setViewMode] = useState("board");
   const [calDate, setCalDate] = useState(new Date());
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode") === "true");
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     document.documentElement.style.colorScheme = darkMode ? 'dark' : 'light';
     localStorage.setItem("darkMode", String(darkMode));
   }, [darkMode]);
+
+  useEffect(() => {
+    if (userData) {
+      setProfileForm({
+        name: userData.name || "",
+        email: userData.email || "",
+        password: "",
+      });
+    }
+  }, [userData]);
 
   const currentEmail = useMemo(() => {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
@@ -224,6 +236,27 @@ export default function App() {
     setUploading(false);
   };
 
+  const handleProfileUpdate = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      const payload = {
+        name: profileForm.name.trim(),
+        email: profileForm.email.trim(),
+        password: profileForm.password.trim() || undefined,
+      };
+      const res = await auth.updateProfile(payload);
+      setUserData(res.data.user);
+      if (res.data.access_token) {
+        localStorage.setItem("token", res.data.access_token);
+        setToken(res.data.access_token);
+      }
+      setShowProfileSettings(false);
+      alert("Profile updated successfully");
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to update profile");
+    }
+  };
+
   const toggleLabel = (lb) => {
     if (!canEdit || !editing) return;
     const cur = (editing.labels || "").split(",").filter(Boolean);
@@ -276,7 +309,7 @@ export default function App() {
 
   return (
     <div className={`h-screen w-full flex overflow-hidden transition-colors duration-200 ${bgMain}`}>
-      <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard }} />
+      <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setShowProfileSettings }} />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }} />
@@ -293,6 +326,43 @@ export default function App() {
       </main>
 
       {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn }} />}
+
+      {showProfileSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-md rounded-2xl border shadow-2xl ${bgCard}`}>
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-5 py-4">
+              <h3 className="text-lg font-bold">Profile Settings</h3>
+              <button onClick={() => setShowProfileSettings(false)} className="text-xl text-gray-500 hover:text-red-500 transition-colors">×</button>
+            </div>
+
+            <form onSubmit={handleProfileUpdate} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Full name</label>
+                <input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className={`border w-full p-3 rounded-xl text-sm ${inputCls}`} placeholder="Your name" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Email address</label>
+                <input type="email" value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className={`border w-full p-3 rounded-xl text-sm ${inputCls}`} placeholder="you@example.com" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">New password</label>
+                <input type="password" value={profileForm.password} onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })} className={`border w-full p-3 rounded-xl text-sm ${inputCls}`} placeholder="Leave blank to keep current password" />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowProfileSettings(false)} className={`px-4 py-2.5 rounded-xl border text-sm font-semibold ${bgCard}`}>
+                  Cancel
+                </button>
+                <button type="submit" className={`px-4 py-2.5 rounded-xl text-sm font-semibold text-white ${primaryBtn}`}>
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }

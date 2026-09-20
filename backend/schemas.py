@@ -11,6 +11,12 @@ class RegisterRequest(BaseModel):
     name: str
 
 
+class UserProfileUpdate(BaseModel):
+    name: str = ""
+    email: str = ""
+    password: str = ""
+
+
 # ==========================================
 #              BOARD SCHEMAS
 # ==========================================
