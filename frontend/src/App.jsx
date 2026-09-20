@@ -35,17 +35,20 @@ export default function App(){
   const [selectedBoard,setSelectedBoard]=useState(null)
   const [newBoardName,setNewBoardName]=useState("")
   const [inviteEmail,setInviteEmail]=useState("")
+  const [inviteRole,setInviteRole]=useState("member")
   const [renameValue,setRenameValue]=useState("")
 
   // Extras
   const [taskComments,setTaskComments]=useState([])
+  const [subtasks,setSubtasks]=useState([])
+  const [newSubtask,setNewSubtask]=useState("")
   const [newComment,setNewComment]=useState("")
   const [activities,setActivities]=useState([])
   const [boardMembers,setBoardMembers]=useState([])
   const [uploading,setUploading]=useState(false)
   const [notifications,setNotifications]=useState([])
   const [showNotif,setShowNotif]=useState(false)
-  const [viewMode,setViewMode]=useState("board")
+  const [viewMode,setViewMode]=useState("board") // board, calendar, timeline, dashboard
   const [calDate,setCalDate]=useState(new Date())
   const [darkMode,setDarkMode]=useState(localStorage.getItem("darkMode")==="true")
 
@@ -54,12 +57,16 @@ export default function App(){
   useEffect(()=>{ localStorage.setItem("darkMode", String(darkMode)) },[darkMode])
 
   const getCurrentEmail=()=>{
-    try{
-      if(!token) return ""
-      return JSON.parse(atob(token.split('.')[1])).sub||""
-    }catch{ return "" }
+    try{ if(!token) return ""; return JSON.parse(atob(token.split('.')[1])).sub||"" }catch{ return "" }
   }
   const currentEmail=getCurrentEmail()
+
+  const myRole = useMemo(()=>{
+    if(!selectedBoard || boardMembers.length===0) return "member"
+    const m = boardMembers.find(x=>x.email===currentEmail)
+    return m ? m.role : "member"
+  },[boardMembers, currentEmail, selectedBoard])
+  const canEdit = myRole === "admin" || myRole === "member"
 
   // Fetchers
   const fetchBoards=async()=>{
@@ -77,11 +84,13 @@ export default function App(){
       setTasks(r.data)
     }catch{}
   }
-  const fetchComments=async(id)=>{
+  const fetchCommentsAndSubtasks=async(id)=>{
     if(!id) return
     try{
-      const r=await axios.get(`${API_URL}/api/tasks/${id}/comments`, authHeader)
-      setTaskComments(r.data)
+      const rc=await axios.get(`${API_URL}/api/tasks/${id}/comments`, authHeader)
+      setTaskComments(rc.data)
+      const rs=await axios.get(`${API_URL}/api/tasks/${id}/subtasks`, authHeader)
+      setSubtasks(rs.data)
     }catch{}
   }
   const fetchActivities=async()=>{
@@ -112,7 +121,7 @@ export default function App(){
     const b=boards.find(x=>x.id===selectedBoard)
     if(b) setRenameValue(b.name)
   },[selectedBoard])
-  useEffect(()=>{ if(editing) fetchComments(editing.id) },[editing])
+  useEffect(()=>{ if(editing) fetchCommentsAndSubtasks(editing.id) },[editing])
 
   // WebSocket realtime
   useEffect(()=>{
@@ -122,13 +131,12 @@ export default function App(){
     ws.onmessage=(e)=>{
       try{
         const d=JSON.parse(e.data)
-        if(d.type==="update"){ fetchTasks(); fetchActivities(); fetchNotifications(); if(editing) fetchComments(editing.id) }
+        if(d.type==="update"){ fetchTasks(); fetchActivities(); fetchNotifications(); if(editing) fetchCommentsAndSubtasks(editing.id) }
       }catch{}
     }
     return ()=>{ try{ ws.close() }catch{} }
   },[selectedBoard])
 
-  // Polling fallback
   useEffect(()=>{
     if(!token) return
     const id=setInterval(()=>{ if(selectedBoard){ fetchTasks(); fetchNotifications() } },8000)
@@ -138,8 +146,7 @@ export default function App(){
   // Auth handlers
   const handleLogin=async()=>{
     const f=new URLSearchParams()
-    f.append("username",email)
-    f.append("password",password)
+    f.append("username",email); f.append("password",password)
     try{
       const r=await axios.post(`${API_URL}/api/login`,f)
       localStorage.setItem("token",r.data.access_token)
@@ -156,95 +163,94 @@ export default function App(){
 
   // Task handlers
   const addTask=async()=>{
+    if(!canEdit) return alert("Viewers cannot add tasks")
     if(!title.trim()||!selectedBoard) return alert("Select board and enter title")
     const prio=(title.toLowerCase().includes("urgent")||title.toLowerCase().includes("bug"))?"high":"medium"
-    await axios.post(`${API_URL}/api/tasks`,{title,status:"todo",priority:prio,description:"",due_date:"",board_id:selectedBoard,assigned_to:"",assigned_to_name:"",attachment_url:"",labels:""},authHeader)
+    await axios.post(`${API_URL}/api/tasks`,{title,status:"todo",priority:prio,description:"",start_date:"",due_date:"",time_estimated:0,time_spent:0,board_id:selectedBoard,assigned_to:"",assigned_to_name:"",attachment_url:"",labels:""},authHeader)
     setTitle("")
   }
   const onDragEnd=async(r)=>{
+    if(!canEdit) return
     if(!r.destination) return
-    const id=r.draggableId
-    const ns=r.destination.droppableId
+    const id=r.draggableId; const ns=r.destination.droppableId
     setTasks(p=>p.map(t=>String(t.id)===id?{...t,status:ns}:t))
     try{ await axios.put(`${API_URL}/api/tasks/${id}`,{status:ns},authHeader) }catch{}
   }
   const openEditModal=(t)=>setEditing({...t, labels:t.labels||""})
-  const saveEdit=async()=>{ await axios.put(`${API_URL}/api/tasks/${editing.id}`,editing,authHeader); setEditing(null) }
-  const delTask=async(id)=>{ await axios.delete(`${API_URL}/api/tasks/${id}`,authHeader); setEditing(null) }
+  const saveEdit=async()=>{ 
+    if(!canEdit) return alert("Viewers cannot edit")
+    await axios.put(`${API_URL}/api/tasks/${editing.id}`,editing,authHeader); setEditing(null) 
+  }
+  const delTask=async(id)=>{ 
+    if(!canEdit) return alert("Viewers cannot delete")
+    if(!confirm("Delete task?")) return
+    await axios.delete(`${API_URL}/api/tasks/${id}`,authHeader); setEditing(null) 
+  }
+
+  // Subtask handlers
+  const addSubtask=async()=>{
+    if(!canEdit || !newSubtask.trim() || !editing) return
+    await axios.post(`${API_URL}/api/tasks/${editing.id}/subtasks`,{title:newSubtask},authHeader)
+    setNewSubtask(""); fetchCommentsAndSubtasks(editing.id)
+  }
+  const toggleSubtask=async(s)=>{
+    if(!canEdit) return
+    await axios.put(`${API_URL}/api/subtasks/${s.id}`,{is_completed:!s.is_completed},authHeader)
+    fetchCommentsAndSubtasks(editing.id)
+  }
+  const delSubtask=async(sId)=>{
+    if(!canEdit) return
+    await axios.delete(`${API_URL}/api/subtasks/${sId}`,authHeader)
+    fetchCommentsAndSubtasks(editing.id)
+  }
 
   // Board handlers
   const createBoard=async()=>{
     if(!newBoardName.trim()) return
     const r=await axios.post(`${API_URL}/api/boards`,{name:newBoardName},authHeader)
-    setNewBoardName("")
-    await fetchBoards()
-    setSelectedBoard(r.data.id)
+    setNewBoardName(""); await fetchBoards(); setSelectedBoard(r.data.id)
   }
   const renameBoard=async()=>{
-    if(!renameValue.trim()||!selectedBoard) return
+    if(!renameValue.trim()||!selectedBoard || myRole!=='admin') return
     await axios.put(`${API_URL}/api/boards/${selectedBoard}`,{name:renameValue},authHeader)
     await fetchBoards()
   }
   const deleteBoard=async()=>{
-    if(!selectedBoard) return
+    if(!selectedBoard || myRole!=='admin') return
     if(!confirm("Delete board and all tasks?")) return
     await axios.delete(`${API_URL}/api/boards/${selectedBoard}`,authHeader)
-    setSelectedBoard(null)
-    await fetchBoards()
+    setSelectedBoard(null); await fetchBoards()
   }
   
-  // FIX: invite API call updated message handling
   const inviteUser=async()=>{
-    if(!inviteEmail.trim()||!selectedBoard) return
+    if(!inviteEmail.trim()||!selectedBoard || myRole!=='admin') return alert("Only admins can invite")
     try{
-      const res = await axios.post(`${API_URL}/api/boards/${selectedBoard}/invite`,{email:inviteEmail},authHeader)
+      const res = await axios.post(`${API_URL}/api/boards/${selectedBoard}/invite`,{email:inviteEmail, role:inviteRole},authHeader)
       alert(res.data.message || "Invited + Email sent!")
-      setInviteEmail("")
-      fetchBoardMembers()
+      setInviteEmail(""); fetchBoardMembers()
     }catch(e){ alert(e.response?.data?.detail||"Invite failed") }
   }
 
-  // EXPORT CSV HANDLER ADDED HERE
-  const handleExportCSV = async () => {
-    if (!selectedBoard) return;
-    try {
-      const response = await axios.get(`${API_URL}/api/boards/${selectedBoard}/export-csv`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob', // Important to handle binary data/files
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `tasks_board_${selectedBoard}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      alert("Failed to export CSV. Please try again.");
-    }
-  };
-
-  // Comment / Upload / Notif / Email
+  // Comment / Upload / Notif
   const addComment=async()=>{
     if(!newComment.trim()||!editing) return
     try{
       await axios.post(`${API_URL}/api/tasks/${editing.id}/comments`,{text:newComment},authHeader)
-      setNewComment("")
-      fetchComments(editing.id)
+      setNewComment(""); fetchCommentsAndSubtasks(editing.id)
     }catch{ alert("Comment failed") }
   }
   const handleFileUpload=async(e)=>{
+    if(!canEdit) return
     const file=e.target.files[0]
     if(!file) return
     if(file.size>5*1024*1024){ alert("Max 5MB"); return }
     setUploading(true)
     try{
-      const fd=new FormData()
-      fd.append("file",file)
+      const fd=new FormData(); fd.append("file",file)
       const r=await axios.post(`${API_URL}/api/upload`, fd, { headers:{ Authorization:`Bearer ${token}`, "Content-Type":"multipart/form-data" } })
       setEditing({...editing, attachment_url:r.data.url})
       alert("Uploaded!")
-    }catch{ alert("Upload failed - add Cloudinary keys in Render") }
+    }catch{ alert("Upload failed") }
     setUploading(false)
   }
   const markRead=async(id)=>{ await axios.put(`${API_URL}/api/notifications/${id}/read`,{},authHeader); fetchNotifications() }
@@ -253,21 +259,25 @@ export default function App(){
   const testEmail=async()=>{
     try{
       const r=await axios.post(`${API_URL}/api/test-email`,{},authHeader)
-      alert(r.data.sent? `✅ Email request sent to background. Check inbox for ${r.data.to}` : `❌ Failed`)
-    }catch{ alert("Test failed - check backend logs /api/test-email") }
+      alert(r.data.sent? `✅ Email request sent to background.` : `❌ Failed`)
+    }catch{ alert("Test failed") }
   }
   const toggleLabel=(lb)=>{
-    if(!editing) return
+    if(!canEdit || !editing) return
     const cur=(editing.labels||"").split(",").filter(Boolean)
     const next=cur.includes(lb)? cur.filter(x=>x!==lb): [...cur,lb]
     setEditing({...editing, labels:next.join(",")})
   }
 
-  // Calendar helpers
+  // Formatters
   const getDaysInMonth=(y,m)=>new Date(y,m+1,0).getDate()
   const getFirstDay=(y,m)=>new Date(y,m,1).getDay()
   const formatDate=(d)=>{ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }
   const tasksByDate=(ds)=>tasks.filter(t=>t.due_date===ds)
+  const formatMentions = (text) => {
+    const parts = text.split(/(@[\w\.-]+@[\w\.-]+)/g)
+    return parts.map((p,i)=> p.startsWith("@") ? <b key={i} className="text-blue-500">{p}</b> : p)
+  }
 
   // Analytics
   const analytics=useMemo(()=>{
@@ -281,13 +291,16 @@ export default function App(){
     const overdue=tasks.filter(t=>t.due_date && t.due_date < todayStr && t.status!=="done").length
     const dueToday=tasks.filter(t=>t.due_date===todayStr).length
     const progress=total===0?0:Math.round((done/total)*100)
+    let totalTimeEst = 0; let totalTimeSpent = 0;
     const labelCount={}
     const byMember={}
     tasks.forEach(t=>{
-      (t.labels||"").split(",").filter(Boolean).forEach(l=>{ labelCount[l]=(labelCount[l]||0)+1 })
+      totalTimeEst += (t.time_estimated||0)
+      totalTimeSpent += (t.time_spent||0)
+      ;(t.labels||"").split(",").filter(Boolean).forEach(l=>{ labelCount[l]=(labelCount[l]||0)+1 })
       if(t.assigned_to){ byMember[t.assigned_to]=(byMember[t.assigned_to]||0)+1 }
     })
-    return {total,todo,doing,done,high,my,overdue,dueToday,progress,labelCount,byMember}
+    return {total,todo,doing,done,high,my,overdue,dueToday,progress,labelCount,byMember,totalTimeEst,totalTimeSpent}
   },[tasks,currentEmail])
 
   const filtered=tasks.filter(t=>{
@@ -299,11 +312,14 @@ export default function App(){
 
   const currentBoardName=boards.find(b=>b.id===selectedBoard)?.name||""
   const unread=notifications.filter(n=>!n.is_read).length
-  const y=calDate.getFullYear()
-  const m=calDate.getMonth()
-  const daysInMonth=getDaysInMonth(y,m)
-  const firstDay=getFirstDay(y,m)
+  const y=calDate.getFullYear(); const m=calDate.getMonth()
+  const daysInMonth=getDaysInMonth(y,m); const firstDay=getFirstDay(y,m)
   const monthName=calDate.toLocaleString('default',{month:'long',year:'numeric'})
+
+  // Timeline Generate (next 14 days)
+  const timelineDays = Array.from({length:14}).map((_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()+i); return formatDate(d)
+  })
 
   // Theme classes
   const bgMain=darkMode?"bg-[#0f1115] text-gray-100":"bg-[#f8fafc] text-gray-900"
@@ -338,20 +354,21 @@ export default function App(){
           <h1 className="font-bold text-lg">WorkFlow 🚀</h1>
           <button onClick={()=>setDarkMode(!darkMode)} className="border px-3 py-1.5 rounded-lg text-sm bg-black text-white dark:bg-white dark:text-black">{darkMode?"☀":"🌙"}</button>
         </div>
+        <p className="text-xs text-blue-500 font-bold mb-4">Role: {myRole.toUpperCase()}</p>
 
         <h2 className="font-bold text-xs uppercase tracking-wider text-gray-500 mb-3">Your Boards</h2>
-        <div className="space-y-2 mb-4 max-h-64 overflow-auto">
+        <div className="space-y-2 mb-4 max-h-48 overflow-auto">
           {boards.map(b=>(
             <button key={b.id} onClick={()=>setSelectedBoard(b.id)} className={`w-full text-left p-2.5 rounded-lg text-sm border truncate transition ${selectedBoard===b.id?'bg-black text-white border-black dark:bg-white dark:text-black font-bold':'hover:bg-gray-100 dark:hover:bg-[#2a2e38] '+bgCard}`}>📋 {b.name}</button>
           ))}
           {boards.length===0 && <p className="text-xs text-gray-400">No boards - create one</p>}
         </div>
         <div className="flex gap-2 mb-6">
-          <input value={newBoardName} onChange={e=>setNewBoardName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createBoard()} placeholder="New board name" className={`border p-2 rounded-lg text-sm flex-1 min-w-0 ${inputCls}`}/>
+          <input value={newBoardName} onChange={e=>setNewBoardName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createBoard()} placeholder="New board" className={`border p-2 rounded-lg text-sm flex-1 min-w-0 ${inputCls}`}/>
           <button onClick={createBoard} className="bg-black text-white px-3 rounded-lg text-sm font-bold dark:bg-white dark:text-black">+</button>
         </div>
 
-        {selectedBoard && (
+        {selectedBoard && myRole==='admin' && (
           <div className={`border rounded-lg p-3 mb-4 ${subCard}`}>
             <p className="text-xs font-bold uppercase mb-2 opacity-60">Manage Board</p>
             <input value={renameValue} onChange={e=>setRenameValue(e.target.value)} className={`border w-full p-2 rounded text-xs mb-2 ${inputCls}`}/>
@@ -362,29 +379,21 @@ export default function App(){
           </div>
         )}
 
-        <div className="border-t pt-4 mb-4">
-          <h3 className="font-bold text-xs uppercase mb-3">Invite Teammate + Email 📧</h3>
-          <input value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="friend@gmail.com" className={`border w-full p-2.5 rounded-lg text-sm mb-2 ${inputCls}`}/>
-          <button disabled={!selectedBoard} onClick={inviteUser} className="bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white w-full p-2.5 rounded-lg text-sm font-bold">Invite + Send Email</button>
-          <button onClick={testEmail} className={`mt-2 w-full p-2.5 rounded-lg text-xs border font-bold ${bgCard} hover:bg-gray-100 dark:hover:bg-[#2a2e38]`}>🧪 Test My Email</button>
-        </div>
+        {myRole==='admin' && (
+          <div className="border-t pt-4 mb-4">
+            <h3 className="font-bold text-xs uppercase mb-3">Invite Teammate 📧</h3>
+            <input value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)} placeholder="friend@email.com" className={`border w-full p-2 rounded-lg text-sm mb-2 ${inputCls}`}/>
+            <select value={inviteRole} onChange={e=>setInviteRole(e.target.value)} className={`border w-full p-2 rounded-lg text-sm mb-2 ${inputCls}`}><option value="member">Member</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select>
+            <button disabled={!selectedBoard} onClick={inviteUser} className="bg-blue-600 text-white w-full p-2 rounded-lg text-sm font-bold">Invite + Email</button>
+          </div>
+        )}
 
         <div className="border-t pt-4 mb-4">
           <h3 className="font-bold text-xs uppercase mb-2">Label Filter 🏷</h3>
           <div className="flex flex-wrap gap-1.5 mb-2">
-            <button onClick={()=>setFilterLabel("all")} className={`text-xs px-2.5 py-1 rounded-full border font-bold ${filterLabel==="all"?"bg-black text-white border-black":"bg-gray-100 dark:bg-[#2a2e38]"}`}>All</button>
+            <button onClick={()=>setFilterLabel("all")} className={`text-xs px-2 py-1 rounded-full border font-bold ${filterLabel==="all"?"bg-black text-white border-black":"bg-gray-100 dark:bg-[#2a2e38]"}`}>All</button>
             {AVAILABLE_LABELS.map(l=>(
-              <button key={l.name} onClick={()=>setFilterLabel(l.name)} className={`text-xs px-2.5 py-1 rounded-full border font-bold ${filterLabel===l.name?'bg-black text-white border-black dark:bg-white dark:text-black': l.cls}`}>{l.name}</button>
-            ))}
-          </div>
-        </div>
-
-        <div className="border-t pt-4 mb-4">
-          <h3 className="font-bold text-xs uppercase mb-2">Activity Feed 🔥</h3>
-          <div className="max-h-64 overflow-auto space-y-1.5 pr-1">
-            {activities.length===0 && <p className="text-xs text-gray-400">No activity yet</p>}
-            {activities.map(a=>(
-              <div key={a.id} className={`text-xs p-2 rounded border leading-tight ${subCard}`}><b className="text-blue-500">{a.user_name}</b> {a.action}<div className="text-xs text-gray-400 mt-0.5">{a.created_at}</div></div>
+              <button key={l.name} onClick={()=>setFilterLabel(l.name)} className={`text-xs px-2 py-1 rounded-full border font-bold ${filterLabel===l.name?'bg-black text-white border-black dark:bg-white dark:text-black': l.cls}`}>{l.name}</button>
             ))}
           </div>
         </div>
@@ -398,14 +407,11 @@ export default function App(){
           <h2 className="text-2xl font-bold truncate">{currentBoardName||"Select a board"}</h2>
           <div className="flex gap-2 items-center flex-wrap">
             <div className={`flex border rounded-lg p-1 ${bgCard}`}>
-              <button onClick={()=>setViewMode("board")} className={`px-4 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="board"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📋 Board</button>
-              <button onClick={()=>setViewMode("calendar")} className={`px-4 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="calendar"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📅 Calendar</button>
+              <button onClick={()=>setViewMode("dashboard")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="dashboard"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📊 Dash</button>
+              <button onClick={()=>setViewMode("board")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="board"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📋 Board</button>
+              <button onClick={()=>setViewMode("timeline")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="timeline"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>⏳ Timeline</button>
+              <button onClick={()=>setViewMode("calendar")} className={`px-3 py-1.5 rounded-md text-sm font-bold transition ${viewMode==="calendar"?"bg-black text-white dark:bg-white dark:text-black shadow":"text-gray-500 hover:text-black"}`}>📅 Calendar</button>
             </div>
-            
-            {/* EXPORT CSV BUTTON ADDED HERE */}
-            <button onClick={handleExportCSV} disabled={!selectedBoard} className={`px-4 py-2.5 rounded-lg text-sm font-bold border transition ${bgCard} hover:bg-green-50 hover:text-green-700 hover:border-green-200 disabled:opacity-50`}>
-              📤 Export CSV
-            </button>
 
             <div className="relative">
               <button onClick={()=>setShowNotif(!showNotif)} className={`relative border px-4 py-2.5 rounded-lg text-sm font-bold ${bgCard} hover:shadow-sm`}>🔔 {unread>0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold animate-pulse">{unread}</span>}</button>
@@ -416,7 +422,7 @@ export default function App(){
                     {notifications.length===0 && <p className="text-xs text-gray-400 p-6 text-center">No notifications</p>}
                     {notifications.map(n=>(
                       <div key={n.id} className={`p-3 border-b flex gap-2 ${!n.is_read?'bg-blue-50 dark:bg-[#252a33]':''}`}>
-                        <div className="flex-1"><p className="text-sm leading-snug">{n.message}</p><p className="text-xs text-gray-400 mt-1">{n.created_at} • 📧 Email sent</p></div>
+                        <div className="flex-1"><p className="text-sm leading-snug">{n.message}</p><p className="text-xs text-gray-400 mt-1">{n.created_at}</p></div>
                         <div className="flex flex-col gap-1"><button onClick={()=>markRead(n.id)} className="text-xs bg-black text-white px-2.5 py-1 rounded-full font-bold h-fit">Read</button><button onClick={()=>deleteNotif(n.id)} className="text-xs text-gray-400 hover:text-red-500">✕</button></div>
                       </div>
                     ))}
@@ -425,71 +431,123 @@ export default function App(){
               )}
             </div>
 
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search title/desc..." className={`border px-4 py-2.5 w-64 rounded-lg text-sm ${inputCls}`}/>
-            <select value={filterPrio} onChange={e=>setFilterPrio(e.target.value)} className={`border px-3 py-2.5 rounded-lg text-sm font-bold ${inputCls}`}><option value="all">All Prio</option><option value="high">High 🔥</option><option value="medium">Medium</option></select>
+            {viewMode==="board" && (
+              <>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search..." className={`border px-4 py-2.5 w-48 rounded-lg text-sm ${inputCls}`}/>
+                <select value={filterPrio} onChange={e=>setFilterPrio(e.target.value)} className={`border px-3 py-2.5 rounded-lg text-sm font-bold ${inputCls}`}><option value="all">All Prio</option><option value="high">High 🔥</option><option value="medium">Medium</option></select>
+              </>
+            )}
           </div>
         </div>
 
-        {/* DASHBOARD ANALYTICS */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-          <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Total</p><p className="text-2xl font-bold mt-1">{analytics.total}</p><div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden"><div className="bg-black dark:bg-white h-1.5 rounded-full transition-all" style={{width:`${analytics.progress}%`}}></div></div><p className="text-xs text-gray-400 mt-1">{analytics.progress}% done</p></div>
-          <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Todo</p><p className="text-2xl font-bold mt-1">{analytics.todo}</p><p className="text-xs text-gray-400 mt-1">To start</p></div>
-          <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Doing</p><p className="text-2xl font-bold mt-1 text-blue-600">{analytics.doing}</p><p className="text-xs text-gray-400 mt-1">In progress</p></div>
-          <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Done</p><p className="text-2xl font-bold mt-1 text-green-600">{analytics.done}</p><p className="text-xs text-gray-400 mt-1">{analytics.progress}%</p></div>
-          <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">High 🔥</p><p className="text-2xl font-bold mt-1 text-red-600">{analytics.high}</p><p className="text-xs text-gray-400 mt-1">Urgent</p></div>
-          <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">My Tasks 👤</p><p className="text-2xl font-bold mt-1">{analytics.my}</p><p className="text-xs text-gray-400 mt-1 truncate">{currentEmail.split('@')[0]||"me"}</p></div>
-          <div className={`rounded-xl border p-4 shadow-sm ${statCard} ${analytics.overdue>0?'ring-1 ring-red-400':''}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Overdue ⚠</p><p className={`text-2xl font-bold mt-1 ${analytics.overdue>0?'text-red-600':''}`}>{analytics.overdue}</p><p className="text-xs text-gray-400 mt-1">Today: {analytics.dueToday}</p></div>
-        </div>
-
-        {/* Labels + Workload breakdown */}
-        {(Object.keys(analytics.labelCount).length>0 || Object.keys(analytics.byMember).length>0) && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
-            <div className={`rounded-xl border p-4 flex flex-wrap gap-2 items-center ${statCard}`}>
-              <span className="text-sm font-bold uppercase mr-2">Labels 🏷:</span>
-              {Object.entries(analytics.labelCount).map(([k,v])=><span key={k} className={`text-xs px-2.5 py-1 rounded-full border font-bold ${getLabelCls(k)}`}>{k}: {v}</span>)}
-              {Object.keys(analytics.labelCount).length===0 && <span className="text-xs text-gray-400">No labels yet</span>}
+        {/* Dashboard View */}
+        {viewMode==="dashboard" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Total Tasks</p><p className="text-2xl font-bold mt-1">{analytics.total}</p><div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden"><div className="bg-black dark:bg-white h-1.5 rounded-full transition-all" style={{width:`${analytics.progress}%`}}></div></div><p className="text-xs text-gray-400 mt-1">{analytics.progress}% done</p></div>
+              <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Todo</p><p className="text-2xl font-bold mt-1">{analytics.todo}</p></div>
+              <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Doing</p><p className="text-2xl font-bold mt-1 text-blue-600">{analytics.doing}</p></div>
+              <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Done</p><p className="text-2xl font-bold mt-1 text-green-600">{analytics.done}</p></div>
+              <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Overdue ⚠</p><p className={`text-2xl font-bold mt-1 ${analytics.overdue>0?'text-red-600':''}`}>{analytics.overdue}</p></div>
+              <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Time Est (hrs)</p><p className="text-2xl font-bold mt-1 text-purple-600">{analytics.totalTimeEst}</p></div>
+              <div className={`rounded-xl border p-4 shadow-sm ${statCard}`}><p className="text-xs uppercase tracking-wider text-gray-500 font-bold">Time Spent (hrs)</p><p className="text-2xl font-bold mt-1 text-orange-600">{analytics.totalTimeSpent}</p></div>
             </div>
-            <div className={`rounded-xl border p-4 flex flex-wrap gap-2 items-center ${statCard}`}>
-              <span className="text-sm font-bold uppercase mr-2">Workload 👥:</span>
-              {Object.entries(analytics.byMember).map(([em,cnt])=><span key={em} className={`text-xs px-2.5 py-1 rounded-full border font-bold ${subCard}`}>{em.split('@')[0]}: <b>{cnt}</b></span>)}
-              {Object.keys(analytics.byMember).length===0 && <span className="text-xs text-gray-400">No assignees</span>}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className={`rounded-xl border p-5 ${statCard}`}>
+                <h3 className="font-bold mb-4 uppercase text-sm tracking-wider">Workload Distribution</h3>
+                <div className="space-y-3">
+                  {Object.entries(analytics.byMember).map(([em,cnt])=>(
+                    <div key={em}>
+                      <div className="flex justify-between text-sm mb-1"><span>{em}</span><span className="font-bold">{cnt} tasks</span></div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden"><div className="bg-blue-500 h-full rounded-full" style={{width:`${(cnt/analytics.total)*100}%`}}></div></div>
+                    </div>
+                  ))}
+                  {Object.keys(analytics.byMember).length===0 && <p className="text-xs text-gray-400">No tasks assigned</p>}
+                </div>
+              </div>
+              <div className={`rounded-xl border p-5 ${statCard} max-h-96 overflow-y-auto`}>
+                <h3 className="font-bold mb-4 uppercase text-sm tracking-wider">Recent Activity Feed 🔥</h3>
+                <div className="space-y-3">
+                  {activities.map(a=>(
+                    <div key={a.id} className={`text-sm p-3 rounded-lg border ${subCard}`}><b className="text-blue-500">{a.user_name}</b> {a.action} <span className="text-xs text-gray-400 ml-2">{a.created_at}</span></div>
+                  ))}
+                  {activities.length===0 && <p className="text-xs text-gray-400">No activity yet</p>}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Add task */}
-        <div className="flex gap-3 mb-8">
-          <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTask()} placeholder="New task... (type urgent or bug = high priority)" className={`border px-4 py-2.5 w-full max-w-2xl rounded-lg text-sm shadow-sm ${inputCls}`}/>
-          <button onClick={addTask} className="bg-black text-white px-6 rounded-lg text-sm font-bold shadow hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200">Add Task</button>
-        </div>
-
-        {viewMode==="board"?(
-          <DragDropContext onDragEnd={onDragEnd}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {["todo","doing","done"].map(s=>(
-                <Droppable key={s} droppableId={s}>{(p)=>(
-                  <div ref={p.innerRef} {...p.droppableProps} className={`rounded-xl border p-4 min-h-[200px] shadow-sm ${bgCard}`}>
-                    <h3 className="font-bold uppercase text-sm tracking-wider border-b pb-3 mb-3 flex justify-between"><span>{s}</span><span className="bg-gray-100 dark:bg-[#2a2e38] px-2 py-0.5 rounded-full">{filtered.filter(t=>t.status===s).length}</span></h3>
-                    {filtered.filter(t=>t.status===s).map((t,i)=>(
-                      <Draggable key={t.id} draggableId={String(t.id)} index={i}>{(pr)=>(
-                        <div ref={pr.innerRef} {...pr.draggableProps} {...pr.dragHandleProps} onClick={()=>openEditModal(t)} className={`p-3 rounded-xl mb-3 border cursor-pointer hover:shadow-md transition ${bgTask}`}>
-                          <div className="font-medium text-sm leading-snug line-clamp-2">{t.title}</div>
-                          {t.labels && <div className="flex gap-1 flex-wrap mt-2">{t.labels.split(",").filter(Boolean).map(lb=><span key={lb} className={`text-xs px-2 py-0.5 rounded-full border font-bold ${getLabelCls(lb)}`}>{lb}</span>)}</div>}
-                          <div className="flex justify-between items-center mt-2.5">
-                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${t.priority==='high'?'bg-red-100 text-red-600 border border-red-200':'bg-green-100 text-green-700 border border-green-200'}`}>{t.priority}</span>
-                            {t.due_date && <span className={`text-xs ${t.due_date < formatDate(new Date()) && t.status!=='done'? 'text-red-600 font-bold' : 'text-gray-500'}`}>📅 {t.due_date}</span>}
+        {/* Board View */}
+        {viewMode==="board" && (
+          <>
+            {canEdit && (
+              <div className="flex gap-3 mb-6">
+                <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTask()} placeholder="New task..." className={`border px-4 py-2.5 w-full max-w-2xl rounded-lg text-sm shadow-sm ${inputCls}`}/>
+                <button onClick={addTask} className="bg-black text-white px-6 rounded-lg text-sm font-bold shadow hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200">Add Task</button>
+              </div>
+            )}
+            <DragDropContext onDragEnd={onDragEnd}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {["todo","doing","done"].map(s=>(
+                  <Droppable key={s} droppableId={s} isDropDisabled={!canEdit}>{(p)=>(
+                    <div ref={p.innerRef} {...p.droppableProps} className={`rounded-xl border p-4 min-h-[200px] shadow-sm ${bgCard}`}>
+                      <h3 className="font-bold uppercase text-sm tracking-wider border-b pb-3 mb-3 flex justify-between"><span>{s}</span><span className="bg-gray-100 dark:bg-[#2a2e38] px-2 py-0.5 rounded-full">{filtered.filter(t=>t.status===s).length}</span></h3>
+                      {filtered.filter(t=>t.status===s).map((t,i)=>(
+                        <Draggable key={t.id} draggableId={String(t.id)} index={i} isDragDisabled={!canEdit}>{(pr)=>(
+                          <div ref={pr.innerRef} {...pr.draggableProps} {...pr.dragHandleProps} onClick={()=>openEditModal(t)} className={`p-3 rounded-xl mb-3 border cursor-pointer hover:shadow-md transition ${bgTask}`}>
+                            <div className="font-medium text-sm leading-snug line-clamp-2">{t.title}</div>
+                            {t.labels && <div className="flex gap-1 flex-wrap mt-2">{t.labels.split(",").filter(Boolean).map(lb=><span key={lb} className={`text-xs px-2 py-0.5 rounded-full border font-bold ${getLabelCls(lb)}`}>{lb}</span>)}</div>}
+                            <div className="flex justify-between items-center mt-2.5">
+                              <span className={`text-xs px-2 py-1 rounded-full font-bold ${t.priority==='high'?'bg-red-100 text-red-600 border border-red-200':'bg-green-100 text-green-700 border border-green-200'}`}>{t.priority}</span>
+                              {t.due_date && <span className={`text-xs ${t.due_date < formatDate(new Date()) && t.status!=='done'? 'text-red-600 font-bold' : 'text-gray-500'}`}>📅 {t.due_date}</span>}
+                            </div>
+                            <div className="flex justify-between mt-1.5">
+                              {t.assigned_to && <div className="text-xs text-gray-500 flex items-center gap-1">👤 {t.assigned_to_name||t.assigned_to.split('@')[0]}</div>}
+                              {(t.time_spent > 0 || t.time_estimated > 0) && <div className="text-xs font-bold text-orange-500">⏱ {t.time_spent}/{t.time_estimated}h</div>}
+                            </div>
                           </div>
-                          {t.assigned_to && <div className="mt-1.5 text-xs text-gray-500 flex items-center gap-1">👤 {t.assigned_to_name||t.assigned_to.split('@')[0]}</div>}
-                          {t.attachment_url && <div className="text-xs text-blue-600 mt-1 font-bold">📎 Attachment</div>}
-                        </div>
-                      )}</Draggable>
-                    ))}{p.placeholder}
+                        )}</Draggable>
+                      ))}{p.placeholder}
+                    </div>
+                  )}</Droppable>
+                ))}
+              </div>
+            </DragDropContext>
+          </>
+        )}
+
+        {/* Timeline (Gantt) View */}
+        {viewMode==="timeline" && (
+          <div className={`rounded-xl border p-5 shadow-sm overflow-x-auto ${bgCard}`}>
+            <h3 className="font-bold text-lg mb-4">Timeline (Next 14 Days)</h3>
+            <div className="min-w-[800px]">
+              <div className="grid grid-cols-[200px_repeat(14,1fr)] gap-1 mb-2">
+                <div className="font-bold text-sm">Tasks</div>
+                {timelineDays.map(d=><div key={d} className="text-xs text-center text-gray-500 border-l px-1">{d.slice(5)}</div>)}
+              </div>
+              {tasks.filter(t=>t.start_date && t.due_date).map(t=>{
+                const startIdx = timelineDays.indexOf(t.start_date)
+                const endIdx = timelineDays.indexOf(t.due_date)
+                if(startIdx===-1 && endIdx===-1) return null;
+                const renderStart = startIdx===-1 ? 0 : startIdx
+                const renderEnd = endIdx===-1 ? 13 : endIdx
+                const colSpan = (renderEnd - renderStart) + 1
+                return (
+                  <div key={t.id} onClick={()=>openEditModal(t)} className="grid grid-cols-[200px_repeat(14,1fr)] gap-1 mb-2 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 py-1">
+                    <div className="text-sm truncate pr-2" title={t.title}>{t.title}</div>
+                    <div style={{gridColumn: `${renderStart+2} / span ${colSpan}`}} className={`h-6 rounded-md px-2 text-xs flex items-center font-bold text-white ${t.status==='done'?'bg-green-500': t.status==='doing'?'bg-blue-500':'bg-gray-400'}`}>{t.status}</div>
                   </div>
-                )}</Droppable>
-              ))}
+                )
+              })}
+              {tasks.filter(t=>!t.start_date || !t.due_date).length > 0 && <p className="text-xs text-gray-400 mt-4 italic">Some tasks are hidden because they lack a Start Date or Due Date.</p>}
             </div>
-          </DragDropContext>
-        ):(
+          </div>
+        )}
+
+        {/* Calendar View */}
+        {viewMode==="calendar" && (
           <div className={`rounded-xl border p-5 shadow-sm ${bgCard}`}>
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-lg">{monthName}</h3>
@@ -524,67 +582,104 @@ export default function App(){
       {/* EDIT MODAL */}
       {editing && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={`rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border ${bgCard}`}>
+          <div className={`rounded-2xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl border ${bgCard}`}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-lg">Edit Task ✏</h2>
+              <h2 className="font-bold text-lg">Edit Task ✏ {myRole==='viewer' && <span className="text-red-500 text-xs ml-2">(View Only)</span>}</h2>
               <button onClick={()=>setEditing(null)} className={`w-8 h-8 rounded-full border flex items-center justify-center ${subCard}`}>✕</button>
             </div>
 
-            <input value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})} placeholder="Task title" className={`border w-full p-2.5 mb-3 rounded-xl text-sm font-medium ${inputCls}`}/>
-            <textarea value={editing.description||""} onChange={e=>setEditing({...editing,description:e.target.value})} className={`border w-full p-2.5 mb-3 rounded-xl h-24 text-sm ${inputCls}`} placeholder="Description..."/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column */}
+              <div>
+                <input disabled={!canEdit} value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})} placeholder="Task title" className={`border w-full p-2.5 mb-3 rounded-xl text-sm font-medium ${inputCls}`}/>
+                <textarea disabled={!canEdit} value={editing.description||""} onChange={e=>setEditing({...editing,description:e.target.value})} className={`border w-full p-2.5 mb-3 rounded-xl h-24 text-sm ${inputCls}`} placeholder="Description..."/>
 
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div><label className="text-xs font-bold uppercase opacity-60">Due Date</label><input type="date" value={editing.due_date||""} onChange={e=>setEditing({...editing,due_date:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
-              <div><label className="text-xs font-bold uppercase opacity-60">Priority</label><select value={editing.priority} onChange={e=>setEditing({...editing,priority:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 font-bold ${inputCls}`}><option value="medium">Medium</option><option value="high">High 🔥</option></select></div>
-            </div>
+                <div className={`border rounded-xl p-3 mb-3 ${subCard}`}>
+                  <h3 className="text-xs font-bold uppercase mb-2">Subtasks / Checklist ☑</h3>
+                  <div className="space-y-2 mb-3">
+                    {subtasks.map(st=>(
+                      <div key={st.id} className="flex items-center gap-2">
+                        <input type="checkbox" disabled={!canEdit} checked={st.is_completed} onChange={()=>toggleSubtask(st)} className="w-4 h-4"/>
+                        <span className={`text-sm flex-1 ${st.is_completed?'line-through text-gray-400':''}`}>{st.title}</span>
+                        {canEdit && <button onClick={()=>delSubtask(st.id)} className="text-xs text-red-500 font-bold hover:underline">Del</button>}
+                      </div>
+                    ))}
+                    {subtasks.length===0 && <p className="text-xs text-gray-400">No subtasks</p>}
+                  </div>
+                  {canEdit && (
+                    <div className="flex gap-2">
+                      <input value={newSubtask} onChange={e=>setNewSubtask(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addSubtask()} placeholder="Add checklist item..." className={`border flex-1 p-2 rounded-lg text-sm ${inputCls}`}/>
+                      <button onClick={addSubtask} className="bg-black text-white px-3 rounded-lg text-xs font-bold dark:bg-white dark:text-black">Add</button>
+                    </div>
+                  )}
+                </div>
 
-            <div className="mb-3"><label className="text-xs font-bold uppercase opacity-60">Status</label><select value={editing.status} onChange={e=>setEditing({...editing,status:e.target.value})} className={`border w-full p-2.5 rounded-xl text-sm mt-1 font-bold ${inputCls}`}><option value="todo">📋 Todo</option><option value="doing">⚡ Doing</option><option value="done">✅ Done</option></select></div>
-
-            <div className={`border rounded-xl p-3 mb-3 ${subCard}`}>
-              <label className="text-xs font-bold uppercase">Labels 🏷 - Click to toggle</label>
-              <div className="flex flex-wrap gap-2 mt-2.5">
-                {AVAILABLE_LABELS.map(l=>{
-                  const active=(editing.labels||"").split(",").includes(l.name)
-                  return <button key={l.name} onClick={()=>toggleLabel(l.name)} className={`text-xs px-3 py-1.5 rounded-full border font-bold transition-all ${active?'bg-black text-white border-black dark:bg-white dark:text-black scale-105 shadow':'hover:scale-105 '+l.cls}`}>{active?'✓ ':''}{l.name}</button>
-                })}
+                <div className={`border rounded-xl p-3 mb-3 ${subCard}`}>
+                  <label className="text-xs font-bold uppercase">Attachment 📎</label>
+                  {canEdit && <input type="file" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx" className="w-full text-xs mt-2.5 mb-2 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-black file:text-white file:text-xs dark:file:bg-white dark:file:text-black"/>}
+                  {uploading && <p className="text-xs text-blue-600 font-bold animate-pulse">Uploading...</p>}
+                  {editing.attachment_url && <div className="mt-2 text-xs break-all bg-white dark:bg-[#1e2128] border p-2.5 rounded-xl flex justify-between items-center"><a href={editing.attachment_url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline truncate mr-2">📎 View File</a>{canEdit && <button onClick={()=>setEditing({...editing,attachment_url:""})} className="text-xs text-red-600 font-bold">Remove</button>}</div>}
+                </div>
               </div>
-              {editing.labels && <p className="text-xs text-gray-400 mt-2">Selected: {editing.labels}</p>}
+
+              {/* Right Column */}
+              <div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div><label className="text-xs font-bold uppercase opacity-60">Status</label><select disabled={!canEdit} value={editing.status} onChange={e=>setEditing({...editing,status:e.target.value})} className={`border w-full p-2.5 rounded-xl text-sm mt-1 font-bold ${inputCls}`}><option value="todo">📋 Todo</option><option value="doing">⚡ Doing</option><option value="done">✅ Done</option></select></div>
+                  <div><label className="text-xs font-bold uppercase opacity-60">Priority</label><select disabled={!canEdit} value={editing.priority} onChange={e=>setEditing({...editing,priority:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 font-bold ${inputCls}`}><option value="medium">Medium</option><option value="high">High 🔥</option></select></div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div><label className="text-xs font-bold uppercase opacity-60">Start Date (Gantt)</label><input disabled={!canEdit} type="date" value={editing.start_date||""} onChange={e=>setEditing({...editing,start_date:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
+                  <div><label className="text-xs font-bold uppercase opacity-60">Due Date</label><input disabled={!canEdit} type="date" value={editing.due_date||""} onChange={e=>setEditing({...editing,due_date:e.target.value})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div><label className="text-xs font-bold uppercase opacity-60">Est. Time (Hours)</label><input disabled={!canEdit} type="number" value={editing.time_estimated||0} onChange={e=>setEditing({...editing,time_estimated:parseInt(e.target.value)})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
+                  <div><label className="text-xs font-bold uppercase opacity-60">Time Spent (Hours)</label><input disabled={!canEdit} type="number" value={editing.time_spent||0} onChange={e=>setEditing({...editing,time_spent:parseInt(e.target.value)})} className={`border p-2.5 rounded-xl w-full text-sm mt-1 ${inputCls}`}/></div>
+                </div>
+
+                <div className={`border rounded-xl p-3 mb-3 ${subCard}`}>
+                  <label className="text-xs font-bold uppercase">Labels 🏷</label>
+                  <div className="flex flex-wrap gap-2 mt-2.5">
+                    {AVAILABLE_LABELS.map(l=>{
+                      const active=(editing.labels||"").split(",").includes(l.name)
+                      return <button disabled={!canEdit} key={l.name} onClick={()=>toggleLabel(l.name)} className={`text-xs px-3 py-1.5 rounded-full border font-bold transition-all ${active?'bg-black text-white border-black dark:bg-white dark:text-black shadow':l.cls}`}>{active?'✓ ':''}{l.name}</button>
+                    })}
+                  </div>
+                </div>
+
+                <div className={`border rounded-xl p-3 mb-5 ${subCard}`}>
+                  <label className="text-xs font-bold uppercase">Assign To 👤</label>
+                  <select disabled={!canEdit} value={editing.assigned_to||""} onChange={e=>{
+                    const sel=boardMembers.find(m=>m.email===e.target.value)
+                    setEditing({...editing, assigned_to:e.target.value, assigned_to_name:sel?.name||""})
+                  }} className={`border w-full p-2.5 rounded-xl text-sm mt-2 ${inputCls}`}>
+                    <option value="">Unassigned</option>
+                    {boardMembers.map(m=><option key={m.email} value={m.email}>{m.name} ({m.email})</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
 
-            <div className={`border rounded-xl p-3 mb-3 ${subCard}`}>
-              <label className="text-xs font-bold uppercase">Assign To 👤 + 📧 Email Notification</label>
-              <select value={editing.assigned_to||""} onChange={e=>{
-                const sel=boardMembers.find(m=>m.email===e.target.value)
-                setEditing({...editing, assigned_to:e.target.value, assigned_to_name:sel?.name||""})
-              }} className={`border w-full p-2.5 rounded-xl text-sm mt-2 ${inputCls}`}>
-                <option value="">Unassigned</option>
-                {boardMembers.map(m=><option key={m.email} value={m.email}>{m.name} ({m.email})</option>)}
-              </select>
-              <p className="text-xs text-gray-400 mt-1.5">Assign cheythal automatic bell + email notification pokum</p>
-            </div>
+            {canEdit && (
+              <div className="flex gap-3 mt-2 border-t pt-4">
+                <button onClick={saveEdit} className="bg-black text-white flex-1 p-3 rounded-xl text-sm font-bold shadow hover:bg-gray-800 dark:bg-white dark:text-black">💾 Save Task</button>
+                <button onClick={()=>delTask(editing.id)} className="bg-red-50 text-red-600 flex-1 p-3 rounded-xl border border-red-200 text-sm font-bold">🗑 Delete</button>
+              </div>
+            )}
 
-            <div className={`border rounded-xl p-3 mb-5 ${subCard}`}>
-              <label className="text-xs font-bold uppercase">Attachment 📎 (Cloudinary / Base64)</label>
-              <input type="file" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx" className="w-full text-xs mt-2.5 mb-2 file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:bg-black file:text-white file:text-xs dark:file:bg-white dark:file:text-black"/>
-              {uploading && <p className="text-xs text-blue-600 font-bold animate-pulse">Uploading... wait</p>}
-              {editing.attachment_url && <div className="mt-3 text-xs break-all bg-white dark:bg-[#1e2128] border p-2.5 rounded-xl flex justify-between items-center"><a href={editing.attachment_url} target="_blank" rel="noreferrer" className="text-blue-600 font-bold hover:underline truncate mr-2">📎 View File</a><button onClick={()=>setEditing({...editing,attachment_url:""})} className="text-xs bg-red-50 text-red-600 border border-red-200 px-2.5 py-1 rounded-full font-bold">Remove</button></div>}
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={saveEdit} className="bg-black text-white flex-1 p-3 rounded-xl text-sm font-bold shadow hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200">💾 Save + Email</button>
-              <button onClick={()=>delTask(editing.id)} className="bg-red-50 text-red-600 flex-1 p-3 rounded-xl border border-red-200 text-sm font-bold hover:bg-red-100">🗑 Delete</button>
-              <button onClick={()=>setEditing(null)} className={`flex-1 p-3 rounded-xl text-sm font-bold border ${subCard}`}>Cancel</button>
-            </div>
-
-            <div className="mt-7 border-t pt-5">
-              <h3 className="font-bold text-sm mb-3">Comments 💬 + Email Notification</h3>
-              <div className={`max-h-64 overflow-y-auto mb-3 space-y-2 border rounded-xl p-2.5 ${subCard}`}>
-                {taskComments.length===0? <p className="text-xs text-gray-400 text-center py-4">No comments yet - first comment add cheyyu</p> : taskComments.map(c=>(
-                  <div key={c.id} className={`p-2.5 rounded-xl border ${bgCard}`}><div className="flex justify-between items-center"><span className="font-bold text-xs text-blue-600">{c.user_name}</span><span className="text-xs text-gray-400">{c.created_at}</span></div><p className="text-sm mt-1 leading-snug">{c.text}</p></div>
+            <div className="mt-6 border-t pt-5">
+              <h3 className="font-bold text-sm mb-1">Comments 💬 & @Mentions</h3>
+              <p className="text-xs text-gray-500 mb-3">Type <b className="text-blue-500">@email@address.com</b> to notify someone directly via email.</p>
+              
+              <div className={`max-h-48 overflow-y-auto mb-3 space-y-2 border rounded-xl p-2.5 ${subCard}`}>
+                {taskComments.length===0? <p className="text-xs text-gray-400 text-center py-4">No comments yet</p> : taskComments.map(c=>(
+                  <div key={c.id} className={`p-2.5 rounded-xl border ${bgCard}`}><div className="flex justify-between items-center"><span className="font-bold text-xs text-blue-600">{c.user_name}</span><span className="text-xs text-gray-400">{c.created_at}</span></div><p className="text-sm mt-1 leading-snug whitespace-pre-wrap">{formatMentions(c.text)}</p></div>
                 ))}
               </div>
               <div className="flex gap-2">
-                <input value={newComment} onChange={e=>setNewComment(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addComment()} placeholder="Write a comment... (assigned user gets email)" className={`border flex-1 p-2.5 rounded-xl text-sm ${inputCls}`}/>
+                <input value={newComment} onChange={e=>setNewComment(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addComment()} placeholder="Write a comment... (use @email to mention)" className={`border flex-1 p-2.5 rounded-xl text-sm ${inputCls}`}/>
                 <button onClick={addComment} className="bg-blue-600 hover:bg-blue-700 text-white px-5 rounded-xl text-sm font-bold">Post</button>
               </div>
             </div>
