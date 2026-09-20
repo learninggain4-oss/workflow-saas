@@ -42,30 +42,48 @@ export default function ProfileSettingsModal({
     setWorkspaceDefaults((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className={`w-full max-w-2xl rounded-2xl border shadow-2xl ${bgCard}`} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-5 py-4">
-          <div>
-            <h3 className="text-lg font-bold">Profile Settings</h3>
-            <p className="text-xs text-gray-500 mt-1">Manage your workspace account</p>
-          </div>
+  const [activeSection, setActiveSection] = React.useState("profile");
+
+  const navItems = [
+    { id: "profile", label: "Profile" },
+    { id: "preferences", label: "Preferences" },
+    { id: "workspace", label: "Workspace" },
+    { id: "security", label: "Security" },
+    { id: "activity", label: "Activity" },
+  ];
+
+  const renderSectionContent = () => {
+    const commonFooter = (
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
+        <button
+          type="button"
+          onClick={resetProfilePreferences}
+          className="text-xs font-semibold text-gray-600 hover:text-red-500 dark:text-gray-300 dark:hover:text-red-400"
+        >
+          Reset local settings
+        </button>
+        <div className="flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="text-xl text-gray-500 hover:text-red-500 transition-colors"
-            aria-label="Close profile settings"
+            className={`px-4 py-2.5 rounded-xl border text-sm font-semibold ${bgCard}`}
           >
-            ×
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={savingProfile}
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold text-white ${primaryBtn} ${savingProfile ? "opacity-70 cursor-not-allowed" : ""}`}
+          >
+            {savingProfile ? "Saving..." : "Save Changes"}
           </button>
         </div>
+      </div>
+    );
 
-        <form onSubmit={handleProfileUpdate} className="p-5 space-y-5">
+    if (activeSection === "profile") {
+      return (
+        <div className="space-y-5">
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50/80 dark:border-indigo-900/70 dark:bg-indigo-900/20 p-4">
             <div className="flex items-center gap-4">
               <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-bold text-white shadow-lg shadow-indigo-500/20">
@@ -101,210 +119,259 @@ export default function ProfileSettingsModal({
             </div>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Full name</label>
-                <input
-                  value={profileForm.name}
-                  onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                  className={`border w-full p-3 rounded-xl text-sm ${inputCls}`}
-                  placeholder="Your name"
-                  autoComplete="name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Email address</label>
-                <input
-                  type="email"
-                  value={profileForm.email}
-                  onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                  className={`border w-full p-3 rounded-xl text-sm ${inputCls}`}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">New password</label>
-                <input
-                  type="password"
-                  value={profileForm.password}
-                  onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
-                  className={`border w-full p-3 rounded-xl text-sm ${inputCls}`}
-                  placeholder="Leave blank to keep current password"
-                  autoComplete="new-password"
-                />
-              </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Full name</label>
+              <input
+                value={profileForm.name}
+                onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                className={`border w-full p-3 rounded-xl text-sm ${inputCls}`}
+                placeholder="Your name"
+                autoComplete="name"
+              />
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Appearance</p>
-                    <p className="text-sm mt-1">Dark mode</p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Toggle dark mode"
-                    onClick={() => setDarkMode(!darkMode)}
-                    className={`relative h-7 w-12 rounded-full transition-colors ${darkMode ? "bg-indigo-600" : "bg-gray-300"}`}
-                  >
-                    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${darkMode ? "left-6" : "left-1"}`} />
-                  </button>
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Email address</label>
+              <input
+                type="email"
+                value={profileForm.email}
+                onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                className={`border w-full p-3 rounded-xl text-sm ${inputCls}`}
+                placeholder="you@example.com"
+                autoComplete="email"
+              />
+            </div>
 
-              <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Notification preferences</p>
-
-                {[
-                  { key: "emailNotifications", label: "Email notifications" },
-                  { key: "boardUpdates", label: "Board updates" },
-                  { key: "taskReminders", label: "Task reminders" },
-                  { key: "weeklyDigest", label: "Weekly digest" },
-                  { key: "compactMode", label: "Compact layout" },
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between gap-3">
-                    <span className="text-sm">{item.label}</span>
-                    <button
-                      type="button"
-                      aria-label={`Toggle ${item.label}`}
-                      onClick={() => togglePreference(item.key)}
-                      className={`relative h-7 w-12 rounded-full transition-colors ${profilePreferences[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
-                    >
-                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${profilePreferences[item.key] ? "left-6" : "left-1"}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Account status</p>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-sm">Security</span>
-                  <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Protected</span>
-                </div>
-                <p className="mt-2 text-xs text-gray-500">Use a strong password and keep email notifications enabled for board activity updates.</p>
-
-                <div className="mt-3 rounded-xl bg-gray-50 p-2 dark:bg-gray-900/40">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-500">Plan</span>
-                    <span className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
-                      {userData?.subscription_tier ? userData.subscription_tier : "free"}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleUpgrade}
-                    className="mt-2 w-full rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-indigo-700"
-                  >
-                    {userData?.subscription_tier === "pro" ? "Manage plan" : "Upgrade to Pro"}
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleDeleteAccount}
-                  className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-                >
-                  Delete account
-                </button>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Workspace defaults</p>
-
-                {[
-                  { key: "openLastBoard", label: "Open last board" },
-                  { key: "showCompletedTasks", label: "Show completed tasks" },
-                  { key: "autoSaveEdits", label: "Auto-save edits" },
-                  { key: "previewFiles", label: "Preview attachments" },
-                  { key: "hideArchived", label: "Hide archived items" },
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between gap-3">
-                    <span className="text-sm">{item.label}</span>
-                    <button
-                      type="button"
-                      aria-label={`Toggle ${item.label}`}
-                      onClick={() => toggleWorkspaceDefault(item.key)}
-                      className={`relative h-7 w-12 rounded-full transition-colors ${workspaceDefaults[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
-                    >
-                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${workspaceDefaults[item.key] ? "left-6" : "left-1"}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">New password</label>
+              <input
+                type="password"
+                value={profileForm.password}
+                onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
+                className={`border w-full p-3 rounded-xl text-sm ${inputCls}`}
+                placeholder="Leave blank to keep current password"
+                autoComplete="new-password"
+              />
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recent activity</p>
-                <span className="text-[10px] text-gray-400">Last 5</span>
-              </div>
-              <div className="space-y-2">
-                {accountActivity?.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
-                    <span className="text-sm">{item.title}</span>
-                    <span className="text-[10px] text-gray-500">{item.time}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {commonFooter}
+        </div>
+      );
+    }
 
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Session controls</p>
-              <div className="mt-3 space-y-3">
-                {[
-                  { key: "rememberMe", label: "Remember this device" },
-                  { key: "showSessions", label: "Show active sessions" },
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between gap-3">
-                    <span className="text-sm">{item.label}</span>
-                    <button
-                      type="button"
-                      aria-label={`Toggle ${item.label}`}
-                      onClick={() => togglePreference(`${item.key}`)}
-                      className={`relative h-7 w-12 rounded-full transition-colors ${profilePreferences[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
-                    >
-                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${profilePreferences[item.key] ? "left-6" : "left-1"}`} />
-                    </button>
-                  </div>
-                ))}
+    if (activeSection === "preferences") {
+      return (
+        <div className="space-y-5">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Appearance</p>
+                <p className="text-sm mt-1">Dark mode</p>
               </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-800 px-3 py-2">
-            <button
-              type="button"
-              onClick={resetProfilePreferences}
-              className="text-xs font-semibold text-gray-600 hover:text-red-500 dark:text-gray-300 dark:hover:text-red-400"
-            >
-              Reset local settings
-            </button>
-            <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={onClose}
-                className={`px-4 py-2.5 rounded-xl border text-sm font-semibold ${bgCard}`}
+                aria-label="Toggle dark mode"
+                onClick={() => setDarkMode(!darkMode)}
+                className={`relative h-7 w-12 rounded-full transition-colors ${darkMode ? "bg-indigo-600" : "bg-gray-300"}`}
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={savingProfile}
-                className={`px-4 py-2.5 rounded-xl text-sm font-semibold text-white ${primaryBtn} ${savingProfile ? "opacity-70 cursor-not-allowed" : ""}`}
-              >
-                {savingProfile ? "Saving..." : "Save Changes"}
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${darkMode ? "left-6" : "left-1"}`} />
               </button>
             </div>
           </div>
-        </form>
+
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Notification preferences</p>
+            {[
+              { key: "emailNotifications", label: "Email notifications" },
+              { key: "boardUpdates", label: "Board updates" },
+              { key: "taskReminders", label: "Task reminders" },
+              { key: "weeklyDigest", label: "Weekly digest" },
+              { key: "compactMode", label: "Compact layout" },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-3 py-1">
+                <span className="text-sm">{item.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Toggle ${item.label}`}
+                  onClick={() => togglePreference(item.key)}
+                  className={`relative h-7 w-12 rounded-full transition-colors ${profilePreferences[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
+                >
+                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${profilePreferences[item.key] ? "left-6" : "left-1"}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {commonFooter}
+        </div>
+      );
+    }
+
+    if (activeSection === "workspace") {
+      return (
+        <div className="space-y-5">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Workspace defaults</p>
+            {[
+              { key: "openLastBoard", label: "Open last board" },
+              { key: "showCompletedTasks", label: "Show completed tasks" },
+              { key: "autoSaveEdits", label: "Auto-save edits" },
+              { key: "previewFiles", label: "Preview attachments" },
+              { key: "hideArchived", label: "Hide archived items" },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-3 py-1">
+                <span className="text-sm">{item.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Toggle ${item.label}`}
+                  onClick={() => toggleWorkspaceDefault(item.key)}
+                  className={`relative h-7 w-12 rounded-full transition-colors ${workspaceDefaults[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
+                >
+                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${workspaceDefaults[item.key] ? "left-6" : "left-1"}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {commonFooter}
+        </div>
+      );
+    }
+
+    if (activeSection === "security") {
+      return (
+        <div className="space-y-5">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Security</p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-sm">Protection status</span>
+              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Protected</span>
+            </div>
+            <p className="mt-3 text-sm text-gray-500">Use a strong password and keep email notifications enabled for board activity updates.</p>
+
+            <div className="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-gray-900/40">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-500">Subscription</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                  {userData?.subscription_tier ? userData.subscription_tier : "free"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleUpgrade}
+                className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-indigo-700"
+              >
+                {userData?.subscription_tier === "pro" ? "Manage plan" : "Upgrade to Pro"}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+            >
+              Delete account
+            </button>
+          </div>
+
+          {commonFooter}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-5">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recent activity</p>
+            <span className="text-[10px] text-gray-400">Last 5</span>
+          </div>
+          <div className="space-y-2">
+            {accountActivity?.map((item) => (
+              <div key={item.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
+                <span className="text-sm">{item.title}</span>
+                <span className="text-[10px] text-gray-500">{item.time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Session controls</p>
+          <div className="mt-3 space-y-3">
+            {[
+              { key: "rememberMe", label: "Remember this device" },
+              { key: "showSessions", label: "Show active sessions" },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-3 py-1">
+                <span className="text-sm">{item.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Toggle ${item.label}`}
+                  onClick={() => togglePreference(`${item.key}`)}
+                  className={`relative h-7 w-12 rounded-full transition-colors ${profilePreferences[item.key] ? "bg-indigo-600" : "bg-gray-300"}`}
+                >
+                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${profilePreferences[item.key] ? "left-6" : "left-1"}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {commonFooter}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className={`w-full max-w-5xl rounded-2xl border shadow-2xl ${bgCard}`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-5 py-4">
+          <div>
+            <h3 className="text-lg font-bold">Profile Settings</h3>
+            <p className="text-xs text-gray-500 mt-1">Manage your workspace account</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xl text-gray-500 hover:text-red-500 transition-colors"
+            aria-label="Close profile settings"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="border-b border-gray-200 dark:border-gray-800 md:border-b-0 md:border-r md:p-4 p-3">
+            <div className="space-y-2">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveSection(item.id)}
+                  className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                    activeSection === item.id
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <form onSubmit={handleProfileUpdate} className="p-5">
+            {renderSectionContent()}
+          </form>
+        </div>
       </div>
     </div>
   );
