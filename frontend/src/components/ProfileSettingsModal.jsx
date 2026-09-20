@@ -13,6 +13,10 @@ export default function ProfileSettingsModal({
   resetProfilePreferences,
   darkMode,
   setDarkMode,
+  profileAvatar,
+  setProfileAvatar,
+  handleAvatarUpload,
+  handleDeleteAccount,
   bgCard,
   inputCls,
   primaryBtn,
@@ -56,8 +60,12 @@ export default function ProfileSettingsModal({
         <form onSubmit={handleProfileUpdate} className="p-5 space-y-5">
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50/80 dark:border-indigo-900/70 dark:bg-indigo-900/20 p-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-bold text-white shadow-lg shadow-indigo-500/20">
-                {initials}
+              <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-bold text-white shadow-lg shadow-indigo-500/20">
+                {profileAvatar ? (
+                  <img src={profileAvatar} alt="Profile avatar" className="h-full w-full object-cover" />
+                ) : (
+                  initials
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-base font-bold truncate">{profileForm.name || userData?.name || "Your profile"}</p>
@@ -66,6 +74,22 @@ export default function ProfileSettingsModal({
               <span className="rounded-full border border-indigo-200 bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-700 dark:border-indigo-800 dark:bg-slate-900/50 dark:text-indigo-300">
                 {userData?.subscription_tier ? `${userData.subscription_tier} plan` : "Free plan"}
               </span>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2">
+              <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
+                Upload photo
+                <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+              </label>
+              {profileAvatar && (
+                <button
+                  type="button"
+                  onClick={() => setProfileAvatar("")}
+                  className="rounded-xl border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-600 hover:border-red-300 hover:text-red-500 dark:border-gray-700 dark:text-gray-300"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           </div>
 
@@ -156,6 +180,14 @@ export default function ProfileSettingsModal({
                   <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Protected</span>
                 </div>
                 <p className="mt-2 text-xs text-gray-500">Use a strong password and keep email notifications enabled for board activity updates.</p>
+
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                >
+                  Delete account
+                </button>
               </div>
             </div>
           </div>

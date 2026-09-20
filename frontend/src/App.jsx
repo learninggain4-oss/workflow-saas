@@ -49,6 +49,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode") === "true");
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
+  const [profileAvatar, setProfileAvatar] = useState(localStorage.getItem("profileAvatar") || "");
   const [savingProfile, setSavingProfile] = useState(false);
   const defaultProfilePreferences = {
     emailNotifications: true,
@@ -85,6 +86,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("profilePreferences", JSON.stringify(profilePreferences));
   }, [profilePreferences]);
+
+  useEffect(() => {
+    localStorage.setItem("profileAvatar", profileAvatar || "");
+  }, [profileAvatar]);
 
   const currentEmail = useMemo(() => {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
@@ -305,6 +310,41 @@ export default function App() {
     setProfilePreferences(defaultProfilePreferences);
   };
 
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Avatar image must be under 2MB");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await uploadFile(formData);
+      setProfileAvatar(res.data?.url || "");
+      alert("Profile photo updated");
+    } catch {
+      alert("Profile photo upload failed");
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    const confirmed = window.confirm("This will clear your stored session and local profile data on this device. Continue?");
+    if (!confirmed) return;
+
+    localStorage.clear();
+    setToken("");
+    setUserData(null);
+    setBoards([]);
+    setTasks([]);
+    setNotifications([]);
+    setProfileForm({ name: "", email: "", password: "" });
+    setProfileAvatar("");
+    setShowProfileSettings(false);
+  };
+
   const toggleLabel = (lb) => {
     if (!canEdit || !editing) return;
     const cur = (editing.labels || "").split(",").filter(Boolean);
@@ -388,6 +428,10 @@ export default function App() {
         resetProfilePreferences={resetProfilePreferences}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        profileAvatar={profileAvatar}
+        setProfileAvatar={setProfileAvatar}
+        handleAvatarUpload={handleAvatarUpload}
+        handleDeleteAccount={handleDeleteAccount}
         bgCard={bgCard}
         inputCls={inputCls}
         primaryBtn={primaryBtn}
