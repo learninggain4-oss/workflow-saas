@@ -74,93 +74,295 @@ async def custom_docs():
         oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
     )
     html = swagger.body.decode("utf-8")
+    custom_header = """
+    <div class="wf-docs-shell">
+        <header class="wf-topbar">
+            <div class="wf-brand">
+                <div class="wf-logo">W</div>
+                <div class="wf-brand-text">
+                    <span>WorkFlow</span>
+                    <strong>SaaS</strong>
+                </div>
+            </div>
+            <div class="wf-actions">
+                <button class="wf-btn wf-btn-secondary">Docs</button>
+                <button class="wf-btn wf-btn-primary">Authorize</button>
+            </div>
+        </header>
+
+        <section class="wf-hero">
+            <div class="wf-hero-copy">
+                <span class="wf-pill">API v0.1.0</span>
+                <h1>Developer Portal</h1>
+                <p>Authentication, board management, project workflows, and collaboration endpoints for WorkFlow SaaS.</p>
+            </div>
+            <div class="wf-hero-card">
+                <div>
+                    <span class="wf-card-label">Status</span>
+                    <strong>Production Ready</strong>
+                </div>
+                <div class="wf-card-mini">
+                    <span>12 endpoints</span>
+                    <span>Realtime APIs</span>
+                </div>
+            </div>
+        </section>
+    """
+    html = html.replace("<body>", f"<body>{custom_header}")
+    html = html.replace("</body>", "</div></body>")
+
     css = """
     <style>
         :root {
-            --bg: #f5f7fb;
-            --panel: #ffffff;
-            --panel-soft: #eef4ff;
-            --primary: #0f172a;
-            --accent: #2563eb;
-            --accent-soft: #dbeafe;
-            --success: #10b981;
-            --border: #dfe7f3;
-            --text: #1f2937;
-            --muted: #64748b;
+            --wf-bg: #f5f7fb;
+            --wf-panel: rgba(255,255,255,0.9);
+            --wf-border: #dfe7f3;
+            --wf-primary: #0f172a;
+            --wf-accent: #2563eb;
+            --wf-accent-soft: #dbeafe;
+            --wf-success: #10b981;
+            --wf-warning: #f59e0b;
+            --wf-danger: #ef4444;
+            --wf-text: #1f2937;
+            --wf-muted: #64748b;
         }
+
+        * { box-sizing: border-box; }
+
         body {
             background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
             font-family: Inter, "Segoe UI", sans-serif;
-            color: var(--text);
+            color: var(--wf-text);
+            margin: 0;
         }
-        .swagger-ui .topbar {
-            background: rgba(255,255,255,0.96);
-            border-bottom: 1px solid var(--border);
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
-            position: sticky;
-            top: 0;
-            z-index: 9;
+
+        .wf-docs-shell {
+            width: 100%;
+            min-height: 100vh;
+            background: transparent;
         }
-        .swagger-ui .topbar .download-url-wrapper {
-            display: none;
+
+        .wf-topbar {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.06);
         }
-        .swagger-ui .topbar-wrapper .link {
+
+        .wf-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .wf-logo {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #1d4ed8, #60a5fa);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 1.15rem;
+            box-shadow: 0 12px 22px rgba(37, 99, 235, 0.22);
+        }
+
+        .wf-brand-text {
+            display: flex;
+            align-items: end;
+            gap: 8px;
+            font-size: 2.2rem;
+            line-height: 1;
+            letter-spacing: -0.06em;
+            font-weight: 800;
+            color: var(--wf-primary);
+        }
+
+        .wf-brand-text strong {
+            color: #2563eb;
+            font-weight: 800;
+        }
+
+        .wf-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .wf-btn {
+            border: 1px solid rgba(37, 99, 235, 0.4);
+            border-radius: 10px;
+            padding: 10px 18px;
+            font-size: 0.9rem;
             font-weight: 700;
-            letter-spacing: 0.02em;
-            color: var(--primary);
-            font-size: 2rem;
+            cursor: pointer;
+            transition: 0.2s ease;
         }
-        .swagger-ui .topbar-wrapper .link::before {
-            content: "WorkFlow SaaS";
-            font-size: 2rem;
-            font-weight: 800;
-            color: var(--primary);
-            letter-spacing: -0.04em;
+
+        .wf-btn-primary {
+            background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
         }
-        .swagger-ui .topbar-wrapper .link > span,
-        .swagger-ui .topbar-wrapper .link > svg {
-            display: none;
+
+        .wf-btn-secondary {
+            background: rgba(255,255,255,0.5);
+            color: var(--wf-primary);
         }
-        .swagger-ui .info {
-            background: rgba(255,255,255,0.72);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 28px 30px;
-            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
-            margin: 28px 0 20px;
+
+        .wf-btn:hover {
+            transform: translateY(-1px);
         }
-        .swagger-ui .info .title {
-            font-size: 2.15rem;
-            color: var(--primary);
-            font-weight: 800;
-            letter-spacing: -0.04em;
+
+        .wf-hero {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 34px 24px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 28px;
         }
-        .swagger-ui .info .description {
-            color: var(--muted);
+
+        .wf-hero-copy {
+            max-width: 700px;
+        }
+
+        .wf-pill {
+            display: inline-block;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: var(--wf-accent-soft);
+            color: #1d4ed8;
+            font-weight: 700;
+            font-size: 0.75rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+
+        .wf-hero-copy h1 {
+            margin: 0 0 8px;
+            font-size: clamp(2.1rem, 4vw, 3.2rem);
+            line-height: 1.06;
+            letter-spacing: -0.06em;
+            color: var(--wf-primary);
+        }
+
+        .wf-hero-copy p {
+            margin: 0;
+            color: var(--wf-muted);
             font-size: 1rem;
             line-height: 1.7;
         }
+
+        .wf-hero-card {
+            min-width: 280px;
+            padding: 22px 20px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.8);
+            border: 1px solid var(--wf-border);
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .wf-card-label {
+            display: block;
+            font-size: 0.74rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--wf-muted);
+            margin-bottom: 8px;
+        }
+
+        .wf-hero-card strong {
+            font-size: 1.3rem;
+            color: var(--wf-primary);
+        }
+
+        .wf-card-mini {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .wf-card-mini span {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 8px 10px;
+            background: #ecfdf5;
+            color: #047857;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .swagger-ui {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px 48px;
+        }
+
+        .swagger-ui .topbar {
+            display: none !important;
+        }
+
+        .swagger-ui .info {
+            background: rgba(255,255,255,0.72);
+            border: 1px solid var(--wf-border);
+            border-radius: 18px;
+            padding: 28px 30px;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+            margin: 0 0 20px;
+        }
+
+        .swagger-ui .info .title {
+            font-size: 2.15rem;
+            color: var(--wf-primary);
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .swagger-ui .info .description {
+            color: var(--wf-muted);
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+
+        .swagger-ui .scheme-container {
+            background: rgba(255,255,255,0.8);
+            border: 1px solid var(--wf-border);
+            border-radius: 16px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
         .swagger-ui .opblock {
             border-radius: 14px !important;
             box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
-            border: 1px solid var(--border) !important;
+            border: 1px solid var(--wf-border) !important;
             background: rgba(255,255,255,0.9);
+            overflow: hidden;
         }
-        .swagger-ui .opblock.opblock-get {
-            border-left: 5px solid #60a5fa !important;
-        }
-        .swagger-ui .opblock.opblock-post {
-            border-left: 5px solid #34d399 !important;
-        }
-        .swagger-ui .opblock.opblock-put {
-            border-left: 5px solid #fbbf24 !important;
-        }
-        .swagger-ui .opblock.opblock-delete {
-            border-left: 5px solid #f87171 !important;
-        }
+
+        .swagger-ui .opblock.opblock-get { border-left: 5px solid #60a5fa !important; }
+        .swagger-ui .opblock.opblock-post { border-left: 5px solid #34d399 !important; }
+        .swagger-ui .opblock.opblock-put { border-left: 5px solid #fbbf24 !important; }
+        .swagger-ui .opblock.opblock-delete { border-left: 5px solid #f87171 !important; }
+
         .swagger-ui .opblock-summary {
-            padding: 16px 18px;
+            padding: 18px 20px;
         }
+
         .swagger-ui .opblock .opblock-summary-method {
             min-width: 72px;
             border-radius: 8px;
@@ -169,63 +371,86 @@ async def custom_docs():
             letter-spacing: 0.04em;
             text-transform: uppercase;
         }
+
         .swagger-ui .opblock .opblock-summary-path {
-            color: var(--primary);
+            color: var(--wf-primary);
             font-weight: 600;
         }
+
         .swagger-ui .opblock .opblock-summary-description {
-            color: var(--muted);
+            color: var(--wf-muted);
         }
-        .swagger-ui .scheme-container {
-            background: rgba(255,255,255,0.8);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
-            padding: 18px 20px;
-        }
+
         .swagger-ui .btn {
             border-radius: 10px;
             font-weight: 700;
         }
+
         .swagger-ui .btn.execute {
             background: linear-gradient(135deg, #2563eb, #3b82f6);
             border: none;
             box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
+            color: white;
         }
+
         .swagger-ui .authorization__btn {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            color: var(--text);
+            background: white;
+            border: 1px solid var(--wf-border);
+            color: var(--wf-primary);
             box-shadow: none;
         }
+
         .swagger-ui section.models {
-            border: 1px solid var(--border);
+            border: 1px solid var(--wf-border);
             border-radius: 16px;
             overflow: hidden;
             background: rgba(255,255,255,0.8);
         }
+
         .swagger-ui .model-box {
             border-radius: 10px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--wf-border);
         }
+
         .swagger-ui textarea,
         .swagger-ui input,
         .swagger-ui select {
             border-radius: 10px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--wf-border);
             background: #fff;
         }
+
         @media (max-width: 768px) {
-            .swagger-ui .topbar-wrapper .link::before {
-                font-size: 1.5rem;
+            .wf-topbar {
+                padding-top: 24px;
+                flex-direction: column;
+                align-items: flex-start;
             }
-            .swagger-ui .info {
-                padding: 18px 18px;
+
+            .wf-brand-text {
+                font-size: 1.6rem;
+            }
+
+            .wf-hero {
+                flex-direction: column;
+                align-items: flex-start;
+                padding-top: 18px;
+            }
+
+            .wf-hero-card {
+                width: 100%;
+                min-width: auto;
+            }
+
+            .swagger-ui {
+                padding-left: 16px;
+                padding-right: 16px;
             }
         }
     </style>
     """
-    return HTMLResponse(content=html.replace("</head>", css + "</head>"))
+    html = html.replace("</head>", css + "</head>")
+    return HTMLResponse(content=html)
 
 
 # --- EXCEPTION HANDLING ---
