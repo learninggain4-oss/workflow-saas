@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setShowProfileSettings }) {
+export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }) {
   return (
     <aside className={`w-64 flex-shrink-0 border-r flex flex-col transition-colors duration-200 ${bgSide}`}>
       <div className="p-6 flex justify-between items-center shrink-0">
@@ -31,8 +31,8 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
               </span>
               {userData.subscription_tier === 'free' && <button onClick={handleUpgrade} className="text-[10px] font-bold bg-indigo-600 text-white px-3 py-1 rounded-md hover:bg-indigo-700 transition-colors shadow-sm">Upgrade</button>}
             </div>
-            <button onClick={() => setShowProfileSettings(true)} className="mt-3 w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-xs font-semibold text-gray-700 hover:border-indigo-300 hover:text-indigo-600 transition-colors dark:border-gray-700 dark:text-gray-200 dark:hover:text-indigo-400">
-              Edit Profile
+            <button onClick={() => setViewMode('settings')} className="mt-3 w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-xs font-semibold text-gray-700 hover:border-indigo-300 hover:text-indigo-600 transition-colors dark:border-gray-700 dark:text-gray-200 dark:hover:text-indigo-400">
+              Account settings
             </button>
           </div>
         )}

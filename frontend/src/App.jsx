@@ -11,7 +11,7 @@ import BoardView from './components/views/BoardView';
 import Timeline from './components/views/Timeline';
 import CalendarView from './components/views/CalendarView';
 import TaskModal from './components/TaskModal';
-import ProfileSettingsModal from './components/ProfileSettingsModal';
+import AccountSettingsPage from './components/views/AccountSettingsPage';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -47,7 +47,6 @@ export default function App() {
   const [viewMode, setViewMode] = useState("board");
   const [calDate, setCalDate] = useState(new Date());
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode") === "true");
-  const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
   const [profileAvatar, setProfileAvatar] = useState(localStorage.getItem("profileAvatar") || "");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -79,6 +78,15 @@ export default function App() {
     previewFiles: true,
     hideArchived: false,
   };
+  const defaultSecuritySettings = {
+    emailVerified: true,
+    twoFactorEnabled: false,
+    connectedApps: [
+      { id: 'google', name: 'Google', type: 'OAuth', connected: true },
+      { id: 'github', name: 'GitHub', type: 'OAuth', connected: false },
+      { id: 'slack', name: 'Slack', type: 'OAuth', connected: true },
+    ],
+  };
   const [profilePreferences, setProfilePreferences] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("profilePreferences") || "null");
@@ -93,6 +101,19 @@ export default function App() {
       return saved ? { ...defaultWorkspaceDefaults, ...saved } : defaultWorkspaceDefaults;
     } catch {
       return defaultWorkspaceDefaults;
+    }
+  });
+  const [securitySettings, setSecuritySettings] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("securitySettings") || "null");
+      if (!saved) return defaultSecuritySettings;
+      return {
+        ...defaultSecuritySettings,
+        ...saved,
+        connectedApps: saved.connectedApps?.length ? saved.connectedApps : defaultSecuritySettings.connectedApps,
+      };
+    } catch {
+      return defaultSecuritySettings;
     }
   });
 
@@ -119,6 +140,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("workspaceDefaults", JSON.stringify(workspaceDefaults));
   }, [workspaceDefaults]);
+
+  useEffect(() => {
+    localStorage.setItem("securitySettings", JSON.stringify(securitySettings));
+  }, [securitySettings]);
 
   useEffect(() => {
     localStorage.setItem("profileAvatar", profileAvatar || "");
@@ -344,7 +369,6 @@ export default function App() {
         password: "",
       });
       addAccountActivity("Updated profile settings");
-      setShowProfileSettings(false);
       alert("Profile updated successfully");
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to update profile");
@@ -391,7 +415,29 @@ export default function App() {
     setNotifications([]);
     setProfileForm({ name: "", email: "", password: "" });
     setProfileAvatar("");
-    setShowProfileSettings(false);
+    setViewMode("board");
+  };
+
+  const handleVerifyEmail = () => {
+    setSecuritySettings((prev) => ({ ...prev, emailVerified: true }));
+    addAccountActivity("Verified email address");
+  };
+
+  const toggleTwoFactor = () => {
+    setSecuritySettings((prev) => {
+      const nextState = !prev.twoFactorEnabled;
+      addAccountActivity(nextState ? "Enabled two-factor authentication" : "Disabled two-factor authentication");
+      return { ...prev, twoFactorEnabled: nextState };
+    });
+  };
+
+  const toggleConnectedApp = (id) => {
+    setSecuritySettings((prev) => ({
+      ...prev,
+      connectedApps: prev.connectedApps.map((app) =>
+        app.id === id ? { ...app, connected: !app.connected } : app
+      ),
+    }));
   };
 
   const toggleLabel = (lb) => {
@@ -446,49 +492,56 @@ export default function App() {
 
   return (
     <div className={`h-screen w-full flex overflow-hidden transition-colors duration-200 ${bgMain}`}>
-      <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setShowProfileSettings }} />
+      <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }} />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }} />
 
         <div className="flex-1 overflow-auto p-8 custom-scrollbar">
-          {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard }} />}
-          
-          {viewMode === "board" && <BoardView {...{ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask }} />}
-          
-          {viewMode === "timeline" && <Timeline {...{ tasksList, setEditing, timelineDays, bgCard }} />}
-          
-          {viewMode === "calendar" && <CalendarView {...{ calDate, tasksList, setEditing, firstDay, daysInMonth, m, y, bgCard, subCard }} />}
+          {viewMode === "settings" ? (
+            <AccountSettingsPage {...{
+              userData,
+              profileForm,
+              setProfileForm,
+              handleProfileUpdate,
+              savingProfile,
+              profilePreferences,
+              setProfilePreferences,
+              workspaceDefaults,
+              setWorkspaceDefaults,
+              resetProfilePreferences,
+              darkMode,
+              setDarkMode,
+              profileAvatar,
+              setProfileAvatar,
+              handleAvatarUpload,
+              handleDeleteAccount,
+              accountActivity,
+              handleUpgrade,
+              securitySettings,
+              handleVerifyEmail,
+              toggleTwoFactor,
+              toggleConnectedApp,
+              bgCard,
+              inputCls,
+              primaryBtn,
+              setViewMode,
+            }} />
+          ) : (
+            <>
+              {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard }} />}
+
+              {viewMode === "board" && <BoardView {...{ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask }} />}
+
+              {viewMode === "timeline" && <Timeline {...{ tasksList, setEditing, timelineDays, bgCard }} />}
+
+              {viewMode === "calendar" && <CalendarView {...{ calDate, tasksList, setEditing, firstDay, daysInMonth, m, y, bgCard, subCard }} />}
+            </>
+          )}
         </div>
       </main>
 
       {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn }} />}
-
-      <ProfileSettingsModal
-        show={showProfileSettings}
-        onClose={() => setShowProfileSettings(false)}
-        profileForm={profileForm}
-        setProfileForm={setProfileForm}
-        handleProfileUpdate={handleProfileUpdate}
-        userData={userData}
-        savingProfile={savingProfile}
-        profilePreferences={profilePreferences}
-        setProfilePreferences={setProfilePreferences}
-        workspaceDefaults={workspaceDefaults}
-        setWorkspaceDefaults={setWorkspaceDefaults}
-        resetProfilePreferences={resetProfilePreferences}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        profileAvatar={profileAvatar}
-        setProfileAvatar={setProfileAvatar}
-        handleAvatarUpload={handleAvatarUpload}
-        handleDeleteAccount={handleDeleteAccount}
-        accountActivity={accountActivity}
-        handleUpgrade={handleUpgrade}
-        bgCard={bgCard}
-        inputCls={inputCls}
-        primaryBtn={primaryBtn}
-      />
 
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
