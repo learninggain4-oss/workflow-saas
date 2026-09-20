@@ -17,6 +17,8 @@ export default function ProfileSettingsModal({
   setProfileAvatar,
   handleAvatarUpload,
   handleDeleteAccount,
+  accountActivity,
+  handleUpgrade,
   bgCard,
   inputCls,
   primaryBtn,
@@ -181,6 +183,22 @@ export default function ProfileSettingsModal({
                 </div>
                 <p className="mt-2 text-xs text-gray-500">Use a strong password and keep email notifications enabled for board activity updates.</p>
 
+                <div className="mt-3 rounded-xl bg-gray-50 p-2 dark:bg-gray-900/40">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-500">Plan</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                      {userData?.subscription_tier ? userData.subscription_tier : "free"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUpgrade}
+                    className="mt-2 w-full rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-indigo-700"
+                  >
+                    {userData?.subscription_tier === "pro" ? "Manage plan" : "Upgrade to Pro"}
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleDeleteAccount}
@@ -189,6 +207,21 @@ export default function ProfileSettingsModal({
                   Delete account
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-3">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recent activity</p>
+              <span className="text-[10px] text-gray-400">Last 5</span>
+            </div>
+            <div className="space-y-2">
+              {accountActivity?.map((item) => (
+                <div key={item.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-900/40">
+                  <span className="text-sm">{item.title}</span>
+                  <span className="text-[10px] text-gray-500">{item.time}</span>
+                </div>
+              ))}
             </div>
           </div>
 

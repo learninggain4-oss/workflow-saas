@@ -51,6 +51,18 @@ export default function App() {
   const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
   const [profileAvatar, setProfileAvatar] = useState(localStorage.getItem("profileAvatar") || "");
   const [savingProfile, setSavingProfile] = useState(false);
+  const defaultAccountActivity = [
+    { id: 1, title: "Signed in", time: "Today" },
+    { id: 2, title: "Updated profile", time: "Today" },
+  ];
+  const [accountActivity, setAccountActivity] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("accountActivity") || "null");
+      return saved?.length ? saved : defaultAccountActivity;
+    } catch {
+      return defaultAccountActivity;
+    }
+  });
   const defaultProfilePreferences = {
     emailNotifications: true,
     boardUpdates: true,
@@ -90,6 +102,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("profileAvatar", profileAvatar || "");
   }, [profileAvatar]);
+
+  useEffect(() => {
+    localStorage.setItem("accountActivity", JSON.stringify(accountActivity));
+  }, [accountActivity]);
 
   const currentEmail = useMemo(() => {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
@@ -166,8 +182,17 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Register failed"); }
   };
 
+  const addAccountActivity = (title) => {
+    setAccountActivity((prev) => [{ id: Date.now(), title, time: "Just now" }, ...prev].slice(0, 5));
+  };
+
   const handleUpgrade = async () => {
-    try { await auth.upgrade(); alert("Upgraded to Pro!"); auth.getMe().then(r => setUserData(r.data)); } catch { alert("Upgrade failed"); }
+    try {
+      await auth.upgrade();
+      alert("Upgraded to Pro!");
+      auth.getMe().then(r => setUserData(r.data));
+      addAccountActivity("Upgraded to Pro");
+    } catch { alert("Upgrade failed"); }
   };
 
   const exportCSV = async () => {
@@ -297,6 +322,7 @@ export default function App() {
         email: res.data.user?.email || emailValue,
         password: "",
       });
+      addAccountActivity("Updated profile settings");
       setShowProfileSettings(false);
       alert("Profile updated successfully");
     } catch (err) {
@@ -324,6 +350,7 @@ export default function App() {
       formData.append("file", file);
       const res = await uploadFile(formData);
       setProfileAvatar(res.data?.url || "");
+      addAccountActivity("Updated profile photo");
       alert("Profile photo updated");
     } catch {
       alert("Profile photo upload failed");
@@ -432,6 +459,8 @@ export default function App() {
         setProfileAvatar={setProfileAvatar}
         handleAvatarUpload={handleAvatarUpload}
         handleDeleteAccount={handleDeleteAccount}
+        accountActivity={accountActivity}
+        handleUpgrade={handleUpgrade}
         bgCard={bgCard}
         inputCls={inputCls}
         primaryBtn={primaryBtn}
