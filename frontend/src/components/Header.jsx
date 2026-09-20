@@ -20,7 +20,7 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
       
       <div className="flex gap-4 items-center">
         <div className={`flex border rounded-xl p-1 shadow-sm ${bgCard}`}>
-          {["dashboard", "board", "timeline", "calendar", "reports", "team", "automations", "integrations", "audit", "billing"].map(m => (
+          {["dashboard", "board", "timeline", "calendar", "reports", "team", "automations", "integrations", "templates", "audit", "billing"].map(m => (
             <button key={m} onClick={() => setViewMode(m)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold capitalize transition-all duration-200 ${viewMode === m ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-200"}`}>
               {m}
             </button>
