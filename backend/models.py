@@ -1,29 +1,48 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean
 from database import Base
 
+# ==========================================
+#               USER MODEL
+# ==========================================
+
 class User(Base):
     __tablename__ = "users"
+    
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, default="")
     password_hash = Column(String, nullable=False)
     subscription_tier = Column(String, default="free")
 
+
+# ==========================================
+#              BOARD MODELS
+# ==========================================
+
 class Board(Base):
     __tablename__ = "boards"
+    
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, default="My Workspace")
     owner_id = Column(Integer, ForeignKey("users.id"))
 
+
 class BoardMember(Base):
     __tablename__ = "board_members"
+    
     id = Column(Integer, primary_key=True)
     board_id = Column(Integer, ForeignKey("boards.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     role = Column(String, default="member")
 
+
+# ==========================================
+#               TASK MODELS
+# ==========================================
+
 class Task(Base):
     __tablename__ = "tasks"
+    
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     status = Column(String, default="todo")
@@ -40,15 +59,19 @@ class Task(Base):
     attachment_url = Column(Text, default="")
     labels = Column(String, default="")
 
+
 class Subtask(Base):
     __tablename__ = "subtasks"
+    
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(Integer, ForeignKey("tasks.id"))
     title = Column(String, nullable=False)
     is_completed = Column(Boolean, default=False)
 
+
 class Comment(Base):
     __tablename__ = "comments"
+    
     id = Column(Integer, primary_key=True, index=True)
     text = Column(Text, nullable=False)
     task_id = Column(Integer, ForeignKey("tasks.id"))
@@ -56,16 +79,24 @@ class Comment(Base):
     user_name = Column(String, default="")
     created_at = Column(String, default="")
 
+
+# ==========================================
+#         ACTIVITY & NOTIFICATIONS
+# ==========================================
+
 class Activity(Base):
     __tablename__ = "activities"
+    
     id = Column(Integer, primary_key=True, index=True)
     board_id = Column(Integer, ForeignKey("boards.id"))
     user_name = Column(String, default="")
     action = Column(String, default="")
     created_at = Column(String, default="")
 
+
 class Notification(Base):
     __tablename__ = "notifications"
+    
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     board_id = Column(Integer, nullable=True)
@@ -74,5 +105,3 @@ class Notification(Base):
     notif_type = Column(String, default="info")
     is_read = Column(Boolean, default=False)
     created_at = Column(String, default="")
-
-#(SQLAlchemy DB Models)
