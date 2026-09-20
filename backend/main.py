@@ -114,29 +114,31 @@ async def custom_docs():
     css = """
     <style>
         :root {
-            --wf-bg: #0a1020;
-            --wf-bg-2: #111827;
-            --wf-panel: rgba(15, 23, 42, 0.82);
-            --wf-panel-strong: rgba(17, 24, 39, 0.95);
-            --wf-border: rgba(148, 163, 184, 0.22);
-            --wf-primary: #f8fafc;
-            --wf-accent: #60a5fa;
+            --wf-bg: #f5f7fb;
+            --wf-bg-2: #eef2ff;
+            --wf-panel: rgba(255, 255, 255, 0.82);
+            --wf-panel-strong: rgba(255, 255, 255, 0.96);
+            --wf-border: rgba(148, 163, 184, 0.28);
+            --wf-primary: #0f172a;
+            --wf-accent: #2563eb;
             --wf-accent-2: #3b82f6;
-            --wf-accent-soft: rgba(96, 165, 250, 0.14);
-            --wf-success: #34d399;
-            --wf-warning: #fbbf24;
-            --wf-danger: #f87171;
-            --wf-text: #e5e7eb;
-            --wf-muted: #94a3b8;
+            --wf-accent-soft: rgba(37, 99, 235, 0.12);
+            --wf-success: #10b981;
+            --wf-warning: #f59e0b;
+            --wf-danger: #ef4444;
+            --wf-text: #1f2937;
+            --wf-muted: #64748b;
+            --wf-btn-dark: rgba(15, 23, 42, 0.9);
+            --wf-btn-light: rgba(255, 255, 255, 0.8);
+            --wf-card-dark: rgba(15, 23, 42, 0.9);
+            --wf-card-light: rgba(255, 255, 255, 0.8);
         }
-
-        * { box-sizing: border-box; }
 
         body {
             background:
-                radial-gradient(circle at top left, rgba(59,130,246,0.18), transparent 28%),
-                radial-gradient(circle at top right, rgba(168,85,247,0.15), transparent 32%),
-                linear-gradient(180deg, #050b16 0%, #0b1220 100%);
+                radial-gradient(circle at top left, rgba(59,130,246,0.10), transparent 30%),
+                radial-gradient(circle at top right, rgba(168,85,247,0.08), transparent 30%),
+                linear-gradient(180deg, var(--wf-bg) 0%, var(--wf-bg-2) 100%);
             font-family: Inter, "Segoe UI", sans-serif;
             color: var(--wf-text);
             margin: 0;
@@ -157,7 +159,7 @@ async def custom_docs():
             justify-content: space-between;
             gap: 20px;
             border-bottom: 1px solid var(--wf-border);
-            background: rgba(9, 14, 24, 0.4);
+            background: rgba(255, 255, 255, 0.12);
             backdrop-filter: blur(8px);
         }
 
@@ -178,7 +180,7 @@ async def custom_docs():
             color: white;
             font-weight: 800;
             font-size: 1.15rem;
-            box-shadow: 0 12px 24px rgba(59, 130, 246, 0.35);
+            box-shadow: 0 12px 24px rgba(59, 130, 246, 0.22);
         }
 
         .wf-brand-text {
@@ -193,7 +195,7 @@ async def custom_docs():
         }
 
         .wf-brand-text strong {
-            color: #93c5fd;
+            color: var(--wf-accent);
             font-weight: 800;
         }
 
@@ -204,7 +206,7 @@ async def custom_docs():
         }
 
         .wf-btn {
-            border: 1px solid rgba(148, 163, 184, 0.26);
+            border: 1px solid rgba(148, 163, 184, 0.28);
             border-radius: 10px;
             padding: 10px 18px;
             font-size: 0.9rem;
@@ -214,15 +216,15 @@ async def custom_docs():
         }
 
         .wf-btn-primary {
-            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            background: linear-gradient(135deg, var(--wf-accent), var(--wf-accent-2));
             color: #fff;
             border-color: transparent;
-            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.28);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
         }
 
         .wf-btn-secondary {
-            background: rgba(15, 23, 42, 0.8);
-            color: var(--wf-text);
+            background: var(--wf-btn-light);
+            color: var(--wf-primary);
             border-color: var(--wf-border);
         }
 
@@ -248,8 +250,8 @@ async def custom_docs():
             display: inline-block;
             padding: 7px 12px;
             border-radius: 999px;
-            background: rgba(96, 165, 250, 0.12);
-            color: #bfdbfe;
+            background: var(--wf-accent-soft);
+            color: var(--wf-accent);
             font-weight: 700;
             font-size: 0.75rem;
             letter-spacing: 0.06em;
@@ -276,9 +278,9 @@ async def custom_docs():
             min-width: 280px;
             padding: 22px 20px;
             border-radius: 18px;
-            background: rgba(15, 23, 42, 0.8);
+            background: var(--wf-panel);
             border: 1px solid var(--wf-border);
-            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.24);
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.06);
             display: flex;
             flex-direction: column;
             gap: 18px;
@@ -308,8 +310,8 @@ async def custom_docs():
             display: inline-block;
             border-radius: 999px;
             padding: 8px 10px;
-            background: rgba(52, 211, 153, 0.12);
-            color: #a7f3d0;
+            background: rgba(16, 185, 129, 0.09);
+            color: #047857;
             font-size: 0.8rem;
             font-weight: 700;
         }
@@ -325,11 +327,11 @@ async def custom_docs():
         }
 
         .swagger-ui .info {
-            background: rgba(15, 23, 42, 0.76);
+            background: var(--wf-panel);
             border: 1px solid var(--wf-border);
             border-radius: 18px;
             padding: 28px 30px;
-            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
             margin: 0 0 20px;
         }
 
@@ -347,19 +349,19 @@ async def custom_docs():
         }
 
         .swagger-ui .scheme-container {
-            background: rgba(15, 23, 42, 0.82);
+            background: var(--wf-panel);
             border: 1px solid var(--wf-border);
             border-radius: 16px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
             padding: 18px 20px;
             margin-bottom: 20px;
         }
 
         .swagger-ui .opblock {
             border-radius: 14px !important;
-            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
             border: 1px solid var(--wf-border) !important;
-            background: rgba(15, 23, 42, 0.9);
+            background: var(--wf-panel-strong);
             overflow: hidden;
         }
 
@@ -396,14 +398,14 @@ async def custom_docs():
         }
 
         .swagger-ui .btn.execute {
-            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            background: linear-gradient(135deg, var(--wf-accent), var(--wf-accent-2));
             border: none;
             box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
             color: white;
         }
 
         .swagger-ui .authorization__btn {
-            background: rgba(15, 23, 42, 0.85);
+            background: var(--wf-btn-light);
             border: 1px solid var(--wf-border);
             color: var(--wf-primary);
             box-shadow: none;
@@ -413,13 +415,13 @@ async def custom_docs():
             border: 1px solid var(--wf-border);
             border-radius: 16px;
             overflow: hidden;
-            background: rgba(15, 23, 42, 0.8);
+            background: var(--wf-panel);
         }
 
         .swagger-ui .model-box {
             border-radius: 10px;
             border: 1px solid var(--wf-border);
-            background: rgba(15, 23, 42, 0.75);
+            background: var(--wf-panel-strong);
         }
 
         .swagger-ui textarea,
@@ -427,8 +429,20 @@ async def custom_docs():
         .swagger-ui select {
             border-radius: 10px;
             border: 1px solid var(--wf-border);
-            background: rgba(15, 23, 42, 0.8);
-            color: var(--wf-text);
+            background: rgba(255, 255, 255, 0.8);
+            color: var(--wf-primary);
+        }
+
+        .swagger-ui .parameter__name,
+        .swagger-ui .response-col_status,
+        .swagger-ui .tablinks a,
+        .swagger-ui .markdown, .swagger-ui .model-title,
+        .swagger-ui .opblock-section-header h4,
+        .swagger-ui .details p,
+        .swagger-ui .parameter__type,
+        .swagger-ui .property-row td,
+        .swagger-ui .parameter__in {
+            color: var(--wf-primary) !important;
         }
 
         @media (max-width: 768px) {
