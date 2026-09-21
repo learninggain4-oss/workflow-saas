@@ -101,7 +101,7 @@ export default function TeamPage({
   });
 
   const roleBreakdown = {
-    owner: memberCards.filter((member) => normalizedRoleValue(member.role) === 'owner').length,
+    owner: memberCards.filter((member) => normalizeRoleValue(member.role) === 'owner').length,
     administrator: memberCards.filter((member) => normalizeRoleValue(member.role) === 'administrator').length,
     editor: memberCards.filter((member) => normalizeRoleValue(member.role) === 'editor').length,
     guest: memberCards.filter((member) => normalizeRoleValue(member.role) === 'guest').length,
@@ -122,8 +122,8 @@ export default function TeamPage({
 
   const deleteRegisteredUser = async (userId) => {
     try {
-      await administrator.deleteUser(userId);
-      const refreshed = await administrator.getUsers();
+      await admin.deleteUser(userId);
+      const refreshed = await admin.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
     } catch (e) {
       alert(e.response?.data?.detail || 'Failed to delete user');

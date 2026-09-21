@@ -170,42 +170,39 @@ export default function App() {
   }, [token]);
 
   const normalizeRoleValue = (role) => {
-    const value = String(role || 'member').trim().toLowerCase().replace(/[-\s]+/g, '_');
+    const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
     const aliases = {
       owner: 'owner',
-      super_admin: 'owner',
-      superadmin: 'owner',
-      admin: 'admin',
-      administrator: 'admin',
-      member: 'member',
-      editor: 'member',
-      contributor: 'contributor',
-      guest: 'contributor',
-      viewer: 'viewer',
-      subscriber: 'viewer',
+      administrator: 'administrator',
+      editor: 'editor',
+      guest: 'guest',
+      subscriber: 'subscriber',
     };
-    return aliases[value] || 'member';
+    return aliases[value] || 'editor';
   };
 
-  const defaultPermissionsForRole = (role = 'admin') => {
+  const defaultPermissionsForRole = (role = 'owner') => {
     const normalizedRole = normalizeRoleValue(role);
-    if (normalizedRole === 'owner' || normalizedRole === 'admin') {
+    if (normalizedRole === 'owner') {
       return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
     }
-    if (normalizedRole === 'member') {
+    if (normalizedRole === 'administrator') {
+      return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
+    }
+    if (normalizedRole === 'editor') {
       return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
     }
-    if (normalizedRole === 'contributor') {
+    if (normalizedRole === 'guest') {
       return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
     }
-    if (normalizedRole === 'viewer') {
+    if (normalizedRole === 'subscriber') {
       return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
     }
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   };
 
   const getMemberPermissions = (member) => {
-    const base = defaultPermissionsForRole(member?.role || 'member');
+    const base = defaultPermissionsForRole(member?.role || 'editor');
     const custom = member?.permissions && typeof member.permissions === 'object' ? member.permissions : {};
     return { ...base, ...custom };
   };
@@ -213,7 +210,7 @@ export default function App() {
   const myRole = useMemo(() => {
     if (!selectedBoard || boardMembers.length === 0) return "owner";
     const match = boardMembers.find(x => String(x.email || '').trim().toLowerCase() === String(currentEmail || '').trim().toLowerCase());
-    return normalizeRoleValue(match?.role || "member");
+    return normalizeRoleValue(match?.role || "editor");
   }, [boardMembers, currentEmail, selectedBoard]);
 
   const myPermissions = useMemo(() => {
@@ -403,15 +400,15 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Error"); }
   };
   const renameBoard = async () => {
-    if (!renameValue.trim() || !selectedBoard || myRole !== 'admin') return;
+    if (!renameValue.trim() || !selectedBoard || myRole !== 'administrator') return;
     await boards.rename(selectedBoard, renameValue); await fetchInitialData();
   };
   const deleteBoard = async () => {
-    if (!selectedBoard || myRole !== 'admin' || !confirm("Delete board?")) return;
+    if (!selectedBoard || myRole !== 'administrator' || !confirm("Delete board?")) return;
     await boards.delete(selectedBoard); setSelectedBoard(null); await fetchInitialData();
   };
   const inviteUser = async () => {
-    if (!inviteEmail.trim() || !selectedBoard || (myRole !== 'admin' && myRole !== 'owner')) return alert("Only owners and admins can invite");
+    if (!inviteEmail.trim() || !selectedBoard || (myRole !== 'administrator' && myRole !== 'owner')) return alert("Only owners and admins can invite");
     try {
       const res = await boards.invite(selectedBoard, inviteEmail, inviteRole, invitePassword);
       alert(res.data.message || "Invited!");
@@ -422,7 +419,7 @@ export default function App() {
   };
 
   const updateMemberRole = async (userId, role, permissions = null) => {
-    if (!selectedBoard || myRole !== 'admin') return;
+    if (!selectedBoard || myRole !== 'administrator') return;
     try {
       const payload = permissions ? { role, permissions } : { role };
       await boards.updateMemberRole(selectedBoard, userId, payload);
@@ -433,7 +430,7 @@ export default function App() {
   };
 
   const removeMember = async (userId) => {
-    if (!selectedBoard || myRole !== 'admin') return;
+    if (!selectedBoard || myRole !== 'administrator') return;
     const member = boardMembers.find((m) => String(m.id) === String(userId));
     const confirmed = window.confirm(`Remove ${member?.name || member?.email || 'this member'} from this board?`);
     if (!confirmed) return;
