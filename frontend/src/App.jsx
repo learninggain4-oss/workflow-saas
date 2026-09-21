@@ -42,7 +42,7 @@ export default function App() {
   const [selectedBoard, setSelectedBoard] = useState(null);
   const [newBoardName, setNewBoardName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteRole, setInviteRole] = useState("admin");
   const [renameValue, setRenameValue] = useState("");
 
   const [taskComments, setTaskComments] = useState([]);
@@ -167,15 +167,15 @@ export default function App() {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
   }, [token]);
 
-  const defaultPermissionsForRole = (role = 'member') => {
-    const normalizedRole = (role || 'member').toLowerCase();
+  const defaultPermissionsForRole = (role = 'admin') => {
+    const normalizedRole = (role || 'admin').toLowerCase();
     if (normalizedRole === 'admin') {
       return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
     }
     if (normalizedRole === 'viewer') {
       return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
     }
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   };
 
   const getMemberPermissions = (member) => {

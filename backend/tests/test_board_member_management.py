@@ -16,6 +16,12 @@ def _unique_email(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}@example.com"
 
 
+def test_registered_users_default_to_admin_permissions():
+    from utils import PERMISSION_KEYS
+    permissions = main.utils.normalize_permissions("member", {})
+    assert permissions == {key: True for key in PERMISSION_KEYS}
+
+
 def test_board_member_role_update_and_remove():
     db = SessionLocal()
     owner_email = _unique_email("owner")

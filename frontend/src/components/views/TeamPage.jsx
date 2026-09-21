@@ -13,15 +13,15 @@ const getStatusFromRole = (role) => {
   }
 };
 
-const defaultPermissionsForRole = (role = 'member') => {
-  const normalizedRole = (role || 'member').toLowerCase();
+const defaultPermissionsForRole = (role = 'admin') => {
+  const normalizedRole = (role || 'admin').toLowerCase();
   if (normalizedRole === 'admin') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   }
   if (normalizedRole === 'viewer') {
     return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
-  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
+  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
 };
 
 const getMemberPermissions = (member = {}) => {

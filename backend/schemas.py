@@ -34,7 +34,7 @@ class BoardCreate(BaseModel):
 
 class InviteRequest(BaseModel):
     email: str
-    role: str = "member"
+    role: str = "admin"
     permissions: Optional[dict] = None
 
 

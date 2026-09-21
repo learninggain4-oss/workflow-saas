@@ -39,7 +39,7 @@ class BoardMember(Base):
     id = Column(Integer, primary_key=True)
     board_id = Column(Integer, ForeignKey("boards.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    role = Column(String, default="member")
+    role = Column(String, default="admin")
     permissions = Column(String, default="{}")
 
 

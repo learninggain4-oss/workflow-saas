@@ -175,12 +175,12 @@ PERMISSION_KEYS = [
 
 
 def default_permissions_for_role(role):
-    role_name = (role or "member").lower()
+    role_name = (role or "admin").lower()
     if role_name == "admin":
         return {key: True for key in PERMISSION_KEYS}
     if role_name == "viewer":
         return {"viewBoard": True, "createTasks": False, "editTasks": False, "deleteTasks": False, "manageMembers": False, "manageBoard": False}
-    return {"viewBoard": True, "createTasks": True, "editTasks": True, "deleteTasks": True, "manageMembers": False, "manageBoard": False}
+    return {key: True for key in PERMISSION_KEYS}
 
 
 def normalize_permissions(role, custom_permissions=None):
@@ -198,10 +198,14 @@ def get_board_member_role(board_id: int, user_id: int, db: Session):
         return None
     if board.owner_id == user_id:
         return "admin"
-    member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
-    if not member:
+    members = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).all()
+    if not members:
         return None
-    return (member.role or "member").strip().lower()
+    role_order = ["viewer", "member", "admin"]
+    for role in role_order:
+        if any((m.role or "member").strip().lower() == role for m in members):
+            return role
+    return (members[0].role or "member").strip().lower()
 
 
 def get_board_member_permissions(board_id: int, user_id: int, db: Session):
@@ -210,16 +214,29 @@ def get_board_member_permissions(board_id: int, user_id: int, db: Session):
         return default_permissions_for_role("viewer")
     if board.owner_id == user_id:
         return default_permissions_for_role("admin")
-    member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
-    if not member:
+    members = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).all()
+    if not members:
         return default_permissions_for_role("viewer")
+
+    resolved_role = get_board_member_role(board_id, user_id, db)
+    selected_members = [m for m in members if (m.role or "member").strip().lower() == resolved_role]
+    if not selected_members:
+        selected_members = members
+
     custom_permissions = {}
-    if member.permissions:
+    for member in selected_members:
+        if not member.permissions:
+            continue
         try:
-            custom_permissions = json.loads(member.permissions)
+            parsed = json.loads(member.permissions)
+            if isinstance(parsed, dict):
+                for key, value in parsed.items():
+                    if key in PERMISSION_KEYS and isinstance(value, bool):
+                        custom_permissions[key] = bool(value)
         except Exception:
-            custom_permissions = {}
-    return normalize_permissions((member.role or "member").strip().lower(), custom_permissions)
+            pass
+
+    return normalize_permissions(resolved_role, custom_permissions)
 
 
 def ensure_board_access(board_id: int, user, db: Session, required_role: str = "viewer", action: str = "Board access", required_permission: str = None):
