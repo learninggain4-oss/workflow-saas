@@ -2,59 +2,55 @@ import React from 'react';
 import { admin } from '../../services/api';
 
 const normalizeRoleValue = (role) => {
-  const value = String(role || 'member').trim().toLowerCase().replace(/[-\s]+/g, '_');
+  const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
   const aliases = {
     owner: 'owner',
-    super_admin: 'owner',
-    superadmin: 'owner',
-    admin: 'admin',
-    administrator: 'admin',
-    member: 'member',
-    editor: 'member',
-    contributor: 'contributor',
-    guest: 'contributor',
-    viewer: 'viewer',
-    subscriber: 'viewer',
+    administrator: 'administrator',
+    editor: 'editor',
+    guest: 'guest',
+    subscriber: 'subscriber',
   };
-  return aliases[value] || 'member';
+  return aliases[value] || 'editor';
 };
 
 const getStatusFromRole = (role) => {
   switch (normalizeRoleValue(role)) {
     case 'owner':
       return 'Owner';
-    case 'admin':
+    case 'administrator':
       return 'Online';
-    case 'member':
+    case 'editor':
       return 'Active';
-    case 'contributor':
-      return 'Contributor';
-    case 'viewer':
-      return 'View only';
+    case 'guest':
+      return 'guest';
+    case 'subscriber':
+      return 'view only';
     default:
       return 'Available';
   }
 };
 
-const defaultPermissionsForRole = (role = 'admin') => {
+const defaultPermissionsForRole = (role = 'owner') => {
   const normalizedRole = normalizeRoleValue(role);
-  if (normalizedRole === 'owner' || normalizedRole === 'admin') {
+  if (normalizedRole === 'owner' ) {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   }
-  if (normalizedRole === 'member') {
+  if (normalizedRole === 'administrator'){return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
+}
+  if (normalizedRole === 'editor') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
   }
-  if (normalizedRole === 'contributor') {
+  if (normalizedRole === 'guest') {
     return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
-  if (normalizedRole === 'viewer') {
+  if (normalizedRole === 'subscriber') {
     return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
   return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
 };
 
 const getMemberPermissions = (member = {}) => {
-  const base = defaultPermissionsForRole(member.role || 'member');
+  const base = defaultPermissionsForRole(member.role || 'editor');
   return { ...base, ...(member.permissions || {}) };
 };
 
@@ -64,7 +60,7 @@ export default function TeamPage({
   boardMembers = [],
   registeredUsers = [],
   setRegisteredUsers,
-  myRole = 'member',
+  myRole = 'editor',
   myPermissions = {},
   tasksList = [],
   selectedBoard,
@@ -105,18 +101,19 @@ export default function TeamPage({
   });
 
   const roleBreakdown = {
-    admin: memberCards.filter((member) => normalizeRoleValue(member.role) === 'admin').length,
-    member: memberCards.filter((member) => normalizeRoleValue(member.role) === 'member').length,
-    viewer: memberCards.filter((member) => normalizeRoleValue(member.role) === 'viewer').length,
-    contributor: memberCards.filter((member) => normalizeRoleValue(member.role) === 'contributor').length,
+    owner: memberCards.filter((member) => normalizedRoleValue(member.role) === 'owner').length,
+    administrator: memberCards.filter((member) => normalizeRoleValue(member.role) === 'administrator').length,
+    editor: memberCards.filter((member) => normalizeRoleValue(member.role) === 'editor').length,
+    guest: memberCards.filter((member) => normalizeRoleValue(member.role) === 'guest').length,
+    subscriber: memberCards.filter((member) => normalizeRoleValue(member.role) === 'subscriber').length,
   };
   const ownerManagedUsers = (registeredUsers || []).filter((user) => user.email !== currentEmail);
 
   const updateRegisteredUserRole = async (userId, nextRole) => {
     if (!nextRole) return;
     try {
-      await admin.updateUserRole(userId, nextRole);
-      const refreshed = await admin.getUsers();
+      await administrator.updateUserRole(userId, nextRole);
+      const refreshed = await administrator.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
     } catch (e) {
       alert(e.response?.data?.detail || 'Failed to update user role');
@@ -125,8 +122,8 @@ export default function TeamPage({
 
   const deleteRegisteredUser = async (userId) => {
     try {
-      await admin.deleteUser(userId);
-      const refreshed = await admin.getUsers();
+      await administrator.deleteUser(userId);
+      const refreshed = await administrator.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
     } catch (e) {
       alert(e.response?.data?.detail || 'Failed to delete user');
@@ -175,7 +172,7 @@ export default function TeamPage({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {(myRole === 'admin' || myRole === 'owner') && member.email !== currentEmail && (
+                  {(myRole === 'administrator' || myRole === 'owner') && member.email !== currentEmail && (
                     <>
                       <select
                         value={normalizeRoleValue(member.role)}
@@ -185,11 +182,11 @@ export default function TeamPage({
                         }}
                         className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200"
                       >
-                        <option value="owner">Owner / Super Admin</option>
-                        <option value="admin">Admin / Administrator</option>
-                        <option value="member">Member / Editor</option>
-                        <option value="contributor">Contributor / Guest</option>
-                        <option value="viewer">Viewer / Subscriber</option>
+                        <option value="owner">Owner</option>
+                        <option value="administrator">Administrator</option>
+                        <option value="editor">Editor</option>
+                        <option value="guest">Guest</option>
+                        <option value="subscriber">Subscriber</option>
                       </select>
                       <button
                         type="button"
@@ -213,7 +210,7 @@ export default function TeamPage({
         <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
           <h3 className="text-lg font-bold">Custom access</h3>
           <div className="mt-4 space-y-3">
-            {memberCards.filter((member) => (myRole === 'admin' || myRole === 'owner') && member.email !== currentEmail).map((member) => (
+            {memberCards.filter((member) => (myRole === 'administrator' || myRole === 'owner') && member.email !== currentEmail).map((member) => (
               <div key={`permissions-${member.email}`} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
@@ -248,7 +245,7 @@ export default function TeamPage({
           <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
             <h3 className="text-lg font-bold">Access overview</h3>
             <div className="mt-4 space-y-3">
-              {[{ label: 'Admin', value: roleBreakdown.admin }, { label: 'Member', value: roleBreakdown.member }, { label: 'Contributor', value: roleBreakdown.contributor }, { label: 'Viewer', value: roleBreakdown.viewer }].map((item) => (
+              {[{ label: 'Administrator', value: roleBreakdown.administrator }, { label: 'Editor', value: roleBreakdown.editor }, { label: 'Guest', value: roleBreakdown.guest }, { label: 'Subscriber', value: roleBreakdown.subscriber }].map((item) => (
                 <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                   <div>
                     <p className="text-sm font-semibold">{item.label}</p>
@@ -292,11 +289,11 @@ export default function TeamPage({
                           onChange={(e) => updateRegisteredUserRole(user.id, e.target.value)}
                           className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200"
                         >
-                          <option value="owner">Owner / Super Admin</option>
-                          <option value="admin">Admin / Administrator</option>
-                          <option value="member">Member / Editor</option>
-                          <option value="contributor">Contributor / Guest</option>
-                          <option value="viewer">Viewer / Subscriber</option>
+                          <option value="owner">Owner</option>
+                          <option value="administrator">Administrator</option>
+                          <option value="editor">Editor</option>
+                          <option value="guest">Guest</option>
+                          <option value="subscriber">Subscriber</option>
                         </select>
                       </div>
                     </div>
@@ -305,7 +302,7 @@ export default function TeamPage({
               </div>
             )}
 
-            {(myRole === 'admin' || myRole === 'owner') && selectedBoard && (
+            {(myRole === 'administrator' || myRole === 'owner') && selectedBoard && (
               <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Invite teammate</h4>
                 <input
@@ -326,10 +323,11 @@ export default function TeamPage({
                   onChange={(e) => setInviteRole(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
                 >
-                  <option value="admin">Admin / Administrator</option>
-                  <option value="member">Member / Editor</option>
-                  <option value="contributor">Contributor / Guest</option>
-                  <option value="viewer">Viewer / Subscriber</option>
+                  <option value="owner">Owner</option>
+                  <option value="administrator">Administrator</option>
+                  <option value="editor">Editor</option>
+                  <option value="guest">Guest</option>
+                  <option value="subscriber">Subscriber</option>
                 </select>
                 <button
                   type="button"

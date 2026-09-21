@@ -45,7 +45,7 @@ def ensure_database_migrations():
             url_name = str(engine.url).lower()
             if "sqlite" in url_name:
                 migrations = [
-                    ("users", "role", "VARCHAR DEFAULT 'admin'"),
+                    ("users", "role", "VARCHAR DEFAULT 'administrator'"),
                     ("users", "subscription_tier", "VARCHAR DEFAULT 'free'"),
                     ("users", "avatar_url", "VARCHAR DEFAULT ''"),
                     ("users", "email_verified", "BOOLEAN DEFAULT TRUE"),
@@ -83,7 +83,7 @@ def ensure_database_migrations():
 
             required_columns = {
                 "users": [
-                    ("role", "VARCHAR DEFAULT 'admin'"),
+                    ("role", "VARCHAR DEFAULT 'administrator'"),
                     ("subscription_tier", "VARCHAR DEFAULT 'free'"),
                     ("avatar_url", "VARCHAR DEFAULT ''"),
                     ("email_verified", "BOOLEAN DEFAULT TRUE"),
@@ -146,7 +146,7 @@ def normalize_existing_users_to_owner():
         db = SessionLocal()
         users = db.query(models.User).all()
         for user in users:
-            if utils.normalize_role(getattr(user, "role", "admin")) != "owner":
+            if utils.normalize_role(getattr(user, "role", "administrator")) != "owner":
                 user.role = "owner"
         db.commit()
         db.close()
@@ -737,7 +737,7 @@ def register(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
         email=req.email,
         name=req.name,
         password_hash=pwd_context.hash(req.password),
-        role="owner" if is_first_user else "admin",
+        role="owner" if is_first_user else "administrator",
     )
     db.add(u)
     db.commit()
@@ -769,7 +769,7 @@ def get_user_profile(current_user=Depends(get_current_user)):
         "id": current_user.id,
         "email": current_user.email,
         "name": current_user.name,
-        "role": utils.normalize_role(getattr(current_user, "role", "admin")),
+        "role": utils.normalize_role(getattr(current_user, "role", "administrator")),
         "subscription_tier": current_user.subscription_tier,
         "avatar_url": current_user.avatar_url or "",
         "email_verified": bool(current_user.email_verified),
@@ -796,7 +796,7 @@ def list_registered_users(current_user=Depends(get_current_user), db: Session = 
             "id": user.id,
             "email": user.email,
             "name": user.name,
-            "role": utils.normalize_role(getattr(user, "role", "admin")),
+            "role": utils.normalize_role(getattr(user, "role", "administrator")),
         })
     return users
 
@@ -813,8 +813,8 @@ def update_registered_user_role(user_id: int, payload: dict, current_user=Depend
         raise HTTPException(status_code=400, detail="Owner cannot change own role here")
 
     role = utils.normalize_role(payload.get("role", "admin") or "admin")
-    if role not in {"owner", "admin", "member", "contributor", "viewer"}:
-        raise HTTPException(status_code=400, detail="Role must be owner, admin, member, contributor, or viewer")
+    if role not in {"owner", "administrator", "editor", "guest", "subscriber"}:
+        raise HTTPException(status_code=400, detail="Role must be owner, administrator, editor, guest, subscriber")
 
     target.role = role
     db.commit()
@@ -957,7 +957,6 @@ def test_email(current_user=Depends(get_current_user)):
             ("Status", "Email configuration verified"),
             ("Message", "Your WorkFlow SaaS email delivery is active."),
         ],
-        cta_text="Open WorkFlow SaaS",
     )
     threading.Thread(
         target=send_email_safe,
@@ -1080,7 +1079,7 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
 
         subject = f"Invitation to join {board.name} on WorkFlow SaaS"
         html_body = utils.build_professional_email_html(
-            title="Welcome to WorkFlow SaaS",
+            title="Welcome to WorkFlow SaaS ",
             intro=f"<strong>{current_user.name}</strong> has invited you to join <strong>{board.name}</strong> as <strong>{role}</strong>.",
             rows=[
                 ("Board", board.name),
@@ -1088,8 +1087,6 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
                 ("Email", payload.email),
                 ("Password", password),
             ],
-            cta_text="Open WorkFlow SaaS",
-            cta_url="https://workflow-saas-cof-z.onrender.com",
         )
         threading.Thread(target=send_email_safe, args=(payload.email, subject, html_body)).start()
         log_activity_safe(board_id, current_user.name, f"created account and invited {payload.email} as {role}")
@@ -1134,9 +1131,9 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
     if user_id == db.query(models.Board).filter(models.Board.id == board_id).first().owner_id:
         raise HTTPException(status_code=400, detail="Owner access cannot be changed here")
 
-    role = utils.normalize_role(payload.get("role", "member") or "member")
-    if role not in {"owner", "admin", "member", "contributor", "viewer"}:
-        raise HTTPException(status_code=400, detail="Role must be owner, admin, member, contributor, or viewer")
+    role = utils.normalize_role(payload.get("role", "editor") or "editor")
+    if role not in {"owner", "administrator", "editor", "guest", "subscriber"}:
+        raise HTTPException(status_code=400, detail="Role must be owner, administrator, editor, guest, subscriber")
 
     permissions_payload = payload.get("permissions") or {}
     permissions = utils.normalize_permissions(role, permissions_payload)
@@ -1160,7 +1157,7 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
 
 @app.delete("/api/boards/{board_id}/members/{user_id}")
 def remove_board_member(board_id: int, user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member removal", required_permission="manageMembers")
+    board = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Member removal", required_permission="manageMembers")
 
     if user_id == board.owner_id:
         raise HTTPException(status_code=400, detail="Board owner cannot be removed")
@@ -1229,7 +1226,7 @@ def list_tasks(board_id: int, current_user=Depends(get_current_user), db: Sessio
 @app.post("/api/tasks")
 async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     if payload.board_id:
-        utils.ensure_board_access(payload.board_id, current_user, db, required_role="member", action="Task creation", required_permission="createTasks")
+        utils.ensure_board_access(payload.board_id, current_user, db, required_role="editor", action="Task creation", required_permission="createTasks")
         board_owner = db.query(models.Board).filter(models.Board.id == payload.board_id).first()
         if board_owner:
             owner_u = db.query(models.User).filter(models.User.id == board_owner.owner_id).first()
@@ -1254,7 +1251,7 @@ async def update_task(task_id: int, payload: dict, current_user=Depends(get_curr
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404)
-    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task update", required_permission="editTasks")
+    utils.ensure_board_access(t.board_id, current_user, db, required_role="editor", action="Task update", required_permission="editTasks")
 
     old_status, old_assign = t.status, t.assigned_to
     for k, v in payload.items():
@@ -1282,7 +1279,7 @@ async def delete_task(task_id: int, current_user=Depends(get_current_user), db: 
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404)
-    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task deletion", required_permission="deleteTasks")
+    utils.ensure_board_access(t.board_id, current_user, db, required_role="editor", action="Task deletion", required_permission="deleteTasks")
 
     bid = t.board_id
     db.query(models.Comment).filter(models.Comment.task_id == task_id).delete(synchronize_session=False)
@@ -1305,7 +1302,7 @@ async def delete_task(task_id: int, current_user=Depends(get_current_user), db: 
 def get_subtasks(task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if task and task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="viewer", action="Subtask view")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="subscriber", action="Subtask view")
     return db.query(models.Subtask).filter(models.Subtask.task_id == task_id).order_by(models.Subtask.id.asc()).all()
 
 
@@ -1314,7 +1311,7 @@ async def add_subtask(task_id: int, payload: schemas.SubtaskCreate, current_user
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask creation", required_permission="createTasks")
+    utils.ensure_board_access(task.board_id, current_user, db, required_role="editor", action="Subtask creation", required_permission="createTasks")
 
     s = models.Subtask(title=payload.title, task_id=task_id)
     db.add(s)
@@ -1334,7 +1331,7 @@ async def update_subtask(sub_id: int, payload: dict, current_user=Depends(get_cu
         raise HTTPException(status_code=404, detail="Subtask not found")
     task = db.query(models.Task).filter(models.Task.id == s.task_id).first()
     if task and task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask update", required_permission="editTasks")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="editor", action="Subtask update", required_permission="editTasks")
     if s:
         s.is_completed = payload.get("is_completed", s.is_completed)
         db.commit()
@@ -1353,7 +1350,7 @@ async def delete_subtask(sub_id: int, current_user=Depends(get_current_user), db
         raise HTTPException(status_code=404, detail="Subtask not found")
     task = db.query(models.Task).filter(models.Task.id == s.task_id).first()
     if task and task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask deletion", required_permission="deleteTasks")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="editor", action="Subtask deletion", required_permission="deleteTasks")
     tid = s.task_id
     t = db.query(models.Task).filter(models.Task.id == tid).first()
     db.delete(s)
@@ -1369,7 +1366,7 @@ async def delete_subtask(sub_id: int, current_user=Depends(get_current_user), db
 def get_comments(task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if task and task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="viewer", action="Comment view")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="subscriber", action="Comment view")
     return db.query(models.Comment).filter(models.Comment.task_id == task_id).order_by(models.Comment.id.asc()).all()
 
 
@@ -1379,7 +1376,7 @@ async def add_comment(task_id: int, payload: schemas.CommentCreate, current_user
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Comment creation", required_permission="createTasks")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="editor", action="Comment creation", required_permission="createTasks")
 
     c = models.Comment(
         text=payload.text, 

@@ -87,7 +87,7 @@ def send_email_via_brevo_api(to_email: str, subject: str, html_body: str) -> boo
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {"accept": "application/json", "api-key": api_key, "content-type": "application/json"}
         payload = {
-            "sender": {"email": cfg["from"], "name": "WorkFlow SaaS"},
+            "sender": {"email": cfg["from"], "name": "WorkFlow SaaS Automation"},
             "to": [{"email": to_email.strip()}],
             "subject": subject,
             "htmlContent": f"<html><body>{html_body}</body></html>"
@@ -205,16 +205,10 @@ PERMISSION_KEYS = [
 
 ROLE_ALIASES = {
     "owner": "owner",
-    "super_admin": "owner",
-    "superadmin": "owner",
-    "admin": "admin",
-    "administrator": "admin",
-    "member": "member",
-    "editor": "member",
-    "contributor": "contributor",
-    "guest": "contributor",
-    "viewer": "viewer",
-    "subscriber": "viewer",
+    "administrator": "administrator",
+    "editor": "editor",
+    "guest": "guest",
+    "subscriber": "subscriber",
 }
 
 
@@ -232,11 +226,13 @@ def normalize_role(role):
 
 def default_permissions_for_role(role):
     role_name = normalize_role(role)
-    if role_name in {"owner", "admin"}:
+    if role_name in {"owner"}:
         return {key: True for key in PERMISSION_KEYS}
-    if role_name == "member":
+    if role_name in {"administrator"}:
         return {key: True for key in PERMISSION_KEYS}
-    if role_name == "contributor":
+    if role_name == "editor":
+        return {key: True for key in PERMISSION_KEYS}
+    if role_name == "guest":
         return {
             "viewBoard": True,
             "createTasks": True,
@@ -267,7 +263,7 @@ def normalize_permissions(role, custom_permissions=None):
 def is_owner_user(user, db: Session = None):
     if user is None:
         return False
-    if normalize_role(getattr(user, "role", "admin")) == "owner":
+    if normalize_role(getattr(user, "role", "administrator")) == "owner":
         return True
     if db is None:
         return False
@@ -286,7 +282,7 @@ def get_board_member_role(board_id: int, user_id: int, db: Session):
     members = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).all()
     if not members:
         return None
-    role_order = ["viewer", "contributor", "member", "admin", "owner"]
+    role_order = ["subscriber", "guest", "editor", "administrator", "owner"]
     for role in role_order:
         if any(normalize_role((m.role or "member").strip()) == role for m in members):
             return role
@@ -296,12 +292,12 @@ def get_board_member_role(board_id: int, user_id: int, db: Session):
 def get_board_member_permissions(board_id: int, user_id: int, db: Session):
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
     if not board:
-        return default_permissions_for_role("viewer")
+        return default_permissions_for_role("subscriber")
     if board.owner_id == user_id:
         return default_permissions_for_role("owner")
     members = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).all()
     if not members:
-        return default_permissions_for_role("viewer")
+        return default_permissions_for_role("subscriber")
 
     resolved_role = get_board_member_role(board_id, user_id, db)
     selected_members = [m for m in members if normalize_role((m.role or "member").strip()) == resolved_role]
@@ -324,7 +320,7 @@ def get_board_member_permissions(board_id: int, user_id: int, db: Session):
     return normalize_permissions(resolved_role, custom_permissions)
 
 
-def ensure_board_access(board_id: int, user, db: Session, required_role: str = "viewer", action: str = "Board access", required_permission: str = None):
+def ensure_board_access(board_id: int, user, db: Session, required_role: str = "subscriber", action: str = "Board access", required_permission: str = None):
     if board_id is None:
         raise HTTPException(status_code=403, detail=f"{action} denied")
 
@@ -337,11 +333,11 @@ def ensure_board_access(board_id: int, user, db: Session, required_role: str = "
 
     permissions = get_board_member_permissions(board_id, user.id, db)
     permission_map = {
-        "viewer": "viewBoard",
-        "member": "createTasks",
-        "admin": "manageBoard",
+        "subscriber": "viewBoard",
+        "editor": "createTasks",
+        "administrator": "manageBoard",
     }
-    resolved_permission = required_permission or permission_map.get((required_role or "viewer").lower(), "viewBoard")
+    resolved_permission = required_permission or permission_map.get((required_role or "subscriber").lower(), "viewBoard")
     if not permissions.get(resolved_permission, False):
         raise HTTPException(status_code=403, detail=f"{action} requires {resolved_permission} permission")
 
