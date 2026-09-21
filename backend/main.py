@@ -40,45 +40,99 @@ except Exception:
 
 # --- DATABASE INITIALIZATION ---
 def ensure_database_migrations():
-    if "sqlite" not in str(engine.url).lower():
-        return
-
-    migrations = [
-        ("users", "role", "VARCHAR DEFAULT 'admin'"),
-        ("users", "subscription_tier", "VARCHAR DEFAULT 'free'"),
-        ("users", "avatar_url", "VARCHAR DEFAULT ''"),
-        ("users", "email_verified", "BOOLEAN DEFAULT TRUE"),
-        ("users", "two_factor_enabled", "BOOLEAN DEFAULT FALSE"),
-        ("users", "profile_preferences", "TEXT DEFAULT '{}'"),
-        ("users", "workspace_defaults", "TEXT DEFAULT '{}'"),
-        ("users", "connected_apps", "TEXT DEFAULT '[]'"),
-        ("tasks", "description", "TEXT DEFAULT ''"),
-        ("tasks", "due_date", "VARCHAR DEFAULT ''"),
-        ("tasks", "start_date", "VARCHAR DEFAULT ''"),
-        ("tasks", "time_estimated", "INTEGER DEFAULT 0"),
-        ("tasks", "time_spent", "INTEGER DEFAULT 0"),
-        ("tasks", "board_id", "INTEGER"),
-        ("tasks", "assigned_to", "VARCHAR DEFAULT ''"),
-        ("tasks", "assigned_to_name", "VARCHAR DEFAULT ''"),
-        ("tasks", "attachment_url", "TEXT DEFAULT ''"),
-        ("tasks", "labels", "VARCHAR DEFAULT ''"),
-        ("comments", "user_name", "VARCHAR DEFAULT ''"),
-        ("comments", "created_at", "VARCHAR DEFAULT ''"),
-        ("board_members", "role", "VARCHAR DEFAULT 'member'"),
-        ("board_members", "permissions", "TEXT DEFAULT '{}'"),
-    ]
     try:
         with engine.connect() as conn:
-            tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
-            for table_name, column_name, column_def in migrations:
+            url_name = str(engine.url).lower()
+            if "sqlite" in url_name:
+                migrations = [
+                    ("users", "role", "VARCHAR DEFAULT 'admin'"),
+                    ("users", "subscription_tier", "VARCHAR DEFAULT 'free'"),
+                    ("users", "avatar_url", "VARCHAR DEFAULT ''"),
+                    ("users", "email_verified", "BOOLEAN DEFAULT TRUE"),
+                    ("users", "two_factor_enabled", "BOOLEAN DEFAULT FALSE"),
+                    ("users", "profile_preferences", "TEXT DEFAULT '{}'"),
+                    ("users", "workspace_defaults", "TEXT DEFAULT '{}'"),
+                    ("users", "connected_apps", "TEXT DEFAULT '[]'"),
+                    ("tasks", "description", "TEXT DEFAULT ''"),
+                    ("tasks", "due_date", "VARCHAR DEFAULT ''"),
+                    ("tasks", "start_date", "VARCHAR DEFAULT ''"),
+                    ("tasks", "time_estimated", "INTEGER DEFAULT 0"),
+                    ("tasks", "time_spent", "INTEGER DEFAULT 0"),
+                    ("tasks", "board_id", "INTEGER"),
+                    ("tasks", "assigned_to", "VARCHAR DEFAULT ''"),
+                    ("tasks", "assigned_to_name", "VARCHAR DEFAULT ''"),
+                    ("tasks", "attachment_url", "TEXT DEFAULT ''"),
+                    ("tasks", "labels", "VARCHAR DEFAULT ''"),
+                    ("comments", "user_name", "VARCHAR DEFAULT ''"),
+                    ("comments", "created_at", "VARCHAR DEFAULT ''"),
+                    ("board_members", "role", "VARCHAR DEFAULT 'member'"),
+                    ("board_members", "permissions", "TEXT DEFAULT '{}'"),
+                ]
+                tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+                for table_name, column_name, column_def in migrations:
+                    if table_name not in tables:
+                        continue
+                    columns = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+                    existing_columns = {row[1] for row in columns}
+                    if column_name not in existing_columns:
+                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
+                conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
+                conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
+                conn.commit()
+                return
+
+            tables = {
+                row[0]
+                for row in conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()"))
+            }
+            if "users" not in tables:
+                conn.execute(text("CREATE TABLE users (id SERIAL PRIMARY KEY, email VARCHAR UNIQUE NOT NULL, name VARCHAR DEFAULT '', password_hash VARCHAR NOT NULL, role VARCHAR DEFAULT 'admin', subscription_tier VARCHAR DEFAULT 'free', avatar_url VARCHAR DEFAULT '', email_verified BOOLEAN DEFAULT TRUE, two_factor_enabled BOOLEAN DEFAULT FALSE, profile_preferences TEXT DEFAULT '{}', workspace_defaults TEXT DEFAULT '{}', connected_apps TEXT DEFAULT '[]')"))
+                conn.commit()
+
+            required_columns = {
+                "users": [
+                    ("role", "VARCHAR DEFAULT 'admin'"),
+                    ("subscription_tier", "VARCHAR DEFAULT 'free'"),
+                    ("avatar_url", "VARCHAR DEFAULT ''"),
+                    ("email_verified", "BOOLEAN DEFAULT TRUE"),
+                    ("two_factor_enabled", "BOOLEAN DEFAULT FALSE"),
+                    ("profile_preferences", "TEXT DEFAULT '{}'"),
+                    ("workspace_defaults", "TEXT DEFAULT '{}'"),
+                    ("connected_apps", "TEXT DEFAULT '[]'"),
+                ],
+                "tasks": [
+                    ("description", "TEXT DEFAULT ''"),
+                    ("due_date", "VARCHAR DEFAULT ''"),
+                    ("start_date", "VARCHAR DEFAULT ''"),
+                    ("time_estimated", "INTEGER DEFAULT 0"),
+                    ("time_spent", "INTEGER DEFAULT 0"),
+                    ("board_id", "INTEGER"),
+                    ("assigned_to", "VARCHAR DEFAULT ''"),
+                    ("assigned_to_name", "VARCHAR DEFAULT ''"),
+                    ("attachment_url", "TEXT DEFAULT ''"),
+                    ("labels", "VARCHAR DEFAULT ''"),
+                ],
+                "comments": [
+                    ("user_name", "VARCHAR DEFAULT ''"),
+                    ("created_at", "VARCHAR DEFAULT ''"),
+                ],
+                "board_members": [
+                    ("role", "VARCHAR DEFAULT 'member'"),
+                    ("permissions", "TEXT DEFAULT '{}'"),
+                ],
+            }
+            for table_name, columns in required_columns.items():
                 if table_name not in tables:
                     continue
-                columns = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
-                existing_columns = {row[1] for row in columns}
-                if column_name not in existing_columns:
-                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
-            conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
-            conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
+                existing = {
+                    row[1] for row in conn.execute(text(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table_name}' AND table_schema = current_schema()"))
+                }
+                for column_name, column_def in columns:
+                    if column_name not in existing:
+                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
+
+            conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id SERIAL PRIMARY KEY, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
             conn.commit()
     except Exception:
         pass
