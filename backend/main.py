@@ -81,14 +81,6 @@ def ensure_database_migrations():
                 conn.commit()
                 return
 
-            tables = {
-                row[0]
-                for row in conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()"))
-            }
-            if "users" not in tables:
-                conn.execute(text("CREATE TABLE users (id SERIAL PRIMARY KEY, email VARCHAR UNIQUE NOT NULL, name VARCHAR DEFAULT '', password_hash VARCHAR NOT NULL, role VARCHAR DEFAULT 'admin', subscription_tier VARCHAR DEFAULT 'free', avatar_url VARCHAR DEFAULT '', email_verified BOOLEAN DEFAULT TRUE, two_factor_enabled BOOLEAN DEFAULT FALSE, profile_preferences TEXT DEFAULT '{}', workspace_defaults TEXT DEFAULT '{}', connected_apps TEXT DEFAULT '[]')"))
-                conn.commit()
-
             required_columns = {
                 "users": [
                     ("role", "VARCHAR DEFAULT 'admin'"),
@@ -121,21 +113,28 @@ def ensure_database_migrations():
                     ("permissions", "TEXT DEFAULT '{}'"),
                 ],
             }
+
+            tables = {
+                row[0]
+                for row in conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()"))
+            }
             for table_name, columns in required_columns.items():
                 if table_name not in tables:
-                    continue
+                    conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table_name} (id SERIAL PRIMARY KEY)"))
+                    conn.commit()
                 existing = {
-                    row[1] for row in conn.execute(text(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table_name}' AND table_schema = current_schema()"))
+                    row[0]
+                    for row in conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = '{table_name}'"))
                 }
                 for column_name, column_def in columns:
                     if column_name not in existing:
-                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
+                        conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS "{column_name}" {column_def}'))
 
             conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id SERIAL PRIMARY KEY, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
             conn.commit()
     except Exception:
-        pass
+        traceback.print_exc()
 
 
 ensure_database_migrations()
