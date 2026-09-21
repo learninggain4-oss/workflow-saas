@@ -731,13 +731,37 @@ def delete_registered_user(user_id: int, current_user=Depends(get_current_user),
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
+    owned_board_ids = [board.id for board in db.query(models.Board).filter(models.Board.owner_id == user_id).all()]
+    if owned_board_ids:
+        owned_task_ids = [task.id for task in db.query(models.Task).filter(models.Task.board_id.in_(owned_board_ids)).all()]
+        if owned_task_ids:
+            db.query(models.Comment).filter(models.Comment.task_id.in_(owned_task_ids)).delete(synchronize_session=False)
+            db.query(models.Subtask).filter(models.Subtask.task_id.in_(owned_task_ids)).delete(synchronize_session=False)
+            db.query(models.Notification).filter(models.Notification.task_id.in_(owned_task_ids)).delete(synchronize_session=False)
+        db.query(models.Task).filter(models.Task.board_id.in_(owned_board_ids)).delete(synchronize_session=False)
+        db.query(models.BoardMember).filter(models.BoardMember.board_id.in_(owned_board_ids)).delete(synchronize_session=False)
+        db.query(models.Activity).filter(models.Activity.board_id.in_(owned_board_ids)).delete(synchronize_session=False)
+        db.query(models.Notification).filter(models.Notification.board_id.in_(owned_board_ids)).delete(synchronize_session=False)
+        db.query(models.Board).filter(models.Board.id.in_(owned_board_ids)).delete(synchronize_session=False)
+
+    user_task_ids = [task.id for task in db.query(models.Task).filter(models.Task.user_id == user_id).all()]
+    if user_task_ids:
+        db.query(models.Comment).filter(models.Comment.task_id.in_(user_task_ids)).delete(synchronize_session=False)
+        db.query(models.Subtask).filter(models.Subtask.task_id.in_(user_task_ids)).delete(synchronize_session=False)
+        db.query(models.Notification).filter(models.Notification.task_id.in_(user_task_ids)).delete(synchronize_session=False)
+    db.query(models.Task).filter(models.Task.user_id == user_id).delete(synchronize_session=False)
+
     db.query(models.BoardMember).filter(models.BoardMember.user_id == user_id).delete(synchronize_session=False)
     db.query(models.Comment).filter(models.Comment.user_id == user_id).delete(synchronize_session=False)
-    db.query(models.Subtask).filter(models.Subtask.task_id.in_([
-        s.id for s in db.query(models.Task).filter(models.Task.user_id == user_id).all()
-    ])).delete(synchronize_session=False)
-    db.query(models.Task).filter(models.Task.user_id == user_id).delete(synchronize_session=False)
     db.query(models.Notification).filter(models.Notification.user_id == user_id).delete(synchronize_session=False)
+
+    assigned_task_ids = [task.id for task in db.query(models.Task).filter(models.Task.assigned_to == target.email).all()]
+    if assigned_task_ids:
+        db.query(models.Comment).filter(models.Comment.task_id.in_(assigned_task_ids)).delete(synchronize_session=False)
+        db.query(models.Subtask).filter(models.Subtask.task_id.in_(assigned_task_ids)).delete(synchronize_session=False)
+        db.query(models.Notification).filter(models.Notification.task_id.in_(assigned_task_ids)).delete(synchronize_session=False)
+    db.query(models.Task).filter(models.Task.assigned_to == target.email).delete(synchronize_session=False)
+
     db.delete(target)
     db.commit()
     return {"ok": True, "deleted": True, "id": user_id}

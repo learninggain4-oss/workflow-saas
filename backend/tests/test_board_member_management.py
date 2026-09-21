@@ -68,6 +68,59 @@ def test_owner_can_manage_registered_users():
     db.close()
 
 
+def test_owner_delete_user_removes_target_data_from_database():
+    db = SessionLocal()
+    owner_email = _unique_email("owner")
+    target_email = _unique_email("target")
+
+    owner = models.User(email=owner_email, name="Owner", password_hash="x", role="owner")
+    target = models.User(email=target_email, name="Target", password_hash="x", role="member")
+    db.add_all([owner, target])
+    db.commit()
+    db.refresh(owner)
+    db.refresh(target)
+
+    board = models.Board(name="Delete Me Board", owner_id=target.id)
+    db.add(board)
+    db.commit()
+    db.refresh(board)
+    board_id = board.id
+
+    db.add(models.BoardMember(board_id=board_id, user_id=target.id, role="member"))
+    task = models.Task(title="Target task", status="todo", priority="medium", board_id=board_id, user_id=target.id)
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    task_id = task.id
+
+    db.add(models.Comment(text="Target comment", task_id=task_id, user_id=target.id, user_name=target.name))
+    db.add(models.Notification(user_id=target.id, board_id=board_id, message="Target notification"))
+    db.commit()
+
+    client = TestClient(main.app)
+    token = create_token({"sub": owner_email})
+    delete_resp = client.delete(
+        f"/api/admin/users/{target.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert delete_resp.status_code == 200, delete_resp.text
+
+    verify_db = SessionLocal()
+    try:
+        assert verify_db.query(models.User).filter(models.User.id == target.id).first() is None
+        assert verify_db.query(models.Board).filter(models.Board.id == board_id).first() is None
+        assert verify_db.query(models.BoardMember).filter(models.BoardMember.user_id == target.id).count() == 0
+        assert verify_db.query(models.Task).filter(models.Task.id == task_id).first() is None
+        assert verify_db.query(models.Comment).filter(models.Comment.user_id == target.id).count() == 0
+        assert verify_db.query(models.Notification).filter(models.Notification.user_id == target.id).count() == 0
+    finally:
+        verify_db.close()
+
+    db.delete(owner)
+    db.commit()
+    db.close()
+
+
 def test_board_member_role_update_and_remove():
     db = SessionLocal()
     owner_email = _unique_email("owner")
