@@ -6,12 +6,18 @@ const normalizeRoleValue = (role) => {
   const aliases = {
     owner: 'owner',
     administrator: 'administrator',
+    admin: 'administrator',
     editor: 'editor',
+    member: 'editor',
     guest: 'guest',
     subscriber: 'subscriber',
+    viewer: 'subscriber',
   };
   return aliases[value] || 'editor';
 };
+
+// FIX: alias for old buggy name
+const normalizedRoleValue = normalizeRoleValue;
 
 const getStatusFromRole = (role) => {
   switch (normalizeRoleValue(role)) {
@@ -112,8 +118,8 @@ export default function TeamPage({
   const updateRegisteredUserRole = async (userId, nextRole) => {
     if (!nextRole) return;
     try {
-      await administrator.updateUserRole(userId, nextRole);
-      const refreshed = await administrator.getUsers();
+      await admin.updateUserRole(userId, nextRole);
+      const refreshed = await admin.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
     } catch (e) {
       alert(e.response?.data?.detail || 'Failed to update user role');
