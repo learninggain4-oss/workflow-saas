@@ -411,7 +411,7 @@ export default function App() {
     await boards.delete(selectedBoard); setSelectedBoard(null); await fetchInitialData();
   };
   const inviteUser = async () => {
-    if (!inviteEmail.trim() || !selectedBoard || myRole !== 'admin') return alert("Only admins can invite");
+    if (!inviteEmail.trim() || !selectedBoard || (myRole !== 'admin' && myRole !== 'owner')) return alert("Only owners and admins can invite");
     try {
       const res = await boards.invite(selectedBoard, inviteEmail, inviteRole, invitePassword);
       alert(res.data.message || "Invited!");

@@ -305,7 +305,7 @@ export default function TeamPage({
               </div>
             )}
 
-            {myRole === 'admin' && selectedBoard && (
+            {(myRole === 'admin' || myRole === 'owner') && selectedBoard && (
               <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Invite teammate</h4>
                 <input
