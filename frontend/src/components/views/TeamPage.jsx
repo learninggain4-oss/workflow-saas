@@ -13,11 +13,28 @@ const getStatusFromRole = (role) => {
   }
 };
 
+const defaultPermissionsForRole = (role = 'member') => {
+  const normalizedRole = (role || 'member').toLowerCase();
+  if (normalizedRole === 'admin') {
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
+  }
+  if (normalizedRole === 'viewer') {
+    return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
+  }
+  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
+};
+
+const getMemberPermissions = (member = {}) => {
+  const base = defaultPermissionsForRole(member.role || 'member');
+  return { ...base, ...(member.permissions || {}) };
+};
+
 export default function TeamPage({
   bgCard,
   setViewMode,
   boardMembers = [],
   myRole = 'member',
+  myPermissions = {},
   tasksList = [],
   selectedBoard,
   inviteEmail,
@@ -31,12 +48,22 @@ export default function TeamPage({
 }) {
   const members = boardMembers.length
     ? boardMembers
-    : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole }];
+    : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole, permissions: myPermissions }];
+
+  const permissionOptions = [
+    { key: 'viewBoard', label: 'View board' },
+    { key: 'createTasks', label: 'Create tasks' },
+    { key: 'editTasks', label: 'Edit tasks' },
+    { key: 'deleteTasks', label: 'Delete tasks' },
+    { key: 'manageMembers', label: 'Manage members' },
+    { key: 'manageBoard', label: 'Manage board' },
+  ];
 
   const memberCards = members.map((member) => {
     const taskCount = tasksList.filter((task) => task.assigned_to === member.email).length;
     return {
       ...member,
+      permissions: getMemberPermissions(member),
       status: getStatusFromRole(member.role),
       tasks: taskCount,
     };
@@ -94,7 +121,10 @@ export default function TeamPage({
                     <>
                       <select
                         value={member.role}
-                        onChange={(e) => updateMemberRole?.(member.id, e.target.value)}
+                        onChange={(e) => {
+                          const nextRole = e.target.value;
+                          updateMemberRole?.(member.id, nextRole, defaultPermissionsForRole(nextRole));
+                        }}
                         className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200"
                       >
                         <option value="admin">Admin</option>
@@ -121,48 +151,84 @@ export default function TeamPage({
         </div>
 
         <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
-          <h3 className="text-lg font-bold">Access overview</h3>
+          <h3 className="text-lg font-bold">Custom access</h3>
           <div className="mt-4 space-y-3">
-            {[{ label: 'Admin', value: roleBreakdown.admin }, { label: 'Member', value: roleBreakdown.member }, { label: 'Viewer', value: roleBreakdown.viewer }].map((item) => (
-              <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-gray-800">
-                <div>
-                  <p className="text-sm font-semibold">{item.label}</p>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">Permissions</p>
+            {memberCards.filter((member) => myRole === 'admin' && member.email !== currentEmail).map((member) => (
+              <div key={`permissions-${member.email}`} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{member.name || member.email}</p>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">{member.role}</p>
+                  </div>
                 </div>
-                <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                  {item.value}
-                </span>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {permissionOptions.map((option) => (
+                    <label key={`${member.email}-${option.key}`} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(member.permissions?.[option.key])}
+                        onChange={(e) => {
+                          const nextPermissions = {
+                            ...member.permissions,
+                            [option.key]: e.target.checked,
+                          };
+                          updateMemberRole?.(member.id, member.role, nextPermissions);
+                        }}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
 
-          {myRole === 'admin' && selectedBoard && (
-            <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
-              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Invite teammate</h4>
-              <input
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="Email address"
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
-              />
-              <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
-              >
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-                <option value="viewer">Viewer</option>
-              </select>
-              <button
-                type="button"
-                onClick={inviteUser}
-                className="w-full rounded-xl bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-              >
-                Send invite
-              </button>
+          <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
+            <h3 className="text-lg font-bold">Access overview</h3>
+            <div className="mt-4 space-y-3">
+              {[{ label: 'Admin', value: roleBreakdown.admin }, { label: 'Member', value: roleBreakdown.member }, { label: 'Viewer', value: roleBreakdown.viewer }].map((item) => (
+                <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+                  <div>
+                    <p className="text-sm font-semibold">{item.label}</p>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">Permissions</p>
+                  </div>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
             </div>
-          )}
+
+            {myRole === 'admin' && selectedBoard && (
+              <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Invite teammate</h4>
+                <input
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="Email address"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
+                />
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={inviteUser}
+                  className="w-full rounded-xl bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                >
+                  Send invite
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

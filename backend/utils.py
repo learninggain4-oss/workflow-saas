@@ -1,4 +1,4 @@
-import os, traceback, smtplib, ssl, threading
+import os, json, traceback, smtplib, ssl, threading
 from datetime import datetime, timedelta
 from typing import Dict, List
 from fastapi import WebSocket, Depends, HTTPException
@@ -164,6 +164,34 @@ def get_user_boards(user, db: Session):
     return list({b.id: b for b in owned + mboards}.values())
 
 
+PERMISSION_KEYS = [
+    "viewBoard",
+    "createTasks",
+    "editTasks",
+    "deleteTasks",
+    "manageMembers",
+    "manageBoard",
+]
+
+
+def default_permissions_for_role(role):
+    role_name = (role or "member").lower()
+    if role_name == "admin":
+        return {key: True for key in PERMISSION_KEYS}
+    if role_name == "viewer":
+        return {"viewBoard": True, "createTasks": False, "editTasks": False, "deleteTasks": False, "manageMembers": False, "manageBoard": False}
+    return {"viewBoard": True, "createTasks": True, "editTasks": True, "deleteTasks": True, "manageMembers": False, "manageBoard": False}
+
+
+def normalize_permissions(role, custom_permissions=None):
+    permissions = default_permissions_for_role(role)
+    if isinstance(custom_permissions, dict):
+        for key in PERMISSION_KEYS:
+            if key in custom_permissions and isinstance(custom_permissions[key], bool):
+                permissions[key] = bool(custom_permissions[key])
+    return permissions
+
+
 def get_board_member_role(board_id: int, user_id: int, db: Session):
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
     if not board:
@@ -176,6 +204,24 @@ def get_board_member_role(board_id: int, user_id: int, db: Session):
     return (member.role or "member").strip().lower()
 
 
+def get_board_member_permissions(board_id: int, user_id: int, db: Session):
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    if not board:
+        return default_permissions_for_role("viewer")
+    if board.owner_id == user_id:
+        return default_permissions_for_role("admin")
+    member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
+    if not member:
+        return default_permissions_for_role("viewer")
+    custom_permissions = {}
+    if member.permissions:
+        try:
+            custom_permissions = json.loads(member.permissions)
+        except Exception:
+            custom_permissions = {}
+    return normalize_permissions((member.role or "member").strip().lower(), custom_permissions)
+
+
 def ensure_board_access(board_id: int, user, db: Session, required_role: str = "viewer", action: str = "Board access"):
     if board_id is None:
         raise HTTPException(status_code=403, detail=f"{action} denied")
@@ -184,14 +230,17 @@ def ensure_board_access(board_id: int, user, db: Session, required_role: str = "
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
 
-    role = get_board_member_role(board_id, user.id, db)
-    if role is None:
-        raise HTTPException(status_code=403, detail=f"{action} denied")
+    if board.owner_id == user.id:
+        return board
 
-    role_levels = {"viewer": 1, "member": 2, "admin": 3}
-    current_level = role_levels.get((role or "viewer").lower(), 0)
-    required_level = role_levels.get((required_role or "viewer").lower(), 0)
-    if current_level < required_level:
+    permissions = get_board_member_permissions(board_id, user.id, db)
+    permission_map = {
+        "viewer": "viewBoard",
+        "member": "createTasks",
+        "admin": "manageBoard",
+    }
+    required_permission = permission_map.get((required_role or "viewer").lower(), "viewBoard")
+    if not permissions.get(required_permission, False):
         raise HTTPException(status_code=403, detail=f"{action} requires {required_role} access")
 
     return board

@@ -39,6 +39,51 @@ except Exception:
 
 
 # --- DATABASE INITIALIZATION ---
+def ensure_database_migrations():
+    if "sqlite" not in str(engine.url).lower():
+        return
+
+    migrations = [
+        ("users", "subscription_tier", "VARCHAR DEFAULT 'free'"),
+        ("users", "avatar_url", "VARCHAR DEFAULT ''"),
+        ("users", "email_verified", "BOOLEAN DEFAULT TRUE"),
+        ("users", "two_factor_enabled", "BOOLEAN DEFAULT FALSE"),
+        ("users", "profile_preferences", "TEXT DEFAULT '{}'"),
+        ("users", "workspace_defaults", "TEXT DEFAULT '{}'"),
+        ("users", "connected_apps", "TEXT DEFAULT '[]'"),
+        ("tasks", "description", "TEXT DEFAULT ''"),
+        ("tasks", "due_date", "VARCHAR DEFAULT ''"),
+        ("tasks", "start_date", "VARCHAR DEFAULT ''"),
+        ("tasks", "time_estimated", "INTEGER DEFAULT 0"),
+        ("tasks", "time_spent", "INTEGER DEFAULT 0"),
+        ("tasks", "board_id", "INTEGER"),
+        ("tasks", "assigned_to", "VARCHAR DEFAULT ''"),
+        ("tasks", "assigned_to_name", "VARCHAR DEFAULT ''"),
+        ("tasks", "attachment_url", "TEXT DEFAULT ''"),
+        ("tasks", "labels", "VARCHAR DEFAULT ''"),
+        ("comments", "user_name", "VARCHAR DEFAULT ''"),
+        ("comments", "created_at", "VARCHAR DEFAULT ''"),
+        ("board_members", "role", "VARCHAR DEFAULT 'member'"),
+        ("board_members", "permissions", "TEXT DEFAULT '{}'"),
+    ]
+    try:
+        with engine.connect() as conn:
+            tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+            for table_name, column_name, column_def in migrations:
+                if table_name not in tables:
+                    continue
+                columns = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+                existing_columns = {row[1] for row in columns}
+                if column_name not in existing_columns:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
+            conn.commit()
+    except Exception:
+        pass
+
+
+ensure_database_migrations()
 models.Base.metadata.create_all(bind=engine)
 
 def _parse_json(value, default):
@@ -565,33 +610,7 @@ async def global_handler(request, exc):
 # --- STARTUP EVENTS ---
 @app.on_event("startup")
 def fix_db():
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR DEFAULT 'free'"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT TRUE"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_preferences TEXT DEFAULT '{}'"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS workspace_defaults TEXT DEFAULT '{}'"))
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS connected_apps TEXT DEFAULT '[]'"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_estimated INTEGER DEFAULT 0"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time_spent INTEGER DEFAULT 0"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_name VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT ''"))
-            conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS labels VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_name VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE comments ADD COLUMN IF NOT EXISTS created_at VARCHAR DEFAULT ''"))
-            conn.execute(text("ALTER TABLE board_members ADD COLUMN IF NOT EXISTS role VARCHAR DEFAULT 'member'"))
-            conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id SERIAL PRIMARY KEY, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
-            conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
-            conn.commit()
-    except Exception:
-        pass
+    ensure_database_migrations()
 
 
 # --- ROOT ENDPOINT ---
@@ -843,16 +862,19 @@ def export_board_csv(board_id: int, current_user=Depends(get_current_user), db: 
 def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board invite")
     target = db.query(models.User).filter(models.User.email == payload.email).first()
+    role = str(payload.role or "member").strip().lower()
+    permissions = utils.normalize_permissions(role, getattr(payload, "permissions", None))
     
     if target:
         bm = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == target.id).first()
         if not bm:
-            db.add(models.BoardMember(board_id=board_id, user_id=target.id, role=payload.role))
+            db.add(models.BoardMember(board_id=board_id, user_id=target.id, role=role, permissions=json.dumps(permissions, ensure_ascii=False)))
             db.commit()
-            log_activity_safe(board_id, current_user.name, f"invited {payload.email} as {payload.role}")
+            log_activity_safe(board_id, current_user.name, f"invited {payload.email} as {role}")
             create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}'", "invite", f"Invited to {board.name}")
         else:
-            bm.role = payload.role
+            bm.role = role
+            bm.permissions = json.dumps(permissions, ensure_ascii=False)
             db.commit()
     else:
         subject = f"Join {board.name}"
@@ -870,12 +892,13 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
     if board:
         owner = db.query(models.User).filter(models.User.id == board.owner_id).first()
         if owner: 
-            members.append({"email": owner.email, "name": owner.name, "role": "admin", "id": owner.id})
+            members.append({"email": owner.email, "name": owner.name, "role": "admin", "id": owner.id, "permissions": utils.default_permissions_for_role("admin")})
             
         for m in db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id).all():
             u = db.query(models.User).filter(models.User.id == m.user_id).first()
             if u: 
-                members.append({"email": u.email, "name": u.name, "role": m.role, "id": u.id})
+                permissions = utils.normalize_permissions((m.role or "member").strip().lower(), _parse_json(m.permissions, {}))
+                members.append({"email": u.email, "name": u.name, "role": m.role, "id": u.id, "permissions": permissions})
                 
     return members
 
@@ -891,6 +914,9 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
     if role not in {"admin", "member", "viewer"}:
         raise HTTPException(status_code=400, detail="Role must be admin, member, or viewer")
 
+    permissions_payload = payload.get("permissions") or {}
+    permissions = utils.normalize_permissions(role, permissions_payload)
+
     target = db.query(models.User).filter(models.User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -898,13 +924,14 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
     member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
     if member:
         member.role = role
+        member.permissions = json.dumps(permissions, ensure_ascii=False)
     else:
-        member = models.BoardMember(board_id=board_id, user_id=user_id, role=role)
+        member = models.BoardMember(board_id=board_id, user_id=user_id, role=role, permissions=json.dumps(permissions, ensure_ascii=False))
         db.add(member)
 
     db.commit()
     log_activity_safe(board_id, current_user.name, f"updated {target.email} access to {role}")
-    return {"ok": True, "message": "Member role updated", "role": role}
+    return {"ok": True, "message": "Member role updated", "role": role, "permissions": permissions}
 
 
 @app.delete("/api/boards/{board_id}/members/{user_id}")

@@ -167,12 +167,34 @@ export default function App() {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
   }, [token]);
 
+  const defaultPermissionsForRole = (role = 'member') => {
+    const normalizedRole = (role || 'member').toLowerCase();
+    if (normalizedRole === 'admin') {
+      return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
+    }
+    if (normalizedRole === 'viewer') {
+      return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
+    }
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
+  };
+
+  const getMemberPermissions = (member) => {
+    const base = defaultPermissionsForRole(member?.role || 'member');
+    const custom = member?.permissions && typeof member.permissions === 'object' ? member.permissions : {};
+    return { ...base, ...custom };
+  };
+
   const myRole = useMemo(() => {
     if (!selectedBoard || boardMembers.length === 0) return "member";
     return boardMembers.find(x => x.email === currentEmail)?.role || "member";
   }, [boardMembers, currentEmail, selectedBoard]);
-  
-  const canEdit = myRole === "admin" || myRole === "member";
+
+  const myPermissions = useMemo(() => {
+    const member = boardMembers.find(x => x.email === currentEmail)
+    return getMemberPermissions(member);
+  }, [boardMembers, currentEmail]);
+
+  const canEdit = Boolean(myPermissions.createTasks || myPermissions.editTasks || myPermissions.deleteTasks || myPermissions.manageBoard);
 
   const fetchInitialData = async () => {
     if (!token) return;
@@ -363,10 +385,11 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Invite failed"); }
   };
 
-  const updateMemberRole = async (userId, role) => {
+  const updateMemberRole = async (userId, role, permissions = null) => {
     if (!selectedBoard || myRole !== 'admin') return;
     try {
-      await boards.updateMemberRole(selectedBoard, userId, role);
+      const payload = permissions ? { role, permissions } : { role };
+      await boards.updateMemberRole(selectedBoard, userId, payload);
       await fetchBoardData();
     } catch (e) {
       alert(e.response?.data?.detail || "Failed to update member role");
@@ -644,7 +667,7 @@ export default function App() {
           ) : viewMode === "reports" ? (
             <ReportsPage {...{ analytics, bgCard, setViewMode }} />
           ) : viewMode === "team" ? (
-            <TeamPage {...{ bgCard, setViewMode, boardMembers, myRole, tasksList, selectedBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
+            <TeamPage {...{ bgCard, setViewMode, boardMembers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
           ) : viewMode === "automations" ? (
             <AutomationPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "integrations" ? (

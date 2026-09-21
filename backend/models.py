@@ -40,6 +40,7 @@ class BoardMember(Base):
     board_id = Column(Integer, ForeignKey("boards.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     role = Column(String, default="member")
+    permissions = Column(String, default="{}")
 
 
 # ==========================================
