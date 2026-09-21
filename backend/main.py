@@ -140,6 +140,23 @@ def ensure_database_migrations():
 ensure_database_migrations()
 models.Base.metadata.create_all(bind=engine)
 
+
+def normalize_existing_users_to_owner():
+    try:
+        db = SessionLocal()
+        users = db.query(models.User).all()
+        for user in users:
+            if utils.normalize_role(getattr(user, "role", "admin")) != "owner":
+                user.role = "owner"
+        db.commit()
+        db.close()
+    except Exception:
+        traceback.print_exc()
+
+
+normalize_existing_users_to_owner()
+
+
 def _parse_json(value, default):
     if value in (None, "", "null"):
         return default
