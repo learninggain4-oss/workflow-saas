@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -112,6 +112,7 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+app.swagger_ui_oauth2_redirect_url = "/docs/oauth2-redirect"
 
 app.swagger_ui_parameters = {
     "persistAuthorization": True,
@@ -600,6 +601,11 @@ async def custom_docs():
     </script>
     </body>""")
     return HTMLResponse(content=html)
+
+
+@app.get("/docs/oauth2-redirect", include_in_schema=False)
+async def swagger_oauth2_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
 
 
 # --- EXCEPTION HANDLING ---
