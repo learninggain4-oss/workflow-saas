@@ -222,7 +222,7 @@ def get_board_member_permissions(board_id: int, user_id: int, db: Session):
     return normalize_permissions((member.role or "member").strip().lower(), custom_permissions)
 
 
-def ensure_board_access(board_id: int, user, db: Session, required_role: str = "viewer", action: str = "Board access"):
+def ensure_board_access(board_id: int, user, db: Session, required_role: str = "viewer", action: str = "Board access", required_permission: str = None):
     if board_id is None:
         raise HTTPException(status_code=403, detail=f"{action} denied")
 
@@ -239,9 +239,9 @@ def ensure_board_access(board_id: int, user, db: Session, required_role: str = "
         "member": "createTasks",
         "admin": "manageBoard",
     }
-    required_permission = permission_map.get((required_role or "viewer").lower(), "viewBoard")
-    if not permissions.get(required_permission, False):
-        raise HTTPException(status_code=403, detail=f"{action} requires {required_role} access")
+    resolved_permission = required_permission or permission_map.get((required_role or "viewer").lower(), "viewBoard")
+    if not permissions.get(resolved_permission, False):
+        raise HTTPException(status_code=403, detail=f"{action} requires {resolved_permission} permission")
 
     return board
 

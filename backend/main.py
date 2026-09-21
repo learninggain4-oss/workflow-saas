@@ -817,7 +817,7 @@ def create_board(payload: schemas.BoardCreate, current_user=Depends(get_current_
 
 @app.put("/api/boards/{board_id}")
 def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board rename")
+    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board rename", required_permission="manageBoard")
     b.name = payload.name
     db.commit()
     db.refresh(b)
@@ -826,7 +826,7 @@ def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depen
 
 @app.delete("/api/boards/{board_id}")
 async def delete_board(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board delete")
+    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board delete", required_permission="manageBoard")
     tids = [t.id for t in db.query(models.Task).filter(models.Task.board_id == board_id).all()]
     if tids:
         db.query(models.Comment).filter(models.Comment.task_id.in_(tids)).delete(synchronize_session=False)
@@ -860,7 +860,7 @@ def export_board_csv(board_id: int, current_user=Depends(get_current_user), db: 
 
 @app.post("/api/boards/{board_id}/invite")
 def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board invite")
+    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board invite", required_permission="manageMembers")
     target = db.query(models.User).filter(models.User.email == payload.email).first()
     role = str(payload.role or "member").strip().lower()
     permissions = utils.normalize_permissions(role, getattr(payload, "permissions", None))
@@ -905,7 +905,7 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
 
 @app.put("/api/boards/{board_id}/members/{user_id}")
 def update_board_member_role(board_id: int, user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member role update")
+    utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member role update", required_permission="manageMembers")
 
     if user_id == db.query(models.Board).filter(models.Board.id == board_id).first().owner_id:
         raise HTTPException(status_code=400, detail="Owner access cannot be changed here")
@@ -936,7 +936,7 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
 
 @app.delete("/api/boards/{board_id}/members/{user_id}")
 def remove_board_member(board_id: int, user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member removal")
+    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member removal", required_permission="manageMembers")
 
     if user_id == board.owner_id:
         raise HTTPException(status_code=400, detail="Board owner cannot be removed")
@@ -1005,7 +1005,7 @@ def list_tasks(board_id: int, current_user=Depends(get_current_user), db: Sessio
 @app.post("/api/tasks")
 async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     if payload.board_id:
-        utils.ensure_board_access(payload.board_id, current_user, db, required_role="member", action="Task creation")
+        utils.ensure_board_access(payload.board_id, current_user, db, required_role="member", action="Task creation", required_permission="createTasks")
         board_owner = db.query(models.Board).filter(models.Board.id == payload.board_id).first()
         if board_owner:
             owner_u = db.query(models.User).filter(models.User.id == board_owner.owner_id).first()
@@ -1030,7 +1030,7 @@ async def update_task(task_id: int, payload: dict, current_user=Depends(get_curr
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404)
-    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task update")
+    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task update", required_permission="editTasks")
 
     old_status, old_assign = t.status, t.assigned_to
     for k, v in payload.items():
@@ -1058,7 +1058,7 @@ async def delete_task(task_id: int, current_user=Depends(get_current_user), db: 
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404)
-    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task deletion")
+    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task deletion", required_permission="deleteTasks")
 
     bid = t.board_id
     db.query(models.Comment).filter(models.Comment.task_id == task_id).delete(synchronize_session=False)
@@ -1090,7 +1090,7 @@ async def add_subtask(task_id: int, payload: schemas.SubtaskCreate, current_user
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask creation")
+    utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask creation", required_permission="createTasks")
 
     s = models.Subtask(title=payload.title, task_id=task_id)
     db.add(s)
@@ -1110,7 +1110,7 @@ async def update_subtask(sub_id: int, payload: dict, current_user=Depends(get_cu
         raise HTTPException(status_code=404, detail="Subtask not found")
     task = db.query(models.Task).filter(models.Task.id == s.task_id).first()
     if task and task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask update")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask update", required_permission="editTasks")
     if s:
         s.is_completed = payload.get("is_completed", s.is_completed)
         db.commit()
@@ -1129,7 +1129,7 @@ async def delete_subtask(sub_id: int, current_user=Depends(get_current_user), db
         raise HTTPException(status_code=404, detail="Subtask not found")
     task = db.query(models.Task).filter(models.Task.id == s.task_id).first()
     if task and task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask deletion")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask deletion", required_permission="deleteTasks")
     tid = s.task_id
     t = db.query(models.Task).filter(models.Task.id == tid).first()
     db.delete(s)
@@ -1155,7 +1155,7 @@ async def add_comment(task_id: int, payload: schemas.CommentCreate, current_user
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.board_id:
-        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Comment creation")
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Comment creation", required_permission="createTasks")
 
     c = models.Comment(
         text=payload.text, 

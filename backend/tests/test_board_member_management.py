@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 
@@ -93,6 +94,57 @@ def test_viewer_cannot_create_tasks():
 
     db.delete(board)
     db.delete(viewer)
+    db.delete(owner)
+    db.commit()
+    db.close()
+
+
+def test_member_without_edit_permission_cannot_update_task():
+    db = SessionLocal()
+    owner_email = _unique_email("owner")
+    member_email = _unique_email("member")
+
+    owner = models.User(email=owner_email, name="Owner", password_hash="x")
+    member = models.User(email=member_email, name="Member", password_hash="x")
+    db.add_all([owner, member])
+    db.commit()
+    db.refresh(owner)
+    db.refresh(member)
+
+    board = models.Board(name="Restricted Board", owner_id=owner.id)
+    db.add(board)
+    db.commit()
+    db.refresh(board)
+
+    permissions = {
+        "viewBoard": True,
+        "createTasks": True,
+        "editTasks": False,
+        "deleteTasks": False,
+        "manageMembers": False,
+        "manageBoard": False,
+    }
+    db.add(models.BoardMember(board_id=board.id, user_id=member.id, role="member", permissions=json.dumps(permissions)))
+    db.commit()
+
+    task = models.Task(title="Locked task", status="todo", priority="medium", board_id=board.id, user_id=owner.id)
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+
+    client = TestClient(main.app)
+    token = create_token({"sub": member_email})
+    resp = client.put(
+        f"/api/tasks/{task.id}",
+        json={"status": "done"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert resp.status_code == 403, resp.text
+
+    db.delete(task)
+    db.delete(board)
+    db.delete(member)
     db.delete(owner)
     db.commit()
     db.close()
