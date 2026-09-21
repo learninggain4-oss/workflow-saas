@@ -27,6 +27,8 @@ export const boards = {
   delete: (id) => api.delete(`/api/boards/${id}`),
   invite: (id, email, role) => api.post(`/api/boards/${id}/invite`, { email, role }),
   getMembers: (id) => api.get(`/api/boards/${id}/members`),
+  updateMemberRole: (boardId, userId, role) => api.put(`/api/boards/${boardId}/members/${userId}`, { role }),
+  removeMember: (boardId, userId) => api.delete(`/api/boards/${boardId}/members/${userId}`),
   getActivities: (id) => api.get(`/api/boards/${id}/activities`),
   exportCSV: (id) => api.get(`/api/boards/${id}/export`, { responseType: 'blob' }),
 };

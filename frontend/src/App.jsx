@@ -363,6 +363,30 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Invite failed"); }
   };
 
+  const updateMemberRole = async (userId, role) => {
+    if (!selectedBoard || myRole !== 'admin') return;
+    try {
+      await boards.updateMemberRole(selectedBoard, userId, role);
+      await fetchBoardData();
+    } catch (e) {
+      alert(e.response?.data?.detail || "Failed to update member role");
+    }
+  };
+
+  const removeMember = async (userId) => {
+    if (!selectedBoard || myRole !== 'admin') return;
+    const member = boardMembers.find((m) => String(m.id) === String(userId));
+    const confirmed = window.confirm(`Remove ${member?.name || member?.email || 'this member'} from this board?`);
+    if (!confirmed) return;
+
+    try {
+      await boards.removeMember(selectedBoard, userId);
+      await fetchBoardData();
+    } catch (e) {
+      alert(e.response?.data?.detail || "Failed to remove member");
+    }
+  };
+
   const addComment = async () => {
     if (!newComment.trim() || !editing) return;
     await comments.create(editing.id, newComment); setNewComment(""); fetchTaskDetails(editing.id);
@@ -620,7 +644,7 @@ export default function App() {
           ) : viewMode === "reports" ? (
             <ReportsPage {...{ analytics, bgCard, setViewMode }} />
           ) : viewMode === "team" ? (
-            <TeamPage {...{ bgCard, setViewMode }} />
+            <TeamPage {...{ bgCard, setViewMode, boardMembers, myRole, tasksList, selectedBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
           ) : viewMode === "automations" ? (
             <AutomationPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "integrations" ? (

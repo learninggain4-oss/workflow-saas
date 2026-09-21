@@ -887,6 +887,55 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
     return members
 
 
+@app.put("/api/boards/{board_id}/members/{user_id}")
+def update_board_member_role(board_id: int, user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    board = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
+    if not board:
+        raise HTTPException(status_code=403, detail="Only board owners can change access")
+
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Owner access cannot be changed here")
+
+    role = str(payload.get("role", "member") or "member").strip().lower()
+    if role not in {"admin", "member", "viewer"}:
+        raise HTTPException(status_code=400, detail="Role must be admin, member, or viewer")
+
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
+    if member:
+        member.role = role
+    else:
+        member = models.BoardMember(board_id=board_id, user_id=user_id, role=role)
+        db.add(member)
+
+    db.commit()
+    log_activity_safe(board_id, current_user.name, f"updated {target.email} access to {role}")
+    return {"ok": True, "message": "Member role updated", "role": role}
+
+
+@app.delete("/api/boards/{board_id}/members/{user_id}")
+def remove_board_member(board_id: int, user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    board = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
+    if not board:
+        raise HTTPException(status_code=403, detail="Only board owners can remove members")
+
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Board owner cannot be removed")
+
+    member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    db.delete(member)
+    db.commit()
+    log_activity_safe(board_id, current_user.name, f"removed {target.email if target else user_id} from board")
+    return {"ok": True, "removed": True, "message": "Member removed from board"}
+
+
 @app.get("/api/boards/{board_id}/activities")
 def get_activities(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     return db.query(models.Activity).filter(models.Activity.board_id == board_id).order_by(models.Activity.id.desc()).limit(30).all()
