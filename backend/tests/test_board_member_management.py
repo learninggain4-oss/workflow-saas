@@ -48,6 +48,48 @@ def test_first_user_is_treated_as_owner_for_owner_access_checks():
     db.close()
 
 
+def test_owner_can_invite_new_user_with_password_without_separate_registration():
+    db = SessionLocal()
+    owner_email = _unique_email("owner")
+    invited_email = _unique_email("invited")
+
+    owner = models.User(email=owner_email, name="Owner", password_hash="x", role="owner")
+    db.add(owner)
+    db.commit()
+    db.refresh(owner)
+
+    board = models.Board(name="Invite Board", owner_id=owner.id)
+    db.add(board)
+    db.commit()
+    db.refresh(board)
+
+    client = TestClient(main.app)
+    token = create_token({"sub": owner_email})
+    invite_resp = client.post(
+        f"/api/boards/{board.id}/invite",
+        json={"email": invited_email, "role": "member", "password": "StrongPass123!"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert invite_resp.status_code == 200, invite_resp.text
+
+    created_user = db.query(models.User).filter(models.User.email == invited_email).first()
+    assert created_user is not None
+    assert main.pwd_context.verify("StrongPass123!", created_user.password_hash) is True
+
+    login_resp = client.post(
+        "/api/login",
+        data={"username": invited_email, "password": "StrongPass123!"},
+    )
+    assert login_resp.status_code == 200, login_resp.text
+    assert login_resp.json().get("access_token")
+
+    db.delete(board)
+    db.delete(created_user)
+    db.delete(owner)
+    db.commit()
+    db.close()
+
+
 def test_owner_can_manage_registered_users():
     db = SessionLocal()
     owner_email = _unique_email("owner")

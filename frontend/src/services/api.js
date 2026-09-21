@@ -44,7 +44,7 @@ export const boards = {
   create: (name) => api.post('/api/boards', { name }),
   rename: (id, name) => api.put(`/api/boards/${id}`, { name }),
   delete: (id) => api.delete(`/api/boards/${id}`),
-  invite: (id, email, role) => api.post(`/api/boards/${id}/invite`, { email, role }),
+  invite: (id, email, role, password = '') => api.post(`/api/boards/${id}/invite`, { email, role, password }),
   getMembers: (id) => api.get(`/api/boards/${id}/members`),
   updateMemberRole: (boardId, userId, role) => api.put(`/api/boards/${boardId}/members/${userId}`, { role }),
   removeMember: (boardId, userId) => api.delete(`/api/boards/${boardId}/members/${userId}`),

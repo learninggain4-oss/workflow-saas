@@ -70,6 +70,8 @@ export default function TeamPage({
   selectedBoard,
   inviteEmail,
   setInviteEmail,
+  invitePassword,
+  setInvitePassword,
   inviteRole,
   setInviteRole,
   inviteUser,
@@ -310,6 +312,13 @@ export default function TeamPage({
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="Email address"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
+                />
+                <input
+                  type="password"
+                  value={invitePassword}
+                  onChange={(e) => setInvitePassword(e.target.value)}
+                  placeholder="Password for new user"
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
                 />
                 <select

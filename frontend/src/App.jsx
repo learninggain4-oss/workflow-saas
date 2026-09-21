@@ -42,6 +42,7 @@ export default function App() {
   const [selectedBoard, setSelectedBoard] = useState(null);
   const [newBoardName, setNewBoardName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole] = useState("admin");
   const [renameValue, setRenameValue] = useState("");
 
@@ -412,8 +413,11 @@ export default function App() {
   const inviteUser = async () => {
     if (!inviteEmail.trim() || !selectedBoard || myRole !== 'admin') return alert("Only admins can invite");
     try {
-      const res = await boards.invite(selectedBoard, inviteEmail, inviteRole);
-      alert(res.data.message || "Invited!"); setInviteEmail(""); fetchBoardData();
+      const res = await boards.invite(selectedBoard, inviteEmail, inviteRole, invitePassword);
+      alert(res.data.message || "Invited!");
+      setInviteEmail("");
+      setInvitePassword("");
+      fetchBoardData();
     } catch (e) { alert(e.response?.data?.detail || "Invite failed"); }
   };
 
@@ -659,7 +663,7 @@ export default function App() {
   return (
     <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
       <div className="app-shell h-full w-full overflow-hidden rounded-[28px] border border-white/10 flex">
-        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }} />
+        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }} />
 
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }} />
@@ -699,7 +703,7 @@ export default function App() {
           ) : viewMode === "reports" ? (
             <ReportsPage {...{ analytics, bgCard, setViewMode }} />
           ) : viewMode === "team" ? (
-            <TeamPage {...{ bgCard, setViewMode, boardMembers, registeredUsers, setRegisteredUsers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
+            <TeamPage {...{ bgCard, setViewMode, boardMembers, registeredUsers, setRegisteredUsers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
           ) : viewMode === "automations" ? (
             <AutomationPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "integrations" ? (

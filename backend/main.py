@@ -1052,25 +1052,40 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
     target = db.query(models.User).filter(models.User.email == payload.email).first()
     role = utils.normalize_role(payload.role or "member")
     permissions = utils.normalize_permissions(role, getattr(payload, "permissions", None))
-    
-    if target:
-        bm = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == target.id).first()
-        if not bm:
-            db.add(models.BoardMember(board_id=board_id, user_id=target.id, role=role, permissions=json.dumps(permissions, ensure_ascii=False)))
-            db.commit()
-            log_activity_safe(board_id, current_user.name, f"invited {payload.email} as {role}")
-            create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}'", "invite", f"Invited to {board.name}")
-        else:
-            bm.role = role
-            bm.permissions = json.dumps(permissions, ensure_ascii=False)
-            db.commit()
-    else:
+
+    if not target:
+        password = (payload.password or "").strip()
+        if not password:
+            raise HTTPException(status_code=400, detail="Password is required when inviting a new user")
+
+        invited_name = payload.email.split("@", 1)[0].strip() or "New member"
+        target = models.User(
+            email=payload.email,
+            name=invited_name,
+            password_hash=pwd_context.hash(password),
+            role=role,
+        )
+        db.add(target)
+        db.commit()
+        db.refresh(target)
+
         subject = f"Join {board.name}"
-        html_body = f"<p>{current_user.name} invited you to {board.name} as {payload.role}. Please register.</p>"
+        html_body = f"<p>{current_user.name} invited you to {board.name} as {role}. Your account was created automatically.</p>"
         threading.Thread(target=send_email_safe, args=(payload.email, subject, html_body)).start()
-        log_activity_safe(board_id, current_user.name, f"sent email invite to {payload.email}")
-        
-    return {"ok": True, "message": "Invite sent successfully"}
+        log_activity_safe(board_id, current_user.name, f"created account and invited {payload.email} as {role}")
+
+    bm = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == target.id).first()
+    if not bm:
+        db.add(models.BoardMember(board_id=board_id, user_id=target.id, role=role, permissions=json.dumps(permissions, ensure_ascii=False)))
+        db.commit()
+        log_activity_safe(board_id, current_user.name, f"invited {payload.email} as {role}")
+        create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}'", "invite", f"Invited to {board.name}")
+    else:
+        bm.role = role
+        bm.permissions = json.dumps(permissions, ensure_ascii=False)
+        db.commit()
+
+    return {"ok": True, "message": "Invite sent successfully", "user_created": target.id is not None and not target.id == 0}
 
 
 @app.get("/api/boards/{board_id}/members")
