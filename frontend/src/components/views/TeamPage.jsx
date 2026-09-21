@@ -175,7 +175,7 @@ export default function TeamPage({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {myRole === 'admin' && member.email !== currentEmail && (
+                  {(myRole === 'admin' || myRole === 'owner') && member.email !== currentEmail && (
                     <>
                       <select
                         value={normalizeRoleValue(member.role)}
@@ -213,7 +213,7 @@ export default function TeamPage({
         <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
           <h3 className="text-lg font-bold">Custom access</h3>
           <div className="mt-4 space-y-3">
-            {memberCards.filter((member) => myRole === 'admin' && member.email !== currentEmail).map((member) => (
+            {memberCards.filter((member) => (myRole === 'admin' || myRole === 'owner') && member.email !== currentEmail).map((member) => (
               <div key={`permissions-${member.email}`} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
