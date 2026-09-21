@@ -1,4 +1,5 @@
 import React from 'react';
+import { admin } from '../../services/api';
 
 const getStatusFromRole = (role) => {
   switch ((role || '').toLowerCase()) {
@@ -90,11 +91,11 @@ export default function TeamPage({
     member: memberCards.filter((member) => member.role === 'member').length,
     viewer: memberCards.filter((member) => member.role === 'viewer').length,
   };
+  const ownerManagedUsers = (registeredUsers || []).filter((user) => user.email !== currentEmail);
 
   const updateRegisteredUserRole = async (userId, nextRole) => {
     if (!nextRole) return;
     try {
-      const { admin } = await import('../../services/api');
       await admin.updateUserRole(userId, nextRole);
       const refreshed = await admin.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
@@ -105,7 +106,6 @@ export default function TeamPage({
 
   const deleteRegisteredUser = async (userId) => {
     try {
-      const { admin } = await import('../../services/api');
       await admin.deleteUser(userId);
       const refreshed = await admin.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
@@ -242,11 +242,16 @@ export default function TeamPage({
               ))}
             </div>
 
-            {myRole === 'owner' && registeredUsers.length > 0 && (
+            {myRole === 'owner' && ownerManagedUsers.length > 0 && (
               <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Registered users</h4>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Owner controls</h4>
+                  <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                    Registered users
+                  </span>
+                </div>
                 <div className="space-y-2">
-                  {registeredUsers.map((user) => (
+                  {ownerManagedUsers.map((user) => (
                     <div key={user.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
