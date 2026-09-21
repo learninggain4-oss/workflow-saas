@@ -30,6 +30,24 @@ def test_role_aliases_are_normalized_to_canonical_roles():
     assert main.utils.normalize_role("subscriber") == "viewer"
 
 
+def test_first_user_is_treated_as_owner_for_owner_access_checks():
+    db = SessionLocal()
+    db.query(models.User).delete()
+    db.commit()
+
+    owner_email = _unique_email("owner")
+    owner = models.User(email=owner_email, name="Owner", password_hash="x", role="admin")
+    db.add(owner)
+    db.commit()
+    db.refresh(owner)
+
+    assert main.utils.is_owner_user(owner, db) is True
+
+    db.query(models.User).delete()
+    db.commit()
+    db.close()
+
+
 def test_owner_can_manage_registered_users():
     db = SessionLocal()
     owner_email = _unique_email("owner")

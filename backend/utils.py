@@ -234,6 +234,19 @@ def normalize_permissions(role, custom_permissions=None):
     return permissions
 
 
+def is_owner_user(user, db: Session = None):
+    if user is None:
+        return False
+    if normalize_role(getattr(user, "role", "admin")) == "owner":
+        return True
+    if db is None:
+        return False
+    first_user = db.query(models.User).order_by(models.User.id.asc()).first()
+    if first_user is None:
+        return False
+    return user.id == first_user.id
+
+
 def get_board_member_role(board_id: int, user_id: int, db: Session):
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
     if not board:

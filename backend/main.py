@@ -714,8 +714,14 @@ def root():
 def register(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
     if db.query(models.User).filter(models.User.email == req.email).first():
         raise HTTPException(status_code=400, detail="User exists")
-    
-    u = models.User(email=req.email, name=req.name, password_hash=pwd_context.hash(req.password), role="admin")
+
+    is_first_user = db.query(models.User).count() == 0
+    u = models.User(
+        email=req.email,
+        name=req.name,
+        password_hash=pwd_context.hash(req.password),
+        role="owner" if is_first_user else "admin",
+    )
     db.add(u)
     db.commit()
     db.refresh(u)
@@ -764,7 +770,7 @@ def get_user_profile(current_user=Depends(get_current_user)):
 
 @app.get("/api/admin/users")
 def list_registered_users(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if utils.normalize_role(getattr(current_user, "role", "admin")) != "owner":
+    if not utils.is_owner_user(current_user, db):
         raise HTTPException(status_code=403, detail="Owner access required")
 
     users = []
@@ -780,7 +786,7 @@ def list_registered_users(current_user=Depends(get_current_user), db: Session = 
 
 @app.put("/api/admin/users/{user_id}")
 def update_registered_user_role(user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if utils.normalize_role(getattr(current_user, "role", "admin")) != "owner":
+    if not utils.is_owner_user(current_user, db):
         raise HTTPException(status_code=403, detail="Owner access required")
 
     target = db.query(models.User).filter(models.User.id == user_id).first()
@@ -800,7 +806,7 @@ def update_registered_user_role(user_id: int, payload: dict, current_user=Depend
 
 @app.delete("/api/admin/users/{user_id}")
 def delete_registered_user(user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    if utils.normalize_role(getattr(current_user, "role", "admin")) != "owner":
+    if not utils.is_owner_user(current_user, db):
         raise HTTPException(status_code=403, detail="Owner access required")
 
     if user_id == current_user.id:
