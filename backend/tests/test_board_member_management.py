@@ -52,6 +52,7 @@ def test_owner_can_invite_new_user_with_password_without_separate_registration()
     db = SessionLocal()
     owner_email = _unique_email("owner")
     invited_email = _unique_email("invited")
+    invite_password = "StrongPass123!"
 
     owner = models.User(email=owner_email, name="Owner", password_hash="x", role="owner")
     db.add(owner)
@@ -63,25 +64,40 @@ def test_owner_can_invite_new_user_with_password_without_separate_registration()
     db.commit()
     db.refresh(board)
 
-    client = TestClient(main.app)
-    token = create_token({"sub": owner_email})
-    invite_resp = client.post(
-        f"/api/boards/{board.id}/invite",
-        json={"email": invited_email, "role": "member", "password": "StrongPass123!"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert invite_resp.status_code == 200, invite_resp.text
+    captured = {}
+    original_send = main.send_email_safe
 
-    created_user = db.query(models.User).filter(models.User.email == invited_email).first()
-    assert created_user is not None
-    assert main.pwd_context.verify("StrongPass123!", created_user.password_hash) is True
+    def fake_send(to_email, subject, html_body):
+        captured["to"] = to_email
+        captured["subject"] = subject
+        captured["body"] = html_body
+        return True
 
-    login_resp = client.post(
-        "/api/login",
-        data={"username": invited_email, "password": "StrongPass123!"},
-    )
-    assert login_resp.status_code == 200, login_resp.text
-    assert login_resp.json().get("access_token")
+    main.send_email_safe = fake_send
+    try:
+        client = TestClient(main.app)
+        token = create_token({"sub": owner_email})
+        invite_resp = client.post(
+            f"/api/boards/{board.id}/invite",
+            json={"email": invited_email, "role": "member", "password": invite_password},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert invite_resp.status_code == 200, invite_resp.text
+
+        created_user = db.query(models.User).filter(models.User.email == invited_email).first()
+        assert created_user is not None
+        assert main.pwd_context.verify(invite_password, created_user.password_hash) is True
+        assert invited_email in captured.get("body", "")
+        assert invite_password in captured.get("body", "")
+
+        login_resp = client.post(
+            "/api/login",
+            data={"username": invited_email, "password": invite_password},
+        )
+        assert login_resp.status_code == 200, login_resp.text
+        assert login_resp.json().get("access_token")
+    finally:
+        main.send_email_safe = original_send
 
     db.delete(board)
     db.delete(created_user)

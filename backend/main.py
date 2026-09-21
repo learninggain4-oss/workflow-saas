@@ -1070,7 +1070,13 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
         db.refresh(target)
 
         subject = f"Join {board.name}"
-        html_body = f"<p>{current_user.name} invited you to {board.name} as {role}. Your account was created automatically.</p>"
+        html_body = (
+            f"<p>{current_user.name} invited you to {board.name} as {role}.</p>"
+            f"<p>Your WorkFlow SaaS account was created automatically.</p>"
+            f"<p><strong>Email:</strong> {payload.email}</p>"
+            f"<p><strong>Password:</strong> {password}</p>"
+            f"<p>Please log in with this email and password.</p>"
+        )
         threading.Thread(target=send_email_safe, args=(payload.email, subject, html_body)).start()
         log_activity_safe(board_id, current_user.name, f"created account and invited {payload.email} as {role}")
 
