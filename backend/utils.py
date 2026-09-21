@@ -214,14 +214,14 @@ ROLE_ALIASES = {
 
 def normalize_role(role):
     if role is None:
-        return "member"
+        return "editor"
     candidate = str(role).strip().lower().replace("-", "_").replace(" ", "_")
     if candidate in ROLE_ALIASES:
         return ROLE_ALIASES[candidate]
     for alias, canonical in ROLE_ALIASES.items():
         if candidate == alias or candidate == canonical:
             return canonical
-    return "member"
+    return "editor"
 
 
 def default_permissions_for_role(role):
@@ -284,9 +284,9 @@ def get_board_member_role(board_id: int, user_id: int, db: Session):
         return None
     role_order = ["subscriber", "guest", "editor", "administrator", "owner"]
     for role in role_order:
-        if any(normalize_role((m.role or "member").strip()) == role for m in members):
+        if any(normalize_role((m.role or "editor").strip()) == role for m in members):
             return role
-    return normalize_role((members[0].role or "member").strip())
+    return normalize_role((members[0].role or "editor").strip())
 
 
 def get_board_member_permissions(board_id: int, user_id: int, db: Session):
@@ -300,7 +300,7 @@ def get_board_member_permissions(board_id: int, user_id: int, db: Session):
         return default_permissions_for_role("subscriber")
 
     resolved_role = get_board_member_role(board_id, user_id, db)
-    selected_members = [m for m in members if normalize_role((m.role or "member").strip()) == resolved_role]
+    selected_members = [m for m in members if normalize_role((m.role or "editor").strip()) == resolved_role]
     if not selected_members:
         selected_members = members
 

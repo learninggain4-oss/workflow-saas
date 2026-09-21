@@ -6,9 +6,7 @@ const normalizeRoleValue = (role) => {
   const aliases = {
     owner: 'owner',
     administrator: 'administrator',
-    admin: 'administrator',
     editor: 'editor',
-    member: 'editor',
     guest: 'guest',
     subscriber: 'subscriber',
     viewer: 'subscriber',
