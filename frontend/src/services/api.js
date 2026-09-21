@@ -20,6 +20,12 @@ export const auth = {
   upgrade: () => api.post('/api/upgrade'),
 };
 
+export const admin = {
+  getUsers: () => api.get('/api/admin/users'),
+  updateUserRole: (userId, role) => api.put(`/api/admin/users/${userId}`, { role }),
+  deleteUser: (userId) => api.delete(`/api/admin/users/${userId}`),
+};
+
 export const boards = {
   getAll: () => api.get('/api/boards'),
   create: (name) => api.post('/api/boards', { name }),

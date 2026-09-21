@@ -12,6 +12,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, default="")
     password_hash = Column(String, nullable=False)
+    role = Column(String, default="admin")
     subscription_tier = Column(String, default="free")
     avatar_url = Column(String, default="")
     email_verified = Column(Boolean, default=True)

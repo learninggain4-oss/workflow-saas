@@ -44,6 +44,7 @@ def ensure_database_migrations():
         return
 
     migrations = [
+        ("users", "role", "VARCHAR DEFAULT 'admin'"),
         ("users", "subscription_tier", "VARCHAR DEFAULT 'free'"),
         ("users", "avatar_url", "VARCHAR DEFAULT ''"),
         ("users", "email_verified", "BOOLEAN DEFAULT TRUE"),
@@ -635,7 +636,7 @@ def register(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
     if db.query(models.User).filter(models.User.email == req.email).first():
         raise HTTPException(status_code=400, detail="User exists")
     
-    u = models.User(email=req.email, name=req.name, password_hash=pwd_context.hash(req.password))
+    u = models.User(email=req.email, name=req.name, password_hash=pwd_context.hash(req.password), role="admin")
     db.add(u)
     db.commit()
     db.refresh(u)
@@ -666,6 +667,7 @@ def get_user_profile(current_user=Depends(get_current_user)):
         "id": current_user.id,
         "email": current_user.email,
         "name": current_user.name,
+        "role": utils.normalize_role(getattr(current_user, "role", "admin")),
         "subscription_tier": current_user.subscription_tier,
         "avatar_url": current_user.avatar_url or "",
         "email_verified": bool(current_user.email_verified),
@@ -679,6 +681,66 @@ def get_user_profile(current_user=Depends(get_current_user)):
             "connectedApps": _parse_json(current_user.connected_apps, []),
         },
     }
+
+
+@app.get("/api/admin/users")
+def list_registered_users(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if utils.normalize_role(getattr(current_user, "role", "admin")) != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+
+    users = []
+    for user in db.query(models.User).order_by(models.User.id.asc()).all():
+        users.append({
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": utils.normalize_role(getattr(user, "role", "admin")),
+        })
+    return users
+
+
+@app.put("/api/admin/users/{user_id}")
+def update_registered_user_role(user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if utils.normalize_role(getattr(current_user, "role", "admin")) != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Owner cannot change own role here")
+
+    role = utils.normalize_role(payload.get("role", "admin") or "admin")
+    if role not in {"owner", "admin", "member", "contributor", "viewer"}:
+        raise HTTPException(status_code=400, detail="Role must be owner, admin, member, contributor, or viewer")
+
+    target.role = role
+    db.commit()
+    return {"ok": True, "id": target.id, "email": target.email, "role": role}
+
+
+@app.delete("/api/admin/users/{user_id}")
+def delete_registered_user(user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    if utils.normalize_role(getattr(current_user, "role", "admin")) != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Owner cannot delete self")
+
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.query(models.BoardMember).filter(models.BoardMember.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.Comment).filter(models.Comment.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.Subtask).filter(models.Subtask.task_id.in_([
+        s.id for s in db.query(models.Task).filter(models.Task.user_id == user_id).all()
+    ])).delete(synchronize_session=False)
+    db.query(models.Task).filter(models.Task.user_id == user_id).delete(synchronize_session=False)
+    db.query(models.Notification).filter(models.Notification.user_id == user_id).delete(synchronize_session=False)
+    db.delete(target)
+    db.commit()
+    return {"ok": True, "deleted": True, "id": user_id}
 
 
 @app.put("/api/users/me")

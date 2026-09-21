@@ -47,6 +47,8 @@ export default function TeamPage({
   bgCard,
   setViewMode,
   boardMembers = [],
+  registeredUsers = [],
+  setRegisteredUsers,
   myRole = 'member',
   myPermissions = {},
   tasksList = [],
@@ -87,6 +89,29 @@ export default function TeamPage({
     admin: memberCards.filter((member) => member.role === 'admin').length,
     member: memberCards.filter((member) => member.role === 'member').length,
     viewer: memberCards.filter((member) => member.role === 'viewer').length,
+  };
+
+  const updateRegisteredUserRole = async (userId, nextRole) => {
+    if (!nextRole) return;
+    try {
+      const { admin } = await import('../../services/api');
+      await admin.updateUserRole(userId, nextRole);
+      const refreshed = await admin.getUsers();
+      setRegisteredUsers?.(refreshed.data || []);
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to update user role');
+    }
+  };
+
+  const deleteRegisteredUser = async (userId) => {
+    try {
+      const { admin } = await import('../../services/api');
+      await admin.deleteUser(userId);
+      const refreshed = await admin.getUsers();
+      setRegisteredUsers?.(refreshed.data || []);
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to delete user');
+    }
   };
 
   return (
@@ -216,6 +241,45 @@ export default function TeamPage({
                 </div>
               ))}
             </div>
+
+            {myRole === 'owner' && registeredUsers.length > 0 && (
+              <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Registered users</h4>
+                <div className="space-y-2">
+                  {registeredUsers.map((user) => (
+                    <div key={user.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">{user.name || user.email}</p>
+                          <p className="text-[11px] text-gray-500">{user.email}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteRegisteredUser(user.id)}
+                          className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                        >
+                          Delete
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={user.role}
+                          onChange={(e) => updateRegisteredUserRole(user.id, e.target.value)}
+                          className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200"
+                        >
+                          <option value="owner">Owner / Super Admin</option>
+                          <option value="admin">Admin / Administrator</option>
+                          <option value="member">Member / Editor</option>
+                          <option value="contributor">Contributor / Guest</option>
+                          <option value="viewer">Viewer / Subscriber</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {myRole === 'admin' && selectedBoard && (
               <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">

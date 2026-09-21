@@ -30,6 +30,44 @@ def test_role_aliases_are_normalized_to_canonical_roles():
     assert main.utils.normalize_role("subscriber") == "viewer"
 
 
+def test_owner_can_manage_registered_users():
+    db = SessionLocal()
+    owner_email = _unique_email("owner")
+    target_email = _unique_email("member")
+
+    owner = models.User(email=owner_email, name="Owner", password_hash="x", role="owner")
+    target = models.User(email=target_email, name="Target", password_hash="x", role="admin")
+    db.add_all([owner, target])
+    db.commit()
+    db.refresh(owner)
+    db.refresh(target)
+
+    client = TestClient(main.app)
+    token = create_token({"sub": owner_email})
+    list_resp = client.get("/api/admin/users", headers={"Authorization": f"Bearer {token}"})
+    assert list_resp.status_code == 200, list_resp.text
+    assert any(u["email"] == target_email for u in list_resp.json())
+
+    update_resp = client.put(
+        f"/api/admin/users/{target.id}",
+        json={"role": "viewer"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert update_resp.status_code == 200, update_resp.text
+    assert update_resp.json()["role"] == "viewer"
+
+    delete_resp = client.delete(
+        f"/api/admin/users/{target.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert delete_resp.status_code == 200, delete_resp.text
+    assert delete_resp.json()["deleted"] is True
+
+    db.delete(owner)
+    db.commit()
+    db.close()
+
+
 def test_board_member_role_update_and_remove():
     db = SessionLocal()
     owner_email = _unique_email("owner")

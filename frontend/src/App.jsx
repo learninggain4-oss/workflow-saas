@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { auth, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
+import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
 
 // Components import
@@ -51,6 +51,7 @@ export default function App() {
   const [newComment, setNewComment] = useState("");
   const [activities, setActivities] = useState([]);
   const [boardMembers, setBoardMembers] = useState([]);
+  const [registeredUsers, setRegisteredUsers] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
@@ -224,6 +225,12 @@ export default function App() {
       if (user?.avatar_url) setProfileAvatar(user.avatar_url);
       const bRes = await boards.getAll(); setBoards(bRes.data);
       if (bRes.data.length > 0 && !selectedBoard) setSelectedBoard(bRes.data[0].id);
+      if (user?.role === 'owner') {
+        const adminRes = await admin.getUsers();
+        setRegisteredUsers(adminRes.data || []);
+      } else {
+        setRegisteredUsers([]);
+      }
       const nRes = await notifs.getAll(); setNotifications(nRes.data);
     } catch {}
   };
@@ -673,7 +680,7 @@ export default function App() {
           ) : viewMode === "reports" ? (
             <ReportsPage {...{ analytics, bgCard, setViewMode }} />
           ) : viewMode === "team" ? (
-            <TeamPage {...{ bgCard, setViewMode, boardMembers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
+            <TeamPage {...{ bgCard, setViewMode, boardMembers, registeredUsers, setRegisteredUsers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
           ) : viewMode === "automations" ? (
             <AutomationPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "integrations" ? (
