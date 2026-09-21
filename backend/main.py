@@ -949,9 +949,18 @@ def upgrade_to_pro(current_user=Depends(get_current_user), db: Session = Depends
 
 @app.post("/api/test-email")
 def test_email(current_user=Depends(get_current_user)):
-    html_body = f"<h2>Hi {current_user.name}!</h2><p>Your email config works!</p>"
+    html_body = utils.build_professional_email_html(
+        title="WorkFlow SaaS Email Test",
+        intro=f"Hi <strong>{current_user.name}</strong>, this is a test email to confirm your email configuration is working correctly.",
+        rows=[
+            ("Recipient", current_user.email),
+            ("Status", "Email configuration verified"),
+            ("Message", "Your WorkFlow SaaS email delivery is active."),
+        ],
+        cta_text="Open WorkFlow SaaS",
+    )
     threading.Thread(
-        target=send_email_safe, 
+        target=send_email_safe,
         args=(current_user.email, "✅ WorkFlow SaaS - Email Test", html_body)
     ).start()
     return {"sent": True, "to": current_user.email}
@@ -1070,41 +1079,17 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
         db.refresh(target)
 
         subject = f"Invitation to join {board.name} on WorkFlow SaaS"
-        html_body = (
-            f"<div style='font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;padding:32px 0;'>"
-            f"<div style='max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;'>"
-            f"<div style='background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 32px;color:#ffffff;'>"
-            f"<h1 style='margin:0;font-size:28px;line-height:1.3;'>Welcome to WorkFlow SaaS</h1>"
-            f"<p style='margin:10px 0 0;font-size:14px;opacity:0.95;'>You have been invited to collaborate on <strong>{board.name}</strong></p>"
-            f"</div>"
-            f"<div style='padding:32px;'>"
-            f"<p style='margin:0 0 16px;font-size:16px;color:#111827;'>Hello,</p>"
-            f"<p style='margin:0 0 18px;font-size:15px;line-height:1.7;color:#374151;'><strong>{current_user.name}</strong> has invited you to join the board as <strong>{role}</strong>.</p>"
-            f"<p style='margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;'>Your account has been created automatically for you. Please use the details below to sign in.</p>"
-            f"<table role='presentation' cellpadding='0' cellspacing='0' border='0' style='width:100%;border-collapse:separate;border-spacing:0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;'>"
-            f"<tr>"
-            f"<td style='padding:16px 18px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;'><strong>Board:</strong> {board.name}</td>"
-            f"</tr>"
-            f"<tr>"
-            f"<td style='padding:16px 18px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;'><strong>Role:</strong> {role}</td>"
-            f"</tr>"
-            f"<tr>"
-            f"<td style='padding:16px 18px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;'><strong>Email:</strong> {payload.email}</td>"
-            f"</tr>"
-            f"<tr>"
-            f"<td style='padding:16px 18px;color:#374151;font-size:14px;'><strong>Password:</strong> {password}</td>"
-            f"</tr>"
-            f"</table>"
-            f"<div style='margin-top:24px;text-align:center;'>"
-            f"<a href='https://workflow-saas-cof-z.onrender.com' style='display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:bold;'>Open WorkFlow SaaS</a>"
-            f"</div>"
-            f"<p style='margin:24px 0 0;font-size:13px;line-height:1.7;color:#6b7280;'>Please sign in using the email and password above to access your workspace and continue collaborating.</p>"
-            f"</div>"
-            f"<div style='padding:20px 32px 28px;border-top:1px solid #e5e7eb;background:#fafafa;font-size:12px;color:#6b7280;'>"
-            f"<p style='margin:0;'>This is an automated email from WorkFlow SaaS.</p>"
-            f"</div>"
-            f"</div>"
-            f"</div>"
+        html_body = utils.build_professional_email_html(
+            title="Welcome to WorkFlow SaaS",
+            intro=f"<strong>{current_user.name}</strong> has invited you to join <strong>{board.name}</strong> as <strong>{role}</strong>.",
+            rows=[
+                ("Board", board.name),
+                ("Role", role),
+                ("Email", payload.email),
+                ("Password", password),
+            ],
+            cta_text="Open WorkFlow SaaS",
+            cta_url="https://workflow-saas-cof-z.onrender.com",
         )
         threading.Thread(target=send_email_safe, args=(payload.email, subject, html_body)).start()
         log_activity_safe(board_id, current_user.name, f"created account and invited {payload.email} as {role}")

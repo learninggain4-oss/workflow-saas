@@ -144,6 +144,31 @@ def log_activity_safe(board_id, user_name, action):
         db2.close()
     except: pass
 
+def build_professional_email_html(title: str, intro: str, rows: List[tuple], cta_text: str = "Open WorkFlow SaaS", cta_url: str = "https://workflow-saas-cof-z.onrender.com") -> str:
+    details = "".join(
+        f"<tr><td style='padding:14px 18px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;'><strong>{label}:</strong> {value}</td></tr>"
+        for label, value in rows
+    )
+    return (
+        "<div style='font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;padding:32px 0;'>"
+        "<div style='max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;'>"
+        "<div style='background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 32px;color:#ffffff;'>"
+        f"<h1 style='margin:0;font-size:28px;line-height:1.3;'>{title}</h1>"
+        "</div>"
+        "<div style='padding:32px;'>"
+        f"<p style='margin:0 0 18px;font-size:15px;line-height:1.7;color:#374151;'>{intro}</p>"
+        "<table role='presentation' cellpadding='0' cellspacing='0' border='0' style='width:100%;border-collapse:separate;border-spacing:0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;'>"
+        f"{details}"
+        "</table>"
+        f"<div style='margin-top:24px;text-align:center;'><a href='{cta_url}' style='display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:bold;'>{cta_text}</a></div>"
+        "<p style='margin:24px 0 0;font-size:13px;line-height:1.7;color:#6b7280;'>Thank you for using WorkFlow SaaS.</p>"
+        "</div>"
+        "<div style='padding:20px 32px 28px;border-top:1px solid #e5e7eb;background:#fafafa;font-size:12px;color:#6b7280;'><p style='margin:0;'>This is an automated email from WorkFlow SaaS.</p></div>"
+        "</div>"
+        "</div>"
+    )
+
+
 def create_notification_safe(user_id, board_id, task_id, message, n_type="info", email_subject=None):
     try:
         db2 = SessionLocal()
@@ -153,7 +178,12 @@ def create_notification_safe(user_id, board_id, task_id, message, n_type="info",
         db2.commit()
         db2.close()
         if user_email and email_subject:
-            html_body = f"<div style='font-family:Arial'><h3>{email_subject}</h3><p>{message}</p><p>Open WorkFlow SaaS dashboard.</p></div>"
+            html_body = build_professional_email_html(
+                title=email_subject,
+                intro=message,
+                rows=[("Message", message), ("Type", n_type or "info")],
+                cta_text="Open WorkFlow SaaS",
+            )
             threading.Thread(target=send_email_safe, args=(user_email, email_subject, html_body)).start()
     except: pass
 
