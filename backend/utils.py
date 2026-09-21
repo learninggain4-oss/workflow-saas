@@ -173,14 +173,56 @@ PERMISSION_KEYS = [
     "manageBoard",
 ]
 
+ROLE_ALIASES = {
+    "owner": "owner",
+    "super_admin": "owner",
+    "superadmin": "owner",
+    "admin": "admin",
+    "administrator": "admin",
+    "member": "member",
+    "editor": "member",
+    "contributor": "contributor",
+    "guest": "contributor",
+    "viewer": "viewer",
+    "subscriber": "viewer",
+}
+
+
+def normalize_role(role):
+    if role is None:
+        return "member"
+    candidate = str(role).strip().lower().replace("-", "_").replace(" ", "_")
+    if candidate in ROLE_ALIASES:
+        return ROLE_ALIASES[candidate]
+    for alias, canonical in ROLE_ALIASES.items():
+        if candidate == alias or candidate == canonical:
+            return canonical
+    return "member"
+
 
 def default_permissions_for_role(role):
-    role_name = (role or "admin").lower()
-    if role_name == "admin":
+    role_name = normalize_role(role)
+    if role_name in {"owner", "admin"}:
         return {key: True for key in PERMISSION_KEYS}
-    if role_name == "viewer":
-        return {"viewBoard": True, "createTasks": False, "editTasks": False, "deleteTasks": False, "manageMembers": False, "manageBoard": False}
-    return {key: True for key in PERMISSION_KEYS}
+    if role_name == "member":
+        return {key: True for key in PERMISSION_KEYS}
+    if role_name == "contributor":
+        return {
+            "viewBoard": True,
+            "createTasks": True,
+            "editTasks": False,
+            "deleteTasks": False,
+            "manageMembers": False,
+            "manageBoard": False,
+        }
+    return {
+        "viewBoard": True,
+        "createTasks": False,
+        "editTasks": False,
+        "deleteTasks": False,
+        "manageMembers": False,
+        "manageBoard": False,
+    }
 
 
 def normalize_permissions(role, custom_permissions=None):
@@ -197,15 +239,15 @@ def get_board_member_role(board_id: int, user_id: int, db: Session):
     if not board:
         return None
     if board.owner_id == user_id:
-        return "admin"
+        return "owner"
     members = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).all()
     if not members:
         return None
-    role_order = ["viewer", "member", "admin"]
+    role_order = ["viewer", "contributor", "member", "admin", "owner"]
     for role in role_order:
-        if any((m.role or "member").strip().lower() == role for m in members):
+        if any(normalize_role((m.role or "member").strip()) == role for m in members):
             return role
-    return (members[0].role or "member").strip().lower()
+    return normalize_role((members[0].role or "member").strip())
 
 
 def get_board_member_permissions(board_id: int, user_id: int, db: Session):
@@ -213,13 +255,13 @@ def get_board_member_permissions(board_id: int, user_id: int, db: Session):
     if not board:
         return default_permissions_for_role("viewer")
     if board.owner_id == user_id:
-        return default_permissions_for_role("admin")
+        return default_permissions_for_role("owner")
     members = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).all()
     if not members:
         return default_permissions_for_role("viewer")
 
     resolved_role = get_board_member_role(board_id, user_id, db)
-    selected_members = [m for m in members if (m.role or "member").strip().lower() == resolved_role]
+    selected_members = [m for m in members if normalize_role((m.role or "member").strip()) == resolved_role]
     if not selected_members:
         selected_members = members
 

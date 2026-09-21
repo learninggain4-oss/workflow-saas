@@ -107,9 +107,10 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
             <div className="space-y-2">
               <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Email address" className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`} />
               <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`}>
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-                <option value="viewer">Viewer</option>
+                <option value="admin">Admin / Administrator</option>
+                <option value="member">Member / Editor</option>
+                <option value="contributor">Contributor / Guest</option>
+                <option value="viewer">Viewer / Subscriber</option>
               </select>
               <button onClick={inviteUser} className={`w-full p-2.5 rounded-xl text-sm font-semibold shadow-sm ${primaryBtn}`}>Send Invite</button>
             </div>

@@ -168,11 +168,17 @@ export default function App() {
   }, [token]);
 
   const defaultPermissionsForRole = (role = 'admin') => {
-    const normalizedRole = (role || 'admin').toLowerCase();
-    if (normalizedRole === 'admin') {
+    const normalizedRole = (role || 'admin').toLowerCase().replace(/[-\s]+/g, '_');
+    if (normalizedRole === 'owner' || normalizedRole === 'admin' || normalizedRole === 'administrator') {
       return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
     }
-    if (normalizedRole === 'viewer') {
+    if (normalizedRole === 'member' || normalizedRole === 'editor') {
+      return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
+    }
+    if (normalizedRole === 'contributor' || normalizedRole === 'guest') {
+      return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
+    }
+    if (normalizedRole === 'viewer' || normalizedRole === 'subscriber') {
       return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
     }
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
@@ -185,7 +191,7 @@ export default function App() {
   };
 
   const myRole = useMemo(() => {
-    if (!selectedBoard || boardMembers.length === 0) return "member";
+    if (!selectedBoard || boardMembers.length === 0) return "owner";
     return boardMembers.find(x => x.email === currentEmail)?.role || "member";
   }, [boardMembers, currentEmail, selectedBoard]);
 

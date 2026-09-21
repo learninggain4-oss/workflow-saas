@@ -2,11 +2,19 @@ import React from 'react';
 
 const getStatusFromRole = (role) => {
   switch ((role || '').toLowerCase()) {
+    case 'owner':
+      return 'Owner';
     case 'admin':
+    case 'administrator':
       return 'Online';
     case 'member':
+    case 'editor':
       return 'Active';
+    case 'contributor':
+    case 'guest':
+      return 'Contributor';
     case 'viewer':
+    case 'subscriber':
       return 'View only';
     default:
       return 'Available';
@@ -14,11 +22,17 @@ const getStatusFromRole = (role) => {
 };
 
 const defaultPermissionsForRole = (role = 'admin') => {
-  const normalizedRole = (role || 'admin').toLowerCase();
-  if (normalizedRole === 'admin') {
+  const normalizedRole = (role || 'admin').toLowerCase().replace(/[-\s]+/g, '_');
+  if (normalizedRole === 'owner' || normalizedRole === 'admin' || normalizedRole === 'administrator') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   }
-  if (normalizedRole === 'viewer') {
+  if (normalizedRole === 'member' || normalizedRole === 'editor') {
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
+  }
+  if (normalizedRole === 'contributor' || normalizedRole === 'guest') {
+    return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
+  }
+  if (normalizedRole === 'viewer' || normalizedRole === 'subscriber') {
     return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
   return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
@@ -127,9 +141,11 @@ export default function TeamPage({
                         }}
                         className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200"
                       >
-                        <option value="admin">Admin</option>
-                        <option value="member">Member</option>
-                        <option value="viewer">Viewer</option>
+                        <option value="owner">Owner / Super Admin</option>
+                        <option value="admin">Admin / Administrator</option>
+                        <option value="member">Member / Editor</option>
+                        <option value="contributor">Contributor / Guest</option>
+                        <option value="viewer">Viewer / Subscriber</option>
                       </select>
                       <button
                         type="button"
@@ -215,9 +231,10 @@ export default function TeamPage({
                   onChange={(e) => setInviteRole(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100"
                 >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                  <option value="viewer">Viewer</option>
+                  <option value="admin">Admin / Administrator</option>
+                  <option value="member">Member / Editor</option>
+                  <option value="contributor">Contributor / Guest</option>
+                  <option value="viewer">Viewer / Subscriber</option>
                 </select>
                 <button
                   type="button"

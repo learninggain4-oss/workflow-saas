@@ -862,7 +862,7 @@ def export_board_csv(board_id: int, current_user=Depends(get_current_user), db: 
 def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board invite", required_permission="manageMembers")
     target = db.query(models.User).filter(models.User.email == payload.email).first()
-    role = str(payload.role or "member").strip().lower()
+    role = utils.normalize_role(payload.role or "member")
     permissions = utils.normalize_permissions(role, getattr(payload, "permissions", None))
     
     if target:
@@ -892,13 +892,14 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
     if board:
         owner = db.query(models.User).filter(models.User.id == board.owner_id).first()
         if owner: 
-            members.append({"email": owner.email, "name": owner.name, "role": "admin", "id": owner.id, "permissions": utils.default_permissions_for_role("admin")})
+            members.append({"email": owner.email, "name": owner.name, "role": "owner", "id": owner.id, "permissions": utils.default_permissions_for_role("owner")})
             
         for m in db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id).all():
             u = db.query(models.User).filter(models.User.id == m.user_id).first()
             if u: 
-                permissions = utils.normalize_permissions((m.role or "member").strip().lower(), _parse_json(m.permissions, {}))
-                members.append({"email": u.email, "name": u.name, "role": m.role, "id": u.id, "permissions": permissions})
+                normalized_role = utils.normalize_role((m.role or "member").strip())
+                permissions = utils.normalize_permissions(normalized_role, _parse_json(m.permissions, {}))
+                members.append({"email": u.email, "name": u.name, "role": normalized_role, "id": u.id, "permissions": permissions})
                 
     return members
 
@@ -910,9 +911,9 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
     if user_id == db.query(models.Board).filter(models.Board.id == board_id).first().owner_id:
         raise HTTPException(status_code=400, detail="Owner access cannot be changed here")
 
-    role = str(payload.get("role", "member") or "member").strip().lower()
-    if role not in {"admin", "member", "viewer"}:
-        raise HTTPException(status_code=400, detail="Role must be admin, member, or viewer")
+    role = utils.normalize_role(payload.get("role", "member") or "member")
+    if role not in {"owner", "admin", "member", "contributor", "viewer"}:
+        raise HTTPException(status_code=400, detail="Role must be owner, admin, member, contributor, or viewer")
 
     permissions_payload = payload.get("permissions") or {}
     permissions = utils.normalize_permissions(role, permissions_payload)

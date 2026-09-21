@@ -22,6 +22,14 @@ def test_registered_users_default_to_admin_permissions():
     assert permissions == {key: True for key in PERMISSION_KEYS}
 
 
+def test_role_aliases_are_normalized_to_canonical_roles():
+    assert main.utils.normalize_role("super_admin") == "owner"
+    assert main.utils.normalize_role("administrator") == "admin"
+    assert main.utils.normalize_role("editor") == "member"
+    assert main.utils.normalize_role("guest") == "contributor"
+    assert main.utils.normalize_role("subscriber") == "viewer"
+
+
 def test_board_member_role_update_and_remove():
     db = SessionLocal()
     owner_email = _unique_email("owner")
