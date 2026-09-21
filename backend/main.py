@@ -18,6 +18,7 @@ from sqlalchemy import text
 
 import models
 import schemas
+import utils
 from database import SessionLocal, engine, get_db
 from utils import (
     manager, pwd_context, create_token, get_current_user, get_user_boards,
@@ -797,10 +798,7 @@ def create_board(payload: schemas.BoardCreate, current_user=Depends(get_current_
 
 @app.put("/api/boards/{board_id}")
 def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    b = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
-    if not b: 
-        raise HTTPException(status_code=403, detail="Not owner")
-        
+    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board rename")
     b.name = payload.name
     db.commit()
     db.refresh(b)
@@ -809,10 +807,7 @@ def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depen
 
 @app.delete("/api/boards/{board_id}")
 async def delete_board(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    b = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
-    if not b: 
-        raise HTTPException(status_code=403)
-        
+    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board delete")
     tids = [t.id for t in db.query(models.Task).filter(models.Task.board_id == board_id).all()]
     if tids:
         db.query(models.Comment).filter(models.Comment.task_id.in_(tids)).delete(synchronize_session=False)
@@ -829,6 +824,7 @@ async def delete_board(board_id: int, current_user=Depends(get_current_user), db
 
 @app.get("/api/boards/{board_id}/export")
 def export_board_csv(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Board export")
     tasks = db.query(models.Task).filter(models.Task.board_id == board_id).all()
     stream = io.StringIO()
     writer = csv.writer(stream)
@@ -845,10 +841,7 @@ def export_board_csv(board_id: int, current_user=Depends(get_current_user), db: 
 
 @app.post("/api/boards/{board_id}/invite")
 def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
-    if not board: 
-        raise HTTPException(status_code=403)
-        
+    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board invite")
     target = db.query(models.User).filter(models.User.email == payload.email).first()
     
     if target:
@@ -872,7 +865,7 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
 
 @app.get("/api/boards/{board_id}/members")
 def get_board_members(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    board = utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Board members")
     members = []
     if board:
         owner = db.query(models.User).filter(models.User.id == board.owner_id).first()
@@ -889,11 +882,9 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
 
 @app.put("/api/boards/{board_id}/members/{user_id}")
 def update_board_member_role(board_id: int, user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
-    if not board:
-        raise HTTPException(status_code=403, detail="Only board owners can change access")
+    utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member role update")
 
-    if user_id == current_user.id:
+    if user_id == db.query(models.Board).filter(models.Board.id == board_id).first().owner_id:
         raise HTTPException(status_code=400, detail="Owner access cannot be changed here")
 
     role = str(payload.get("role", "member") or "member").strip().lower()
@@ -918,11 +909,9 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
 
 @app.delete("/api/boards/{board_id}/members/{user_id}")
 def remove_board_member(board_id: int, user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = db.query(models.Board).filter(models.Board.id == board_id, models.Board.owner_id == current_user.id).first()
-    if not board:
-        raise HTTPException(status_code=403, detail="Only board owners can remove members")
+    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member removal")
 
-    if user_id == current_user.id:
+    if user_id == board.owner_id:
         raise HTTPException(status_code=400, detail="Board owner cannot be removed")
 
     member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
@@ -938,6 +927,7 @@ def remove_board_member(board_id: int, user_id: int, current_user=Depends(get_cu
 
 @app.get("/api/boards/{board_id}/activities")
 def get_activities(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Board activity")
     return db.query(models.Activity).filter(models.Activity.board_id == board_id).order_by(models.Activity.id.desc()).limit(30).all()
 
 
@@ -981,12 +971,14 @@ def delete_notif(notif_id: int, current_user=Depends(get_current_user), db: Sess
 
 @app.get("/api/tasks")
 def list_tasks(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Task list")
     return db.query(models.Task).filter(models.Task.board_id == board_id).all()
 
 
 @app.post("/api/tasks")
 async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     if payload.board_id:
+        utils.ensure_board_access(payload.board_id, current_user, db, required_role="member", action="Task creation")
         board_owner = db.query(models.Board).filter(models.Board.id == payload.board_id).first()
         if board_owner:
             owner_u = db.query(models.User).filter(models.User.id == board_owner.owner_id).first()
@@ -1007,11 +999,12 @@ async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_curr
 
 
 @app.put("/api/tasks/{task_id}")
-async def update_task(task_id: int, payload: dict, db: Session = Depends(get_db)):
+async def update_task(task_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if not t: 
+    if not t:
         raise HTTPException(status_code=404)
-        
+    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task update")
+
     old_status, old_assign = t.status, t.assigned_to
     for k, v in payload.items():
         if hasattr(t, k): 
@@ -1034,11 +1027,12 @@ async def update_task(task_id: int, payload: dict, db: Session = Depends(get_db)
 
 
 @app.delete("/api/tasks/{task_id}")
-async def delete_task(task_id: int, db: Session = Depends(get_db)):
+async def delete_task(task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if not t: 
+    if not t:
         raise HTTPException(status_code=404)
-        
+    utils.ensure_board_access(t.board_id, current_user, db, required_role="member", action="Task deletion")
+
     bid = t.board_id
     db.query(models.Comment).filter(models.Comment.task_id == task_id).delete(synchronize_session=False)
     db.query(models.Subtask).filter(models.Subtask.task_id == task_id).delete(synchronize_session=False)
@@ -1057,61 +1051,85 @@ async def delete_task(task_id: int, db: Session = Depends(get_db)):
 # ==========================================
 
 @app.get("/api/tasks/{task_id}/subtasks")
-def get_subtasks(task_id: int, db: Session = Depends(get_db)):
+def get_subtasks(task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if task and task.board_id:
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="viewer", action="Subtask view")
     return db.query(models.Subtask).filter(models.Subtask.task_id == task_id).order_by(models.Subtask.id.asc()).all()
 
 
 @app.post("/api/tasks/{task_id}/subtasks")
-async def add_subtask(task_id: int, payload: schemas.SubtaskCreate, db: Session = Depends(get_db)):
+async def add_subtask(task_id: int, payload: schemas.SubtaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask creation")
+
     s = models.Subtask(title=payload.title, task_id=task_id)
     db.add(s)
     db.commit()
     db.refresh(s)
     
-    t = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if t and t.board_id: 
-        await manager.broadcast(t.board_id, {"type": "update"})
+    if task.board_id: 
+        await manager.broadcast(task.board_id, {"type": "update"})
         
     return s
 
 
 @app.put("/api/subtasks/{sub_id}")
-async def update_subtask(sub_id: int, payload: dict, db: Session = Depends(get_db)):
+async def update_subtask(sub_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     s = db.query(models.Subtask).filter(models.Subtask.id == sub_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="Subtask not found")
+    task = db.query(models.Task).filter(models.Task.id == s.task_id).first()
+    if task and task.board_id:
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask update")
     if s:
         s.is_completed = payload.get("is_completed", s.is_completed)
         db.commit()
         db.refresh(s)
         
-        t = db.query(models.Task).filter(models.Task.id == s.task_id).first()
-        if t and t.board_id: 
-            await manager.broadcast(t.board_id, {"type": "update"})
+        if task and task.board_id: 
+            await manager.broadcast(task.board_id, {"type": "update"})
             
     return s
 
 
 @app.delete("/api/subtasks/{sub_id}")
-async def delete_subtask(sub_id: int, db: Session = Depends(get_db)):
+async def delete_subtask(sub_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     s = db.query(models.Subtask).filter(models.Subtask.id == sub_id).first()
-    if s:
-        tid = s.task_id
-        t = db.query(models.Task).filter(models.Task.id == tid).first()
-        db.delete(s)
-        db.commit()
-        
-        if t and t.board_id: 
-            await manager.broadcast(t.board_id, {"type": "update"})
+    if not s:
+        raise HTTPException(status_code=404, detail="Subtask not found")
+    task = db.query(models.Task).filter(models.Task.id == s.task_id).first()
+    if task and task.board_id:
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Subtask deletion")
+    tid = s.task_id
+    t = db.query(models.Task).filter(models.Task.id == tid).first()
+    db.delete(s)
+    db.commit()
+    
+    if t and t.board_id: 
+        await manager.broadcast(t.board_id, {"type": "update"})
             
     return {"ok": True}
 
 
 @app.get("/api/tasks/{task_id}/comments")
-def get_comments(task_id: int, db: Session = Depends(get_db)):
+def get_comments(task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if task and task.board_id:
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="viewer", action="Comment view")
     return db.query(models.Comment).filter(models.Comment.task_id == task_id).order_by(models.Comment.id.asc()).all()
 
 
 @app.post("/api/tasks/{task_id}/comments")
 async def add_comment(task_id: int, payload: schemas.CommentCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.board_id:
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="member", action="Comment creation")
+
     c = models.Comment(
         text=payload.text, 
         task_id=task_id, 
@@ -1123,7 +1141,6 @@ async def add_comment(task_id: int, payload: schemas.CommentCreate, current_user
     db.commit()
     db.refresh(c)
     
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if task and task.board_id:
         log_activity_safe(task.board_id, current_user.name, f"commented on '{task.title}'")
         mentions = re.findall(r'@([\w\.-]+@[\w\.-]+)', payload.text)

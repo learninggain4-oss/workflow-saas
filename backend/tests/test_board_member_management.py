@@ -59,3 +59,40 @@ def test_board_member_role_update_and_remove():
     db.delete(owner)
     db.commit()
     db.close()
+
+
+def test_viewer_cannot_create_tasks():
+    db = SessionLocal()
+    owner_email = _unique_email("owner")
+    viewer_email = _unique_email("viewer")
+
+    owner = models.User(email=owner_email, name="Owner", password_hash="x")
+    viewer = models.User(email=viewer_email, name="Viewer", password_hash="x")
+    db.add_all([owner, viewer])
+    db.commit()
+    db.refresh(owner)
+    db.refresh(viewer)
+
+    board = models.Board(name="Read Only Board", owner_id=owner.id)
+    db.add(board)
+    db.commit()
+    db.refresh(board)
+
+    db.add(models.BoardMember(board_id=board.id, user_id=viewer.id, role="viewer"))
+    db.commit()
+
+    client = TestClient(main.app)
+    token = create_token({"sub": viewer_email})
+    resp = client.post(
+        "/api/tasks",
+        json={"title": "Should fail", "status": "todo", "priority": "medium", "board_id": board.id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert resp.status_code == 403, resp.text
+
+    db.delete(board)
+    db.delete(viewer)
+    db.delete(owner)
+    db.commit()
+    db.close()

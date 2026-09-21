@@ -163,4 +163,37 @@ def get_user_boards(user, db: Session):
     mboards = db.query(models.Board).filter(models.Board.id.in_(mids)).all() if mids else []
     return list({b.id: b for b in owned + mboards}.values())
 
+
+def get_board_member_role(board_id: int, user_id: int, db: Session):
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    if not board:
+        return None
+    if board.owner_id == user_id:
+        return "admin"
+    member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
+    if not member:
+        return None
+    return (member.role or "member").strip().lower()
+
+
+def ensure_board_access(board_id: int, user, db: Session, required_role: str = "viewer", action: str = "Board access"):
+    if board_id is None:
+        raise HTTPException(status_code=403, detail=f"{action} denied")
+
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    role = get_board_member_role(board_id, user.id, db)
+    if role is None:
+        raise HTTPException(status_code=403, detail=f"{action} denied")
+
+    role_levels = {"viewer": 1, "member": 2, "admin": 3}
+    current_level = role_levels.get((role or "viewer").lower(), 0)
+    required_level = role_levels.get((required_role or "viewer").lower(), 0)
+    if current_level < required_level:
+        raise HTTPException(status_code=403, detail=f"{action} requires {required_role} access")
+
+    return board
+
 #(Email, JWT, Security, WebSockets)
