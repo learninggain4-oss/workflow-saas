@@ -162,7 +162,15 @@ npm run dev -- --host 0.0.0.0
 ```env
 DATABASE_URL=postgresql://user:password@host:5432/dbname
 SECRET_KEY=your_secret_key
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=2525
+SMTP_USER=your_smtp_user
+SMTP_PASS=your_smtp_password
+FROM_EMAIL=alerts@yourdomain.com
+BREVO_API_KEY=xkeysib-your-brevo-key
 ```
+
+> Invite emails require either a valid `BREVO_API_KEY` or configured `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS`.
 
 ### Frontend example
 

@@ -62,13 +62,20 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 def get_smtp_config():
+    host = (os.getenv("SMTP_HOST") or "").strip()
+    port = (os.getenv("SMTP_PORT") or "2525").strip()
+    user = (os.getenv("SMTP_USER") or "").strip()
+    pwd = (os.getenv("SMTP_PASS") or "").strip()
+    from_email = (os.getenv("FROM_EMAIL") or user or "").strip()
+    brevo_key = (os.getenv("BREVO_API_KEY") or "").strip()
+
     return {
-        "host": (os.getenv("SMTP_HOST") or "smtp-relay.brevo.com").strip(),
-        "port": int((os.getenv("SMTP_PORT") or "2525").strip()),
-        "user": (os.getenv("SMTP_USER") or "").strip(),
-        "pass": (os.getenv("SMTP_PASS") or "").strip(),
-        "from": (os.getenv("FROM_EMAIL") or os.getenv("SMTP_USER") or "").strip(),
-        "brevo_key": (os.getenv("BREVO_API_KEY") or os.getenv("SMTP_PASS") or "").strip()
+        "host": host or "smtp-relay.brevo.com",
+        "port": int(port or 2525),
+        "user": user,
+        "pass": pwd,
+        "from": from_email,
+        "brevo_key": brevo_key,
     }
 
 def send_email_via_brevo_api(to_email: str, subject: str, html_body: str) -> bool:
@@ -114,11 +121,19 @@ def try_smtp_once(host, port, user, pwd, from_email, to_email, subject, html_bod
 
 def send_email_safe(to_email: str, subject: str, html_body: str) -> bool:
     cfg = get_smtp_config()
-    if send_email_via_brevo_api(to_email, subject, html_body): return True
-    if not cfg["host"] or not cfg["user"]: return False
-    for p in [2525, 587, 465]:
+
+    if cfg["brevo_key"] and send_email_via_brevo_api(to_email, subject, html_body):
+        return True
+
+    if not cfg["host"] or not cfg["user"] or not cfg["pass"]:
+        print("[EMAIL] Invite email skipped: missing SMTP_HOST / SMTP_USER / SMTP_PASS or BREVO_API_KEY")
+        return False
+
+    for p in [cfg["port"], 2525, 587, 465]:
         if try_smtp_once(cfg["host"], p, cfg["user"], cfg["pass"], cfg["from"], to_email, subject, html_body, use_ssl=(p == 465)):
             return True
+
+    print(f"[EMAIL] Failed to send message to {to_email} via configured SMTP relay")
     return False
 
 def log_activity_safe(board_id, user_name, action):
