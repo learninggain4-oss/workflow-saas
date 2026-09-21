@@ -1069,13 +1069,19 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
         db.commit()
         db.refresh(target)
 
-        subject = f"Join {board.name}"
+        subject = f"You have been invited to {board.name}"
         html_body = (
-            f"<p>{current_user.name} invited you to {board.name} as {role}.</p>"
-            f"<p>Your WorkFlow SaaS account was created automatically.</p>"
-            f"<p><strong>Email:</strong> {payload.email}</p>"
-            f"<p><strong>Password:</strong> {password}</p>"
-            f"<p>Please log in with this email and password.</p>"
+            f"<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;'>"
+            f"<h2 style='margin:0 0 12px;color:#111827;'>You are invited to {board.name}</h2>"
+            f"<p style='margin:0 0 16px;color:#374151;'>{current_user.name} invited you to join the board as <strong>{role}</strong>.</p>"
+            f"<p style='margin:0 0 8px;color:#374151;'>Your WorkFlow SaaS account has been created successfully.</p>"
+            f"<div style='background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin:16px 0;'>"
+            f"<p style='margin:0 0 8px;'><strong>Email:</strong> {payload.email}</p>"
+            f"<p style='margin:0;'><strong>Password:</strong> {password}</p>"
+            f"</div>"
+            f"<p style='margin:0 0 16px;color:#374151;'>Please sign in using the email and password above.</p>"
+            f"<p style='margin:0;color:#6b7280;'>Open WorkFlow SaaS dashboard and continue from your workspace.</p>"
+            f"</div>"
         )
         threading.Thread(target=send_email_safe, args=(payload.email, subject, html_body)).start()
         log_activity_safe(board_id, current_user.name, f"created account and invited {payload.email} as {role}")
