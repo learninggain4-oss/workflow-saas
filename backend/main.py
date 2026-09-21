@@ -175,19 +175,29 @@ app.swagger_ui_parameters = {
     "layout": "BaseLayout",
 }
 
+default_allowed_origins = [
+    "http://localhost:4173",
+    "http://localhost:5173",
+    "https://localhost:4173",
+    "https://localhost:5173",
+    "http://127.0.0.1:4173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://workflow-saas.netlify.app",
+    "https://workflow-saas-cof-z.onrender.com",
+]
+
 cors_origins = [
     origin.strip()
-    for origin in os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:5173,https://localhost:5173,http://127.0.0.1:5173,https://workflow-saas.netlify.app,https://*.netlify.app,https://workflow-saas-cof-z.onrender.com",
-    ).split(",")
+    for origin in os.getenv("ALLOWED_ORIGINS", ",".join(default_allowed_origins)).split(",")
     if origin.strip()
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\\.(netlify\\.app|onrender\\.com)$|http://localhost:\\d+$|https://localhost:\\d+$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$|^https://.*\.(netlify\.app|onrender\.com)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
