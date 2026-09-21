@@ -1,21 +1,35 @@
 import React from 'react';
 import { admin } from '../../services/api';
 
+const normalizeRoleValue = (role) => {
+  const value = String(role || 'member').trim().toLowerCase().replace(/[-\s]+/g, '_');
+  const aliases = {
+    owner: 'owner',
+    super_admin: 'owner',
+    superadmin: 'owner',
+    admin: 'admin',
+    administrator: 'admin',
+    member: 'member',
+    editor: 'member',
+    contributor: 'contributor',
+    guest: 'contributor',
+    viewer: 'viewer',
+    subscriber: 'viewer',
+  };
+  return aliases[value] || 'member';
+};
+
 const getStatusFromRole = (role) => {
-  switch ((role || '').toLowerCase()) {
+  switch (normalizeRoleValue(role)) {
     case 'owner':
       return 'Owner';
     case 'admin':
-    case 'administrator':
       return 'Online';
     case 'member':
-    case 'editor':
       return 'Active';
     case 'contributor':
-    case 'guest':
       return 'Contributor';
     case 'viewer':
-    case 'subscriber':
       return 'View only';
     default:
       return 'Available';
@@ -23,17 +37,17 @@ const getStatusFromRole = (role) => {
 };
 
 const defaultPermissionsForRole = (role = 'admin') => {
-  const normalizedRole = (role || 'admin').toLowerCase().replace(/[-\s]+/g, '_');
-  if (normalizedRole === 'owner' || normalizedRole === 'admin' || normalizedRole === 'administrator') {
+  const normalizedRole = normalizeRoleValue(role);
+  if (normalizedRole === 'owner' || normalizedRole === 'admin') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   }
-  if (normalizedRole === 'member' || normalizedRole === 'editor') {
+  if (normalizedRole === 'member') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
   }
-  if (normalizedRole === 'contributor' || normalizedRole === 'guest') {
+  if (normalizedRole === 'contributor') {
     return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
-  if (normalizedRole === 'viewer' || normalizedRole === 'subscriber') {
+  if (normalizedRole === 'viewer') {
     return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
   return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
@@ -77,19 +91,22 @@ export default function TeamPage({
   ];
 
   const memberCards = members.map((member) => {
-    const taskCount = tasksList.filter((task) => task.assigned_to === member.email).length;
+    const taskCount = tasksList.filter((task) => String(task.assigned_to || '').toLowerCase() === String(member.email || '').toLowerCase()).length;
+    const safeRole = normalizeRoleValue(member.role);
     return {
       ...member,
-      permissions: getMemberPermissions(member),
-      status: getStatusFromRole(member.role),
+      role: safeRole,
+      permissions: getMemberPermissions({ ...member, role: safeRole }),
+      status: getStatusFromRole(safeRole),
       tasks: taskCount,
     };
   });
 
   const roleBreakdown = {
-    admin: memberCards.filter((member) => member.role === 'admin').length,
-    member: memberCards.filter((member) => member.role === 'member').length,
-    viewer: memberCards.filter((member) => member.role === 'viewer').length,
+    admin: memberCards.filter((member) => normalizeRoleValue(member.role) === 'admin').length,
+    member: memberCards.filter((member) => normalizeRoleValue(member.role) === 'member').length,
+    viewer: memberCards.filter((member) => normalizeRoleValue(member.role) === 'viewer').length,
+    contributor: memberCards.filter((member) => normalizeRoleValue(member.role) === 'contributor').length,
   };
   const ownerManagedUsers = (registeredUsers || []).filter((user) => user.email !== currentEmail);
 
@@ -151,7 +168,7 @@ export default function TeamPage({
                   </div>
                   <div>
                     <p className="text-sm font-semibold">{member.name || member.email}</p>
-                    <p className="text-xs text-gray-500">{member.role}</p>
+                    <p className="text-xs text-gray-500">{normalizeRoleValue(member.role)}</p>
                   </div>
                 </div>
 
@@ -159,7 +176,7 @@ export default function TeamPage({
                   {myRole === 'admin' && member.email !== currentEmail && (
                     <>
                       <select
-                        value={member.role}
+                        value={normalizeRoleValue(member.role)}
                         onChange={(e) => {
                           const nextRole = e.target.value;
                           updateMemberRole?.(member.id, nextRole, defaultPermissionsForRole(nextRole));
@@ -199,7 +216,7 @@ export default function TeamPage({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">{member.name || member.email}</p>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">{member.role}</p>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">{normalizeRoleValue(member.role)}</p>
                   </div>
                 </div>
 
@@ -229,7 +246,7 @@ export default function TeamPage({
           <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
             <h3 className="text-lg font-bold">Access overview</h3>
             <div className="mt-4 space-y-3">
-              {[{ label: 'Admin', value: roleBreakdown.admin }, { label: 'Member', value: roleBreakdown.member }, { label: 'Viewer', value: roleBreakdown.viewer }].map((item) => (
+              {[{ label: 'Admin', value: roleBreakdown.admin }, { label: 'Member', value: roleBreakdown.member }, { label: 'Contributor', value: roleBreakdown.contributor }, { label: 'Viewer', value: roleBreakdown.viewer }].map((item) => (
                 <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                   <div>
                     <p className="text-sm font-semibold">{item.label}</p>

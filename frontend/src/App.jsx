@@ -168,18 +168,36 @@ export default function App() {
     try { return token ? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
   }, [token]);
 
+  const normalizeRoleValue = (role) => {
+    const value = String(role || 'member').trim().toLowerCase().replace(/[-\s]+/g, '_');
+    const aliases = {
+      owner: 'owner',
+      super_admin: 'owner',
+      superadmin: 'owner',
+      admin: 'admin',
+      administrator: 'admin',
+      member: 'member',
+      editor: 'member',
+      contributor: 'contributor',
+      guest: 'contributor',
+      viewer: 'viewer',
+      subscriber: 'viewer',
+    };
+    return aliases[value] || 'member';
+  };
+
   const defaultPermissionsForRole = (role = 'admin') => {
-    const normalizedRole = (role || 'admin').toLowerCase().replace(/[-\s]+/g, '_');
-    if (normalizedRole === 'owner' || normalizedRole === 'admin' || normalizedRole === 'administrator') {
+    const normalizedRole = normalizeRoleValue(role);
+    if (normalizedRole === 'owner' || normalizedRole === 'admin') {
       return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
     }
-    if (normalizedRole === 'member' || normalizedRole === 'editor') {
+    if (normalizedRole === 'member') {
       return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
     }
-    if (normalizedRole === 'contributor' || normalizedRole === 'guest') {
+    if (normalizedRole === 'contributor') {
       return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
     }
-    if (normalizedRole === 'viewer' || normalizedRole === 'subscriber') {
+    if (normalizedRole === 'viewer') {
       return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
     }
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
@@ -193,7 +211,8 @@ export default function App() {
 
   const myRole = useMemo(() => {
     if (!selectedBoard || boardMembers.length === 0) return "owner";
-    return boardMembers.find(x => x.email === currentEmail)?.role || "member";
+    const match = boardMembers.find(x => String(x.email || '').trim().toLowerCase() === String(currentEmail || '').trim().toLowerCase());
+    return normalizeRoleValue(match?.role || "member");
   }, [boardMembers, currentEmail, selectedBoard]);
 
   const myPermissions = useMemo(() => {
