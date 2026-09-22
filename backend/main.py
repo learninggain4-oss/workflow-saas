@@ -1073,7 +1073,14 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
         if not utils.is_owner_user(current_user, db):
             raise HTTPException(status_code=403, detail="Only owner can invite with owner role")
     
-    permissions = utils.normalize_permissions(role, getattr(payload, "permissions", None))
+    # FIX APPLIED: Retain viewRoleDistribution permission when saving
+    permissions_payload = getattr(payload, "permissions", {}) or {}
+    if hasattr(permissions_payload, "dict"):
+        permissions_payload = permissions_payload.dict()
+        
+    permissions = utils.normalize_permissions(role, permissions_payload)
+    if isinstance(permissions_payload, dict) and "viewRoleDistribution" in permissions_payload:
+        permissions["viewRoleDistribution"] = bool(permissions_payload["viewRoleDistribution"])
 
     if not target:
         password = (payload.password or "").strip()
@@ -1137,7 +1144,13 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
             u = db.query(models.User).filter(models.User.id == m.user_id).first()
             if u: 
                 normalized_role = utils.normalize_role((m.role or "editor").strip())
-                permissions = utils.normalize_permissions(normalized_role, _parse_json(m.permissions, {}))
+                # FIX APPLIED: Ensure viewRoleDistribution is not stripped out when fetching members
+                raw_perms = _parse_json(m.permissions, {})
+                permissions = utils.normalize_permissions(normalized_role, raw_perms)
+                
+                if isinstance(raw_perms, dict) and "viewRoleDistribution" in raw_perms:
+                    permissions["viewRoleDistribution"] = bool(raw_perms["viewRoleDistribution"])
+                    
                 members.append({"email": u.email, "name": u.name, "role": normalized_role, "id": u.id, "permissions": permissions})
                 
     return members
@@ -1160,8 +1173,11 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
         if not utils.is_owner_user(current_user, db):
             raise HTTPException(status_code=403, detail="Only owner can assign owner role")
 
+    # FIX APPLIED: Retain viewRoleDistribution permission when saving
     permissions_payload = payload.get("permissions") or {}
     permissions = utils.normalize_permissions(role, permissions_payload)
+    if isinstance(permissions_payload, dict) and "viewRoleDistribution" in permissions_payload:
+        permissions["viewRoleDistribution"] = bool(permissions_payload["viewRoleDistribution"])
 
     target = db.query(models.User).filter(models.User.id == user_id).first()
     if not target:

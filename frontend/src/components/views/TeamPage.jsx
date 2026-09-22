@@ -49,7 +49,17 @@ const defaultPermissionsForRole = (role = 'owner') => {
 const getMemberPermissions = (member = {}) => {
   const role = normalizeRoleValue(member.role || 'editor');
   const base = defaultPermissionsForRole(role);
-  const custom = member.permissions || {};
+  
+  // FIX APPLIED: Safe parsing of stringified permissions
+  let custom = member.permissions;
+  if (typeof custom === 'string') {
+    try {
+      custom = JSON.parse(custom);
+    } catch(e) {
+      custom = {};
+    }
+  }
+  custom = custom || {};
   
   // Force override viewRoleDistribution for owners & admins (prevents old DB states from hiding it)
   if (role === 'owner' || role === 'administrator') {
