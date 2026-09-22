@@ -1,4 +1,4 @@
-// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner can change any role & View Owners List, Custom Access Embedded)
+// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner Controls renamed & Restricted to Owners only)
 import React from 'react';
 import { admin } from '../../services/api'; 
 
@@ -268,7 +268,7 @@ export default function TeamPage({
                     )}
                   </div>
 
-                  {/* Bottom Row: Custom Permissions (Moved Here) */}
+                  {/* Bottom Row: Custom Permissions */}
                   {isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase() && (
                     <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-800/60">
                       <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">Custom Access</p>
@@ -370,11 +370,11 @@ export default function TeamPage({
             </div>
           </div>
 
-          {/* Owner Controls (Registered Users) */}
+          {/* Owner Controls (Registered Users - Strictly Restricted to Owners Only) */}
           {isOwner && ownerManagedUsers.length > 0 && (
             <div className={`rounded-2xl border border-orange-200 dark:border-orange-900/50 p-6 shadow-sm bg-orange-50/30 dark:bg-orange-900/10`}>
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Workspace Admin Controls</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Owner Controls</h3>
                 <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-800 dark:bg-orange-900/50 dark:text-orange-300">
                   Global Users
                 </span>
