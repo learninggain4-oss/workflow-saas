@@ -1,4 +1,4 @@
-// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner can change any role & View Owners List)
+// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner can change any role & View Owners List, Custom Access Embedded)
 import React from 'react';
 import { admin } from '../../services/api'; 
 
@@ -72,7 +72,6 @@ export default function TeamPage({
   updateMemberRole,
   removeMember,
 }) {
-  // FIXED: Normalize myRole for case-insensitive check - Owner role change work aakan
   const myNormalizedRole = normalizeRoleValue(myRole);
   const isPrivileged = myNormalizedRole === 'administrator' || myNormalizedRole === 'owner';
   const isOwner = myNormalizedRole === 'owner';
@@ -94,7 +93,6 @@ export default function TeamPage({
     return {...member, role: safeRole, permissions: getMemberPermissions({...member, role: safeRole }), status: getStatusFromRole(safeRole), tasks: taskCount };
   });
 
-  // NEW LOGIC: Fetch Owners from both Board Members and Database (registeredUsers) without duplicates
   const workspaceOwnersMap = new Map();
   
   memberCards.forEach((member) => {
@@ -120,7 +118,7 @@ export default function TeamPage({
   const workspaceOwnersList = Array.from(workspaceOwnersMap.values());
 
   const roleBreakdown = {
-    owner: workspaceOwnersList.length, // Updated to use the merged owners list length
+    owner: workspaceOwnersList.length,
     administrator: memberCards.filter((member) => normalizeRoleValue(member.role) === 'administrator').length,
     editor: memberCards.filter((member) => normalizeRoleValue(member.role) === 'editor').length,
     guest: memberCards.filter((member) => normalizeRoleValue(member.role) === 'guest').length,
@@ -207,7 +205,7 @@ export default function TeamPage({
             </div>
           </div>
 
-          {/* Board Members Section */}
+          {/* Board Members Section with Embedded Custom Access */}
           <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden ${bgCard}`}>
             <div className="border-b border-gray-200 dark:border-gray-800 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
@@ -223,48 +221,76 @@ export default function TeamPage({
             
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {memberCards.map((member) => (
-                <div key={`${member.email}-${member.role}`} className="flex flex-col p-4 sm:flex-row sm:items-center sm:justify-between gap-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-sm font-bold text-white shadow-sm dark:from-gray-600 dark:to-gray-800">
-                      {(member.name || member.email || 'U').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{member.name || member.email}</p>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span className="capitalize">{normalizeRoleValue(member.role)}</span>
-                        <span>•</span>
-                        <span>{member.tasks} Task{member.tasks === 1 ? '' : 's'}</span>
-                        <span>•</span>
-                        <span className="font-medium text-indigo-600 dark:text-indigo-400">{member.status}</span>
+                <div key={`${member.email}-${member.role}`} className="flex flex-col p-4 gap-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  
+                  {/* Top Row: User Info & Role Change */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-sm font-bold text-white shadow-sm dark:from-gray-600 dark:to-gray-800">
+                        {(member.name || member.email || 'U').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">{member.name || member.email}</p>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <span className="capitalize">{normalizeRoleValue(member.role)}</span>
+                          <span>•</span>
+                          <span>{member.tasks} Task{member.tasks === 1 ? '' : 's'}</span>
+                          <span>•</span>
+                          <span className="font-medium text-indigo-600 dark:text-indigo-400">{member.status}</span>
+                        </div>
                       </div>
                     </div>
+                    
+                    {isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase() && (
+                      <div className="flex items-center gap-3">
+                        <select 
+                          value={normalizeRoleValue(member.role)} 
+                          onChange={(e) => { 
+                            const nextRole = e.target.value; 
+                            updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole)); 
+                          }} 
+                          className="block w-36 rounded-lg border-gray-300 bg-white py-2 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white"
+                        >
+                          <option value="owner">Owner</option>
+                          <option value="administrator">Administrator</option>
+                          <option value="editor">Editor</option>
+                          <option value="guest">Guest</option>
+                          <option value="subscriber">Subscriber</option>
+                        </select>
+                        <button 
+                          type="button" 
+                          onClick={() => removeMember?.(member.id || member.email)} 
+                          className="inline-flex items-center justify-center rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20 dark:focus:ring-offset-[#09090b]"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  
+
+                  {/* Bottom Row: Custom Permissions (Moved Here) */}
                   {isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase() && (
-                    <div className="flex items-center gap-3">
-                      <select 
-                        value={normalizeRoleValue(member.role)} 
-                        onChange={(e) => { 
-                          const nextRole = e.target.value; 
-                          updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole)); 
-                        }} 
-                        className="block w-36 rounded-lg border-gray-300 bg-white py-2 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white"
-                      >
-                        <option value="owner">Owner</option>
-                        <option value="administrator">Administrator</option>
-                        <option value="editor">Editor</option>
-                        <option value="guest">Guest</option>
-                        <option value="subscriber">Subscriber</option>
-                      </select>
-                      <button 
-                        type="button" 
-                        onClick={() => removeMember?.(member.id || member.email)} 
-                        className="inline-flex items-center justify-center rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20 dark:focus:ring-offset-[#09090b]"
-                      >
-                        Remove
-                      </button>
+                    <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-800/60">
+                      <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">Custom Access</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        {permissionOptions.map((option) => (
+                          <label key={`${member.email}-${option.key}`} className="flex cursor-pointer items-center gap-2 hover:opacity-80 transition-opacity">
+                            <input 
+                              type="checkbox" 
+                              checked={Boolean(member.permissions?.[option.key])} 
+                              onChange={(e) => { 
+                                const nextPermissions = {...member.permissions, [option.key]: e.target.checked }; 
+                                updateMemberRole?.(member.id || member.email, member.role, nextPermissions); 
+                              }} 
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-900" 
+                            />
+                            <span className="text-sm text-gray-600 dark:text-gray-300">{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
+                  
                 </div>
               ))}
             </div>
@@ -342,45 +368,6 @@ export default function TeamPage({
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Custom Access (Granular Permissions) */}
-          <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Custom Access</h3>
-            {memberCards.filter((member) => isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase()).length === 0 ? (
-               <p className="text-sm text-gray-500">No members available to configure custom access.</p>
-            ) : (
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                {memberCards.filter((member) => isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase()).map((member) => (
-                  <div key={`permissions-${member.email}`} className="rounded-xl border border-gray-200 bg-gray-50/30 p-4 dark:border-gray-800 dark:bg-[#09090b]/50">
-                    <div className="mb-4 border-b border-gray-200 pb-3 dark:border-gray-800">
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{member.name || member.email}</p>
-                      <p className="text-xs uppercase tracking-widest text-indigo-500 mt-1">{normalizeRoleValue(member.role)}</p>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2.5">
-                      {permissionOptions.map((option) => (
-                        <label key={`${member.email}-${option.key}`} className="flex cursor-pointer items-center justify-between rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 p-1.5 transition-colors">
-                          <span className="text-sm text-gray-700 dark:text-gray-300">{option.label}</span>
-                          <div className="relative flex items-start">
-                            <div className="flex h-5 items-center">
-                              <input 
-                                type="checkbox" 
-                                checked={Boolean(member.permissions?.[option.key])} 
-                                onChange={(e) => { 
-                                  const nextPermissions = {...member.permissions, [option.key]: e.target.checked }; 
-                                  updateMemberRole?.(member.id || member.email, member.role, nextPermissions); 
-                                }} 
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-900" 
-                              />
-                            </div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Owner Controls (Registered Users) */}
