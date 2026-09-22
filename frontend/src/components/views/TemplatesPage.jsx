@@ -1,4 +1,4 @@
-// frontend/src/components/views/TemplatesPage.jsx - LIVE REAL FIXED
+// frontend/src/components/views/TemplatesPage.jsx - 10 TEMPLATES LIVE REAL
 import React, { useState } from 'react';
 import { boards as boardsApi, tasks as tasksApi } from '../../services/api';
 
@@ -33,6 +33,48 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
       description: 'Oversight for approvals, invoice reviews, and monthly close cycles.',
       tiles: ['Expense approvals', 'Invoice review', 'Month-end closeout'],
       accent: 'from-amber-500 to-orange-500',
+    },
+    {
+      name: 'Content Calendar',
+      category: 'Marketing',
+      description: 'Plan editorial calendar, content creation and publishing schedule.',
+      tiles: ['Content ideas', 'Draft & review', 'Publish & promote'],
+      accent: 'from-fuchsia-500 to-pink-500',
+    },
+    {
+      name: 'HR Onboarding',
+      category: 'People',
+      description: 'Streamline new hire paperwork, training and team introductions.',
+      tiles: ['Paperwork & access', 'Training plan', 'Team intro & buddy'],
+      accent: 'from-violet-500 to-purple-500',
+    },
+    {
+      name: 'Bug Tracking',
+      category: 'Development',
+      description: 'Triage bugs, prioritize fixes and track resolution progress.',
+      tiles: ['Bug reported', 'Triage & assign', 'Fix & verify'],
+      accent: 'from-red-500 to-rose-500',
+    },
+    {
+      name: 'Sales Pipeline',
+      category: 'Sales',
+      description: 'Manage leads from prospect to negotiation and closed-won.',
+      tiles: ['Lead qualification', 'Demo & proposal', 'Negotiation & close'],
+      accent: 'from-blue-500 to-indigo-500',
+    },
+    {
+      name: 'Event Planning',
+      category: 'Operations',
+      description: 'Coordinate venue, vendors, promotion and post-event followup.',
+      tiles: ['Venue & vendors', 'Promotion plan', 'Event day & followup'],
+      accent: 'from-yellow-500 to-amber-500',
+    },
+    {
+      name: 'Design System',
+      category: 'Design',
+      description: 'Review design tokens, components and documentation updates.',
+      tiles: ['Component audit', 'Design review', 'Docs update'],
+      accent: 'from-teal-500 to-cyan-500',
     },
   ];
 
