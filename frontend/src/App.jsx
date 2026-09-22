@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Owner can change any role
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution to permissions
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -140,33 +140,39 @@ export default function App() {
 
   const defaultPermissionsForRole = (role = 'owner') => {
     const normalizedRole = normalizeRoleValue(role);
-    if (normalizedRole === 'owner') { return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true }; }
-    if (normalizedRole === 'administrator') { return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true }; }
-    if (normalizedRole === 'editor') { return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false }; }
-    if (normalizedRole === 'guest') { return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false }; }
-    if (normalizedRole === 'subscriber') { return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false }; }
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
+    if (normalizedRole === 'owner') { return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true }; }
+    if (normalizedRole === 'administrator') { return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true }; }
+    if (normalizedRole === 'editor') { return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false, viewRoleDistribution: false }; }
+    if (normalizedRole === 'guest') { return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false }; }
+    if (normalizedRole === 'subscriber') { return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false }; }
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
   };
 
   const getMemberPermissions = (member) => {
-    const base = defaultPermissionsForRole(member?.role || 'editor');
+    const role = normalizeRoleValue(member?.role || 'editor');
+    const base = defaultPermissionsForRole(role);
     const custom = member?.permissions && typeof member.permissions === 'object'? member.permissions : {};
+    
+    if (role === 'owner' || role === 'administrator') {
+      return { ...base, ...custom, viewRoleDistribution: true, manageMembers: true, manageBoard: true };
+    }
     return {...base,...custom };
   };
 
-  // FIXED: myRole logic - boardMembers empty aayal owner kodukkilla, editor kodukkum. SelectedBoard illaenkil mathram owner.
+  // Ensure owner is correctly identified even if not explicitly in boardMembers array yet
   const myRole = useMemo(() => {
     if (!selectedBoard) return "owner";
-    if (!boardMembers || boardMembers.length === 0) return "editor";
     const match = boardMembers.find(x => String(x.email || '').trim().toLowerCase() === String(currentEmail || '').trim().toLowerCase());
-    return normalizeRoleValue(match?.role || "editor");
-  }, [boardMembers, currentEmail, selectedBoard]);
+    if (match) return normalizeRoleValue(match.role);
+    if (userData && normalizeRoleValue(userData.role) === 'owner') return 'owner';
+    return "editor";
+  }, [boardMembers, currentEmail, selectedBoard, userData]);
 
-  // FIXED: case-insensitive email compare
   const myPermissions = useMemo(() => {
     const member = boardMembers.find(x => String(x.email || '').toLowerCase() === String(currentEmail || '').toLowerCase());
-    return getMemberPermissions(member);
-  }, [boardMembers, currentEmail]);
+    if (member) return getMemberPermissions(member);
+    return getMemberPermissions({ role: myRole });
+  }, [boardMembers, currentEmail, myRole]);
 
   const canEdit = Boolean(myPermissions.createTasks || myPermissions.editTasks || myPermissions.deleteTasks || myPermissions.manageBoard);
   const isAdminOrOwner = myRole === 'owner' || myRole === 'administrator';
@@ -335,7 +341,6 @@ export default function App() {
     await boards.delete(selectedBoard); setSelectedBoard(null); await fetchInitialData();
   };
 
-  // FIXED: inviteUser - role normalize cheythu, ownerinu ellam invite cheyyan pattum
   const inviteUser = async () => {
     if (!inviteEmail.trim() ||!selectedBoard ||!isAdminOrOwner) return alert("Only owners and admins can invite");
     try {
@@ -350,7 +355,6 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Invite failed"); }
   };
 
-  // FIXED: updateMemberRole - role normalize + owner can change any role including owner
   const updateMemberRole = async (userId, role, permissions = null) => {
     if (!selectedBoard ||!isAdminOrOwner) return alert("Only owner/admin can change role");
     try {

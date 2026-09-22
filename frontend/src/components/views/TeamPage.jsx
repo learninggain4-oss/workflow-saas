@@ -47,8 +47,15 @@ const defaultPermissionsForRole = (role = 'owner') => {
 };
 
 const getMemberPermissions = (member = {}) => {
-  const base = defaultPermissionsForRole(member.role || 'editor');
-  return {...base,...(member.permissions || {}) };
+  const role = normalizeRoleValue(member.role || 'editor');
+  const base = defaultPermissionsForRole(role);
+  const custom = member.permissions || {};
+  
+  // Force override viewRoleDistribution for owners & admins (prevents old DB states from hiding it)
+  if (role === 'owner' || role === 'administrator') {
+    return { ...base, ...custom, viewRoleDistribution: true };
+  }
+  return {...base,...custom };
 };
 
 export default function TeamPage({
