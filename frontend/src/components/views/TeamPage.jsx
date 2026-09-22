@@ -1,5 +1,5 @@
 import React from 'react';
-import { admin } from '../../services/api';
+import { admin } from '../services/api';
 
 const normalizeRoleValue = (role) => {
   const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');

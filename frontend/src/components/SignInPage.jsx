@@ -1,6 +1,6 @@
 // src/pages/SignInPage.jsx - UPDATED WITH ROLE SELECT
 import React, { useState } from 'react';
-import { auth } from '../../services/api';
+import { auth } from '../services/api';
 
 const ROLES = [
   { value: 'owner', label: 'Owner' },

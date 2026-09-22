@@ -1,6 +1,6 @@
 // src/pages/AuthPage.jsx - UPDATED WITH ROLE SELECT AT SIGN IN
 import React, { useState } from 'react';
-import { auth } from '../../services/api';
+import { auth } from '../services/api';
 
 const normalizeRoleValue = (role) => {
   const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
