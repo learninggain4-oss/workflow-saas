@@ -1,4 +1,4 @@
-// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner Controls renamed & Restricted to Owners only)
+// frontend/src/pages/TeamPage.jsx - FULL FIXED & PROFESSIONALLY STYLED
 import React from 'react';
 import { admin } from '../../services/api'; 
 
@@ -69,7 +69,7 @@ const getMemberPermissions = (member = {}) => {
 };
 
 export default function TeamPage({
-  bgCard = 'bg-white dark:bg-[#09090b]',
+  bgCard = 'bg-white dark:bg-[#121212]',
   setViewMode,
   boardMembers = [],
   registeredUsers = [],
@@ -172,93 +172,94 @@ export default function TeamPage({
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-[90rem] space-y-6 p-4 sm:p-6 lg:p-8 font-sans">
+      
       {/* Page Header */}
-      <div className={`flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+      <div className={`flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-indigo-500 mb-1">Team Management</p>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">People & Permissions</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your team members and their access levels.</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-1">Team Management</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">People & Permissions</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1.5">Manage your team members and fine-tune their access levels across the workspace.</p>
         </div>
         <button 
           type="button" 
           onClick={() => setViewMode('dashboard')} 
-          className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus:ring-offset-gray-900"
+          className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-offset-gray-900"
         >
           Back to Dashboard
         </button>
       </div>
 
       {/* Main Layout Grid */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         
         {/* LEFT COLUMN (Members & Owners) */}
-        <div className="flex flex-col gap-8 lg:col-span-7 xl:col-span-8">
+        <div className="flex flex-col gap-6 lg:col-span-8">
           
           {/* Owners List Section */}
-          <div className={`rounded-2xl border border-indigo-100 dark:border-indigo-900/50 p-6 shadow-sm bg-gradient-to-br from-indigo-50/50 to-white dark:from-indigo-900/10 dark:to-[#09090b]`}>
+          <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-[#121212] p-6 shadow-sm">
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Workspace Owners</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Users with full access to this workspace.</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Workspace Owners</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Users with unrestricted administrative access to this workspace.</p>
               </div>
-              <span className="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
                 {roleBreakdown.owner} Owner(s)
               </span>
             </div>
             
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {workspaceOwnersList.map((owner) => (
-                <div key={`owner-list-${owner.id || owner.email}`} className="flex items-center gap-4 rounded-xl border border-indigo-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-indigo-800 dark:bg-[#09090b]">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-blue-600 text-lg font-bold text-white shadow-inner">
+                <div key={`owner-list-${owner.id || owner.email}`} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 transition-shadow hover:shadow-sm dark:border-gray-700/75">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white shadow-sm">
                     {(owner.name || owner.email || 'U').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{owner.name || owner.email}</p>
-                    <p className="truncate text-xs text-indigo-600 dark:text-indigo-400">{owner.email}</p>
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{owner.name || owner.email}</p>
+                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">{owner.email}</p>
                   </div>
                 </div>
               ))}
               {workspaceOwnersList.length === 0 && (
-                <div className="col-span-full py-8 text-center text-sm text-gray-500">
+                <div className="col-span-full py-6 text-center text-sm text-gray-500">
                   No owners found for this workspace.
                 </div>
               )}
             </div>
           </div>
 
-          {/* Board Members Section with Embedded Custom Access */}
-          <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden ${bgCard}`}>
+          {/* Board Members Section */}
+          <div className={`rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden ${bgCard}`}>
             <div className="border-b border-gray-200 dark:border-gray-800 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">All Board Members</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Manage everyone collaborating on this project.</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Board Members</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage roles and specific permissions for project collaborators.</p>
               </div>
               {selectedBoard && (
-                <span className="rounded-md bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                <span className="inline-flex items-center rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700">
                   {memberCards.length} Active Members
                 </span>
               )}
             </div>
             
-            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            <div className="divide-y divide-gray-100 dark:divide-gray-800/80">
               {memberCards.map((member) => (
-                <div key={`${member.email}-${member.role}`} className="flex flex-col p-4 gap-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <div key={`${member.email}-${member.role}`} className="p-5 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors duration-150 ease-in-out">
                   
                   {/* Top Row: User Info & Role Change */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-sm font-bold text-white shadow-sm dark:from-gray-600 dark:to-gray-800">
+                    <div className="flex items-center gap-3.5">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-800 text-sm font-medium text-white shadow-sm dark:bg-gray-700">
                         {(member.name || member.email || 'U').slice(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">{member.name || member.email}</p>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                          <span className="capitalize">{normalizeRoleValue(member.role)}</span>
-                          <span>•</span>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{member.name || member.email}</p>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <span className="capitalize font-medium text-gray-700 dark:text-gray-300">{normalizeRoleValue(member.role)}</span>
+                          <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
                           <span>{member.tasks} Task{member.tasks === 1 ? '' : 's'}</span>
-                          <span>•</span>
-                          <span className="font-medium text-indigo-600 dark:text-indigo-400">{member.status}</span>
+                          <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
+                          <span className="text-indigo-600 dark:text-indigo-400">{member.status}</span>
                         </div>
                       </div>
                     </div>
@@ -271,7 +272,7 @@ export default function TeamPage({
                             const nextRole = e.target.value; 
                             updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole)); 
                           }} 
-                          className="block w-36 rounded-lg border-gray-300 bg-white py-2 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white"
+                          className="block w-36 rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-gray-900 dark:text-white dark:ring-gray-700 dark:focus:ring-indigo-500 cursor-pointer"
                         >
                           <option value="owner">Owner</option>
                           <option value="administrator">Administrator</option>
@@ -282,7 +283,7 @@ export default function TeamPage({
                         <button 
                           type="button" 
                           onClick={() => removeMember?.(member.id || member.email)} 
-                          className="inline-flex items-center justify-center rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20 dark:focus:ring-offset-[#09090b]"
+                          className="inline-flex items-center justify-center rounded-md bg-white px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm ring-1 ring-inset ring-red-300 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 dark:bg-transparent dark:text-red-400 dark:ring-red-500/30 dark:hover:bg-red-500/10 transition-all"
                         >
                           Remove
                         </button>
@@ -292,21 +293,25 @@ export default function TeamPage({
 
                   {/* Bottom Row: Custom Permissions */}
                   {isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase() && (
-                    <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-800/60">
-                      <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">Custom Access</p>
-                      <div className="flex flex-wrap gap-4">
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800/60">
+                      <p className="text-[11px] font-semibold text-gray-500 mb-3 uppercase tracking-wider">Custom Permissions</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                         {permissionOptions.map((option) => (
-                          <label key={`${member.email}-${option.key}`} className="flex cursor-pointer items-center gap-2 hover:opacity-80 transition-opacity">
-                            <input 
-                              type="checkbox" 
-                              checked={Boolean(member.permissions?.[option.key])} 
-                              onChange={(e) => { 
-                                const nextPermissions = {...member.permissions, [option.key]: e.target.checked }; 
-                                updateMemberRole?.(member.id || member.email, member.role, nextPermissions); 
-                              }} 
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-900" 
-                            />
-                            <span className="text-sm text-gray-600 dark:text-gray-300">{option.label}</span>
+                          <label key={`${member.email}-${option.key}`} className="flex cursor-pointer items-start gap-2.5 group">
+                            <div className="flex h-5 items-center">
+                              <input 
+                                type="checkbox" 
+                                checked={Boolean(member.permissions?.[option.key])} 
+                                onChange={(e) => { 
+                                  const nextPermissions = {...member.permissions, [option.key]: e.target.checked }; 
+                                  updateMemberRole?.(member.id || member.email, member.role, nextPermissions); 
+                                }} 
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-800 dark:checked:bg-indigo-500 dark:focus:ring-offset-gray-900 cursor-pointer transition-colors" 
+                              />
+                            </div>
+                            <span className="text-sm text-gray-600 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-gray-200 transition-colors select-none">
+                              {option.label}
+                            </span>
                           </label>
                         ))}
                       </div>
@@ -320,38 +325,38 @@ export default function TeamPage({
         </div>
 
         {/* RIGHT COLUMN (Controls, Invites, Settings) */}
-        <div className="flex flex-col gap-6 lg:col-span-5 xl:col-span-4">
+        <div className="flex flex-col gap-6 lg:col-span-4">
           
           {/* Invite Teammate */}
           {isPrivileged && selectedBoard && (
-            <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Invite New Teammate</h3>
+            <div className={`rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-5">Invite Teammate</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
                   <input 
                     value={inviteEmail} 
                     onChange={(e) => setInviteEmail(e.target.value)} 
                     placeholder="colleague@company.com" 
-                    className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white dark:placeholder-gray-500" 
+                    className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-gray-900 dark:text-white dark:ring-gray-700 dark:focus:ring-indigo-500" 
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Temporary Password</label>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Temporary Password</label>
                   <input 
                     type="password" 
                     value={invitePassword} 
                     onChange={(e) => setInvitePassword(e.target.value)} 
                     placeholder="Set a secure password" 
-                    className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white dark:placeholder-gray-500" 
+                    className="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-gray-900 dark:text-white dark:ring-gray-700 dark:focus:ring-indigo-500" 
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Assign Role</label>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Assign Role</label>
                   <select 
                     value={inviteRole} 
                     onChange={(e) => setInviteRole(e.target.value)} 
-                    className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white"
+                    className="block w-full rounded-md border-0 py-2 pl-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-gray-900 dark:text-white dark:ring-gray-700 dark:focus:ring-indigo-500 cursor-pointer"
                   >
                     <option value="owner">Owner</option>
                     <option value="administrator">Administrator</option>
@@ -363,7 +368,7 @@ export default function TeamPage({
                 <button 
                   type="button" 
                   onClick={inviteUser} 
-                  className="mt-2 w-full flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-[#09090b]"
+                  className="mt-2 w-full flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 transition-colors"
                 >
                   Send Invitation
                 </button>
@@ -371,11 +376,11 @@ export default function TeamPage({
             </div>
           )}
 
-          {/* Access Overview / Role Distribution - ഇത് പെർമിഷൻ ഉണ്ടെങ്കിൽ മാത്രം കാണിക്കുന്ന രീതിയിൽ (Hide/Unhide) മാറ്റി */}
+          {/* Access Overview / Role Distribution */}
           {currentUserPermissions.viewRoleDistribution && (
-            <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
-              <div className="space-y-3">
+            <div className={`rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
+              <div className="space-y-2.5">
                 {[
                   { label: 'Owner', value: roleBreakdown.owner }, 
                   { label: 'Administrator', value: roleBreakdown.administrator }, 
@@ -383,9 +388,9 @@ export default function TeamPage({
                   { label: 'Guest', value: roleBreakdown.guest }, 
                   { label: 'Subscriber', value: roleBreakdown.subscriber }
                 ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800 dark:bg-gray-800/30">
+                  <div key={item.label} className="flex items-center justify-between rounded-md px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white border border-gray-200 dark:border-gray-700">
+                    <span className="inline-flex items-center justify-center min-w-[1.75rem] h-6 px-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
                       {item.value}
                     </span>
                   </div>
@@ -394,27 +399,31 @@ export default function TeamPage({
             </div>
           )}
 
-          {/* Owner Controls (Registered Users - Strictly Restricted to Owners Only) */}
+          {/* Owner Controls (Registered Users) */}
           {isOwner && ownerManagedUsers.length > 0 && (
-            <div className={`rounded-2xl border border-orange-200 dark:border-orange-900/50 p-6 shadow-sm bg-orange-50/30 dark:bg-orange-900/10`}>
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Owner Controls</h3>
-                <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-800 dark:bg-orange-900/50 dark:text-orange-300">
-                  Global Users
+            <div className="rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-[#18181b] p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">System Users</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Global workspace control</p>
+                </div>
+                <span className="inline-flex items-center rounded-md bg-gray-200 px-2 py-1 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600">
+                  Admin Only
                 </span>
               </div>
+              
               <div className="space-y-3">
                 {ownerManagedUsers.map((user) => (
-                  <div key={user.id} className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm dark:border-orange-800/50 dark:bg-[#09090b]">
+                  <div key={user.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-[#121212]">
                     <div className="mb-3 flex items-start justify-between">
                       <div className="min-w-0 pr-2">
-                        <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{user.name || user.email}</p>
+                        <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{user.name || user.email}</p>
                         <p className="truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
                       </div>
                       <button 
                         type="button" 
                         onClick={() => deleteRegisteredUser(user.id)} 
-                        className="shrink-0 rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                        className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                       >
                         Delete
                       </button>
@@ -422,7 +431,7 @@ export default function TeamPage({
                     <select 
                       value={normalizeRoleValue(user.role)} 
                       onChange={(e) => updateRegisteredUserRole(user.id, e.target.value)} 
-                      className="block w-full rounded-lg border-gray-300 bg-gray-50 py-2 pl-3 pr-8 text-sm shadow-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                      className="block w-full rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-gray-600 sm:text-sm sm:leading-6 dark:bg-gray-900 dark:text-white dark:ring-gray-700 dark:focus:ring-gray-500 cursor-pointer"
                     >
                       <option value="owner">Owner</option>
                       <option value="administrator">Administrator</option>
