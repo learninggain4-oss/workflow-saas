@@ -31,19 +31,19 @@ const getStatusFromRole = (role) => {
 const defaultPermissionsForRole = (role = 'owner') => {
   const normalizedRole = normalizeRoleValue(role);
   if (normalizedRole === 'owner') {
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
   }
-  if (normalizedRole === 'administrator'){return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };}
+  if (normalizedRole === 'administrator'){return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };}
   if (normalizedRole === 'editor') {
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
   }
   if (normalizedRole === 'guest') {
-    return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
+    return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
   }
   if (normalizedRole === 'subscriber') {
-    return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
+    return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
   }
-  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
+  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
 };
 
 const getMemberPermissions = (member = {}) => {
@@ -75,9 +75,13 @@ export default function TeamPage({
   const myNormalizedRole = normalizeRoleValue(myRole);
   const isPrivileged = myNormalizedRole === 'administrator' || myNormalizedRole === 'owner';
   const isOwner = myNormalizedRole === 'owner';
+  
+  // ലോഗിൻ ചെയ്ത ആളുടെ പെർമിഷൻ ചെക്ക് ചെയ്യാൻ വേണ്ടി ചേർത്തത്
+  const currentUserPermissions = getMemberPermissions({ role: myRole, permissions: myPermissions });
 
   const members = boardMembers.length ? boardMembers : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole, permissions: myPermissions }];
 
+  // Custom Access ലേക്ക് പുതിയ പെർമിഷൻ ചേർത്തു
   const permissionOptions = [
     { key: 'viewBoard', label: 'View board' },
     { key: 'createTasks', label: 'Create tasks' },
@@ -85,6 +89,7 @@ export default function TeamPage({
     { key: 'deleteTasks', label: 'Delete tasks' },
     { key: 'manageMembers', label: 'Manage members' },
     { key: 'manageBoard', label: 'Manage board' },
+    { key: 'viewRoleDistribution', label: 'Role Distribution' },
   ];
 
   const memberCards = members.map((member) => {
@@ -272,7 +277,7 @@ export default function TeamPage({
                   {isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase() && (
                     <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-800/60">
                       <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">Custom Access</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                      <div className="flex flex-wrap gap-4">
                         {permissionOptions.map((option) => (
                           <label key={`${member.email}-${option.key}`} className="flex cursor-pointer items-center gap-2 hover:opacity-80 transition-opacity">
                             <input 
@@ -349,26 +354,28 @@ export default function TeamPage({
             </div>
           )}
 
-          {/* Access Overview */}
-          <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
-            <div className="space-y-3">
-              {[
-                { label: 'Owner', value: roleBreakdown.owner }, 
-                { label: 'Administrator', value: roleBreakdown.administrator }, 
-                { label: 'Editor', value: roleBreakdown.editor }, 
-                { label: 'Guest', value: roleBreakdown.guest }, 
-                { label: 'Subscriber', value: roleBreakdown.subscriber }
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800 dark:bg-gray-800/30">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white border border-gray-200 dark:border-gray-700">
-                    {item.value}
-                  </span>
-                </div>
-              ))}
+          {/* Access Overview / Role Distribution - ഇത് പെർമിഷൻ ഉണ്ടെങ്കിൽ മാത്രം കാണിക്കുന്ന രീതിയിൽ (Hide/Unhide) മാറ്റി */}
+          {currentUserPermissions.viewRoleDistribution && (
+            <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
+              <div className="space-y-3">
+                {[
+                  { label: 'Owner', value: roleBreakdown.owner }, 
+                  { label: 'Administrator', value: roleBreakdown.administrator }, 
+                  { label: 'Editor', value: roleBreakdown.editor }, 
+                  { label: 'Guest', value: roleBreakdown.guest }, 
+                  { label: 'Subscriber', value: roleBreakdown.subscriber }
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800 dark:bg-gray-800/30">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white border border-gray-200 dark:border-gray-700">
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Owner Controls (Registered Users - Strictly Restricted to Owners Only) */}
           {isOwner && ownerManagedUsers.length > 0 && (
