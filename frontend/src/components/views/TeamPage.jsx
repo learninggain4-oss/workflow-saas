@@ -1,6 +1,6 @@
 // frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner can change any role)
 import React from 'react';
-import { admin } from '../services/api'; // FIXED:../../services/api ->../services/api
+import { admin } from '../../services/api'; // FIXED:../../services/api ->../services/api
 
 const normalizeRoleValue = (role) => {
   const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
