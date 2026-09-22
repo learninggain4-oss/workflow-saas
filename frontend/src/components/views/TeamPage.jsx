@@ -1,6 +1,6 @@
-// frontend/src/pages/TeamPage.jsx - FULL FIXED & PROFESSIONALLY STYLED
-import React from 'react';
-import { admin } from '../../services/api'; 
+// frontend/src/pages/TeamPage.jsx - FULL FIXED & PROFESSIONALLY STYLED (OPTIMIZED)
+import React, { useMemo, useCallback } from 'react';
+import { admin } from '../../services/api';
 
 const normalizeRoleValue = (role) => {
   const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
@@ -28,29 +28,24 @@ const getStatusFromRole = (role) => {
   }
 };
 
+// OPTIMIZATION: Replaced multiple if-statements with a clean Object Map (O(1) lookup)
+const ROLE_PERMISSIONS_MAP = {
+  owner: { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true },
+  administrator: { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true },
+  editor: { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false, viewRoleDistribution: false },
+  guest: { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false },
+  subscriber: { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false },
+};
+
 const defaultPermissionsForRole = (role = 'owner') => {
   const normalizedRole = normalizeRoleValue(role);
-  if (normalizedRole === 'owner') {
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
-  }
-  if (normalizedRole === 'administrator'){return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };}
-  if (normalizedRole === 'editor') {
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
-  }
-  if (normalizedRole === 'guest') {
-    return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
-  }
-  if (normalizedRole === 'subscriber') {
-    return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
-  }
-  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
+  return ROLE_PERMISSIONS_MAP[normalizedRole] || ROLE_PERMISSIONS_MAP['owner'];
 };
 
 const getMemberPermissions = (member = {}) => {
   const role = normalizeRoleValue(member.role || 'editor');
   const base = defaultPermissionsForRole(role);
   
-  // FIX APPLIED: Safe parsing of stringified permissions
   let custom = member.permissions;
   if (typeof custom === 'string') {
     try {
@@ -61,11 +56,11 @@ const getMemberPermissions = (member = {}) => {
   }
   custom = custom || {};
   
-  // Force override viewRoleDistribution for owners & admins (prevents old DB states from hiding it)
+  // Force override viewRoleDistribution for owners & admins
   if (role === 'owner' || role === 'administrator') {
     return { ...base, ...custom, viewRoleDistribution: true };
   }
-  return {...base,...custom };
+  return { ...base, ...custom };
 };
 
 export default function TeamPage({
@@ -89,17 +84,20 @@ export default function TeamPage({
   updateMemberRole,
   removeMember,
 }) {
-  const myNormalizedRole = normalizeRoleValue(myRole);
+  
+  const myNormalizedRole = useMemo(() => normalizeRoleValue(myRole), [myRole]);
   const isPrivileged = myNormalizedRole === 'administrator' || myNormalizedRole === 'owner';
   const isOwner = myNormalizedRole === 'owner';
   
-  // ലോഗിൻ ചെയ്ത ആളുടെ പെർമിഷൻ ചെക്ക് ചെയ്യാൻ വേണ്ടി ചേർത്തത്
-  const currentUserPermissions = getMemberPermissions({ role: myRole, permissions: myPermissions });
+  const currentUserPermissions = useMemo(() => 
+    getMemberPermissions({ role: myRole, permissions: myPermissions }), 
+  [myRole, myPermissions]);
 
-  const members = boardMembers.length ? boardMembers : [{ email: currentEmail || 'you@workflow.app', name: 'You', role: myRole, permissions: myPermissions }];
+  const members = useMemo(() => 
+    boardMembers.length ? boardMembers : [{ email: currentEmail || 'you@workflow.app', name: 'You', role: myRole, permissions: myPermissions }],
+  [boardMembers, currentEmail, myRole, myPermissions]);
 
-  // Custom Access ലേക്ക് പുതിയ പെർമിഷൻ ചേർത്തു
-  const permissionOptions = [
+  const permissionOptions = useMemo(() => [
     { key: 'viewBoard', label: 'View board' },
     { key: 'createTasks', label: 'Create tasks' },
     { key: 'editTasks', label: 'Edit tasks' },
@@ -107,69 +105,99 @@ export default function TeamPage({
     { key: 'manageMembers', label: 'Manage members' },
     { key: 'manageBoard', label: 'Manage board' },
     { key: 'viewRoleDistribution', label: 'Role Distribution' },
-  ];
+  ], []);
 
-  const memberCards = members.map((member) => {
-    const taskCount = tasksList.filter((task) => String(task.assigned_to || '').toLowerCase() === String(member.email || '').toLowerCase()).length;
-    const safeRole = normalizeRoleValue(member.role);
-    return {...member, role: safeRole, permissions: getMemberPermissions({...member, role: safeRole }), status: getStatusFromRole(safeRole), tasks: taskCount };
-  });
+  // OPTIMIZATION: Pre-calculate task counts to avoid O(N*M) nested loops
+  const taskCountsByEmail = useMemo(() => {
+    const counts = {};
+    tasksList.forEach((task) => {
+      const email = String(task.assigned_to || '').toLowerCase();
+      counts[email] = (counts[email] || 0) + 1;
+    });
+    return counts;
+  }, [tasksList]);
 
-  const workspaceOwnersMap = new Map();
-  
-  memberCards.forEach((member) => {
-    if (member.role === 'owner') {
-      workspaceOwnersMap.set(String(member.email).toLowerCase(), member);
-    }
-  });
+  // OPTIMIZATION: Memoized member cards calculation
+  const memberCards = useMemo(() => {
+    return members.map((member) => {
+      const emailKey = String(member.email || '').toLowerCase();
+      const taskCount = taskCountsByEmail[emailKey] || 0;
+      const safeRole = normalizeRoleValue(member.role);
+      
+      return {
+        ...member, 
+        role: safeRole, 
+        permissions: getMemberPermissions({ ...member, role: safeRole }), 
+        status: getStatusFromRole(safeRole), 
+        tasks: taskCount 
+      };
+    });
+  }, [members, taskCountsByEmail]);
 
-  (registeredUsers || []).forEach((user) => {
-    if (normalizeRoleValue(user.role) === 'owner') {
-      if (!workspaceOwnersMap.has(String(user.email).toLowerCase())) {
-        workspaceOwnersMap.set(String(user.email).toLowerCase(), {
-          ...user,
-          role: 'owner',
-          status: 'Owner',
-          tasks: tasksList.filter((task) => String(task.assigned_to || '').toLowerCase() === String(user.email || '').toLowerCase()).length,
-          permissions: defaultPermissionsForRole('owner')
-        });
+  // OPTIMIZATION: Unified loop for finding workspace owners and calculating roles
+  const { workspaceOwnersList, roleBreakdown } = useMemo(() => {
+    const workspaceOwnersMap = new Map();
+    const breakdown = { owner: 0, administrator: 0, editor: 0, guest: 0, subscriber: 0 };
+
+    // Process Board Members
+    memberCards.forEach((member) => {
+      const role = normalizeRoleValue(member.role);
+      if (breakdown[role] !== undefined) breakdown[role] += 1;
+      
+      if (role === 'owner') {
+        workspaceOwnersMap.set(String(member.email).toLowerCase(), member);
       }
-    }
-  });
+    });
 
-  const workspaceOwnersList = Array.from(workspaceOwnersMap.values());
+    // Process Registered Users (System wide owners)
+    (registeredUsers || []).forEach((user) => {
+      if (normalizeRoleValue(user.role) === 'owner') {
+        const emailKey = String(user.email).toLowerCase();
+        if (!workspaceOwnersMap.has(emailKey)) {
+          workspaceOwnersMap.set(emailKey, {
+            ...user,
+            role: 'owner',
+            status: 'Owner',
+            tasks: taskCountsByEmail[emailKey] || 0,
+            permissions: defaultPermissionsForRole('owner')
+          });
+          breakdown.owner += 1; // Increment owner count for global owners not in board
+        }
+      }
+    });
 
-  const roleBreakdown = {
-    owner: workspaceOwnersList.length,
-    administrator: memberCards.filter((member) => normalizeRoleValue(member.role) === 'administrator').length,
-    editor: memberCards.filter((member) => normalizeRoleValue(member.role) === 'editor').length,
-    guest: memberCards.filter((member) => normalizeRoleValue(member.role) === 'guest').length,
-    subscriber: memberCards.filter((member) => normalizeRoleValue(member.role) === 'subscriber').length,
-  };
+    return {
+      workspaceOwnersList: Array.from(workspaceOwnersMap.values()),
+      roleBreakdown: breakdown
+    };
+  }, [memberCards, registeredUsers, taskCountsByEmail]);
   
-  const ownerManagedUsers = (registeredUsers || []).filter((user) => String(user.email).toLowerCase() !== String(currentEmail).toLowerCase());
+  const ownerManagedUsers = useMemo(() => 
+    (registeredUsers || []).filter((user) => String(user.email).toLowerCase() !== String(currentEmail).toLowerCase()),
+  [registeredUsers, currentEmail]);
 
-  const updateRegisteredUserRole = async (userId, nextRole) => {
+  // OPTIMIZATION & FIX: Safe error handling and memoized API functions
+  const updateRegisteredUserRole = useCallback(async (userId, nextRole) => {
     if (!nextRole) return;
     try {
       await admin.updateUserRole(userId, nextRole);
       const refreshed = await admin.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
     } catch (e) {
-      alert(e.response?.data?.detail || 'Failed to update user role');
+      alert(e?.response?.data?.detail || e?.message || 'Failed to update user role');
     }
-  };
+  }, [setRegisteredUsers]);
 
-  const deleteRegisteredUser = async (userId) => {
+  const deleteRegisteredUser = useCallback(async (userId) => {
     if (!window.confirm("Are you sure you want to delete this user?")) return;
     try {
       await admin.deleteUser(userId);
       const refreshed = await admin.getUsers();
       setRegisteredUsers?.(refreshed.data || []);
     } catch (e) {
-      alert(e.response?.data?.detail || 'Failed to delete user');
+      alert(e?.response?.data?.detail || e?.message || 'Failed to delete user');
     }
-  };
+  }, [setRegisteredUsers]);
 
   return (
     <div className="mx-auto max-w-[90rem] space-y-6 p-4 sm:p-6 lg:p-8 font-sans">
