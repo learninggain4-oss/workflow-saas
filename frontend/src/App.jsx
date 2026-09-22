@@ -1,5 +1,5 @@
 // frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution to permissions
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
 
@@ -53,6 +53,7 @@ export default function App() {
   const [newComment, setNewComment] = useState("");
   const [activities, setActivities] = useState([]);
   const [boardMembers, setBoardMembers] = useState([]);
+  const [boardMembersBoardId, setBoardMembersBoardId] = useState(null);
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -131,6 +132,11 @@ export default function App() {
     try { return token? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
   }, [token]);
 
+  const selectedBoardRef = useRef(selectedBoard);
+  useEffect(() => {
+    selectedBoardRef.current = selectedBoard;
+  }, [selectedBoard]);
+
   const normalizeRoleValue = (role) => {
     const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
     const aliases = { owner: 'owner', administrator: 'administrator', admin: 'administrator', super_admin: 'owner', superadmin: 'owner', editor: 'editor', member: 'editor', guest: 'guest', subscriber: 'subscriber', viewer: 'subscriber' };
@@ -159,20 +165,31 @@ export default function App() {
     return {...base,...custom };
   };
 
-  // Ensure owner is correctly identified even if not explicitly in boardMembers array yet
+  const selectedBoardDetails = useMemo(
+    () => boardsList.find((board) => String(board.id) === String(selectedBoard)) || null,
+    [boardsList, selectedBoard]
+  );
+
+  const currentBoardMember = useMemo(() => {
+    if (!selectedBoard || String(boardMembersBoardId) !== String(selectedBoard)) return null;
+    return boardMembers.find(x => String(x.email || '').trim().toLowerCase() === String(currentEmail || '').trim().toLowerCase()) || null;
+  }, [boardMembers, boardMembersBoardId, currentEmail, selectedBoard]);
+
+  // Ensure the signed-in user's role comes from the selected board, not a stale board or global account role.
   const myRole = useMemo(() => {
-    if (!selectedBoard) return "owner";
-    const match = boardMembers.find(x => String(x.email || '').trim().toLowerCase() === String(currentEmail || '').trim().toLowerCase());
-    if (match) return normalizeRoleValue(match.role);
+    if (!selectedBoard) return normalizeRoleValue(userData?.role || 'editor');
+    if (currentBoardMember) return normalizeRoleValue(currentBoardMember.role);
+    if (selectedBoardDetails?.role) return normalizeRoleValue(selectedBoardDetails.role);
+    if (selectedBoardDetails?.owner_id && userData?.id && String(selectedBoardDetails.owner_id) === String(userData.id)) return 'owner';
     if (userData && normalizeRoleValue(userData.role) === 'owner') return 'owner';
     return "editor";
-  }, [boardMembers, currentEmail, selectedBoard, userData]);
+  }, [currentBoardMember, selectedBoard, selectedBoardDetails, userData]);
 
   const myPermissions = useMemo(() => {
-    const member = boardMembers.find(x => String(x.email || '').toLowerCase() === String(currentEmail || '').toLowerCase());
-    if (member) return getMemberPermissions(member);
+    if (currentBoardMember) return getMemberPermissions(currentBoardMember);
+    if (selectedBoardDetails?.permissions) return getMemberPermissions({ role: myRole, permissions: selectedBoardDetails.permissions });
     return getMemberPermissions({ role: myRole });
-  }, [boardMembers, currentEmail, myRole]);
+  }, [currentBoardMember, myRole, selectedBoardDetails]);
 
   const canEdit = Boolean(myPermissions.createTasks || myPermissions.editTasks || myPermissions.deleteTasks || myPermissions.manageBoard);
   const isAdminOrOwner = myRole === 'owner' || myRole === 'administrator';
@@ -199,15 +216,31 @@ export default function App() {
     } catch {}
   };
 
-  const fetchBoardData = async () => {
-    if (!selectedBoard) return;
+  const fetchBoardData = async (boardId = selectedBoard) => {
+    if (!boardId) return;
+    const activeBoardId = boardId;
     try {
-      const tRes = await tasks.getAll(selectedBoard); setTasks(tRes.data);
-      const aRes = await boards.getActivities(selectedBoard); setActivities(aRes.data);
-      const mRes = await boards.getMembers(selectedBoard); setBoardMembers(mRes.data);
-      const b = boardsList.find(x => x.id === selectedBoard);
+      const tRes = await tasks.getAll(activeBoardId);
+      if (String(selectedBoardRef.current) !== String(activeBoardId)) return;
+      setTasks(tRes.data);
+
+      const aRes = await boards.getActivities(activeBoardId);
+      if (String(selectedBoardRef.current) !== String(activeBoardId)) return;
+      setActivities(aRes.data);
+
+      const mRes = await boards.getMembers(activeBoardId);
+      if (String(selectedBoardRef.current) !== String(activeBoardId)) return;
+      setBoardMembers(mRes.data);
+      setBoardMembersBoardId(activeBoardId);
+
+      const b = boardsList.find(x => String(x.id) === String(activeBoardId));
       if (b) setRenameValue(b.name);
-    } catch {}
+    } catch {
+      if (String(selectedBoardRef.current) === String(activeBoardId)) {
+        setBoardMembers([]);
+        setBoardMembersBoardId(activeBoardId);
+      }
+    }
   };
 
   const fetchTaskDetails = async (id) => {
@@ -219,7 +252,11 @@ export default function App() {
   };
 
   useEffect(() => { fetchInitialData(); }, [token]);
-  useEffect(() => { fetchBoardData(); }, [selectedBoard]);
+  useEffect(() => {
+    setBoardMembers([]);
+    setBoardMembersBoardId(selectedBoard || null);
+    fetchBoardData(selectedBoard);
+  }, [selectedBoard]);
   useEffect(() => { if (editing) fetchTaskDetails(editing.id); }, [editing]);
 
   useEffect(() => {

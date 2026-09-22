@@ -96,7 +96,7 @@ export default function TeamPage({
   // ലോഗിൻ ചെയ്ത ആളുടെ പെർമിഷൻ ചെക്ക് ചെയ്യാൻ വേണ്ടി ചേർത്തത്
   const currentUserPermissions = getMemberPermissions({ role: myRole, permissions: myPermissions });
 
-  const members = boardMembers.length ? boardMembers : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole, permissions: myPermissions }];
+  const members = boardMembers.length ? boardMembers : [{ email: currentEmail || 'you@workflow.app', name: 'You', role: myRole, permissions: myPermissions }];
 
   // Custom Access ലേക്ക് പുതിയ പെർമിഷൻ ചേർത്തു
   const permissionOptions = [

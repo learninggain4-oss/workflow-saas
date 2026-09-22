@@ -4,6 +4,7 @@ import uuid
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_workflow.db"
 
+import pytest
 from fastapi.testclient import TestClient
 
 import main
@@ -16,18 +17,49 @@ def _unique_email(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}@example.com"
 
 
-def test_registered_users_default_to_admin_permissions():
-    from utils import PERMISSION_KEYS
+@pytest.fixture(autouse=True)
+def clean_database():
+    def clear():
+        db = SessionLocal()
+        try:
+            for model in (
+                models.Notification,
+                models.Activity,
+                models.Comment,
+                models.Subtask,
+                models.Task,
+                models.BoardMember,
+                models.Board,
+                models.User,
+            ):
+                db.query(model).delete(synchronize_session=False)
+            db.commit()
+        finally:
+            db.close()
+
+    clear()
+    yield
+    clear()
+
+
+def test_member_alias_uses_editor_permissions():
     permissions = main.utils.normalize_permissions("member", {})
-    assert permissions == {key: True for key in PERMISSION_KEYS}
+    assert permissions == {
+        "viewBoard": True,
+        "createTasks": True,
+        "editTasks": True,
+        "deleteTasks": True,
+        "manageMembers": False,
+        "manageBoard": False,
+    }
 
 
 def test_role_aliases_are_normalized_to_canonical_roles():
     assert main.utils.normalize_role("super_admin") == "owner"
-    assert main.utils.normalize_role("administrator") == "admin"
-    assert main.utils.normalize_role("editor") == "member"
-    assert main.utils.normalize_role("guest") == "contributor"
-    assert main.utils.normalize_role("subscriber") == "viewer"
+    assert main.utils.normalize_role("admin") == "administrator"
+    assert main.utils.normalize_role("member") == "editor"
+    assert main.utils.normalize_role("contributor") == "editor"
+    assert main.utils.normalize_role("viewer") == "subscriber"
 
 
 def test_first_user_is_treated_as_owner_for_owner_access_checks():
@@ -130,7 +162,7 @@ def test_owner_can_manage_registered_users():
         headers={"Authorization": f"Bearer {token}"},
     )
     assert update_resp.status_code == 200, update_resp.text
-    assert update_resp.json()["role"] == "viewer"
+    assert update_resp.json()["role"] == "subscriber"
 
     delete_resp = client.delete(
         f"/api/admin/users/{target.id}",
@@ -227,7 +259,7 @@ def test_board_member_role_update_and_remove():
         headers=headers,
     )
     assert update_response.status_code == 200, update_response.text
-    assert update_response.json()["role"] == "viewer"
+    assert update_response.json()["role"] == "subscriber"
 
     remove_response = client.delete(
         f"/api/boards/{board.id}/members/{member.id}",
@@ -235,6 +267,50 @@ def test_board_member_role_update_and_remove():
     )
     assert remove_response.status_code == 200, remove_response.text
     assert remove_response.json()["removed"] is True
+
+    db.delete(board)
+    db.delete(member)
+    db.delete(owner)
+    db.commit()
+    db.close()
+
+
+def test_board_list_returns_current_users_board_role():
+    db = SessionLocal()
+    owner_email = _unique_email("owner")
+    member_email = _unique_email("member")
+
+    owner = models.User(email=owner_email, name="Owner", password_hash="x", role="owner")
+    member = models.User(email=member_email, name="Member", password_hash="x", role="administrator")
+    db.add_all([owner, member])
+    db.commit()
+    db.refresh(owner)
+    db.refresh(member)
+
+    board = models.Board(name="Member Role Board", owner_id=owner.id)
+    db.add(board)
+    db.commit()
+    db.refresh(board)
+
+    db.add(models.BoardMember(board_id=board.id, user_id=member.id, role="guest"))
+    db.commit()
+
+    client = TestClient(main.app)
+    token = create_token({"sub": member_email})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    boards_resp = client.get("/api/boards", headers=headers)
+    assert boards_resp.status_code == 200, boards_resp.text
+    board_payload = next(item for item in boards_resp.json() if item["id"] == board.id)
+    assert board_payload["role"] == "guest"
+    assert board_payload["permissions"]["editTasks"] is False
+
+    members_resp = client.get(f"/api/boards/{board.id}/members", headers=headers)
+    assert members_resp.status_code == 200, members_resp.text
+    current_member = next(item for item in members_resp.json() if item["email"] == member_email)
+    assert current_member["role"] == "guest"
+    assert current_member["is_current_user"] is True
+    assert current_member["board_id"] == board.id
 
     db.delete(board)
     db.delete(member)

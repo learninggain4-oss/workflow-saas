@@ -180,6 +180,21 @@ def _dump_json(value, default):
     return json.dumps(value, ensure_ascii=False)
 
 
+def _board_response(board, current_user, db: Session):
+    role = utils.get_board_member_role(board.id, current_user.id, db)
+    if role is None and utils.normalize_role(getattr(current_user, "role", "")) == "owner":
+        role = "owner"
+    role = role or "editor"
+    permissions = utils.default_permissions_for_role("owner") if role == "owner" else utils.get_board_member_permissions(board.id, current_user.id, db)
+    return {
+        "id": board.id,
+        "name": board.name,
+        "owner_id": board.owner_id,
+        "role": role,
+        "permissions": permissions,
+    }
+
+
 # --- FASTAPI APP SETUP ---
 app = FastAPI(
     title="WorkFlow SaaS",
@@ -999,7 +1014,7 @@ def list_boards(current_user=Depends(get_current_user), db: Session = Depends(ge
         db.commit()
         db.refresh(b)
         boards = [b]
-    return boards
+    return [_board_response(board, current_user, db) for board in boards]
 
 
 @app.post("/api/boards")
@@ -1015,7 +1030,7 @@ def create_board(payload: schemas.BoardCreate, current_user=Depends(get_current_
     db.refresh(b)
     
     log_activity_safe(b.id, current_user.name, f"created board {b.name}")
-    return b
+    return _board_response(b, current_user, db)
 
 
 @app.put("/api/boards/{board_id}")
@@ -1135,7 +1150,7 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
     if board:
         owner = db.query(models.User).filter(models.User.id == board.owner_id).first()
         if owner: 
-            members.append({"email": owner.email, "name": owner.name, "role": "owner", "id": owner.id, "permissions": utils.default_permissions_for_role("owner")})
+            members.append({"email": owner.email, "name": owner.name, "role": "owner", "id": owner.id, "board_id": board_id, "is_current_user": owner.id == current_user.id, "permissions": utils.default_permissions_for_role("owner")})
             
         for m in db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id).all():
             # Skip if this member is the board owner (already added)
@@ -1151,7 +1166,7 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
                 if isinstance(raw_perms, dict) and "viewRoleDistribution" in raw_perms:
                     permissions["viewRoleDistribution"] = bool(raw_perms["viewRoleDistribution"])
                     
-                members.append({"email": u.email, "name": u.name, "role": normalized_role, "id": u.id, "permissions": permissions})
+                members.append({"email": u.email, "name": u.name, "role": normalized_role, "id": u.id, "board_id": board_id, "is_current_user": u.id == current_user.id, "permissions": permissions})
                 
     return members
 

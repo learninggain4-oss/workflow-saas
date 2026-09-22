@@ -12,7 +12,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, default="")
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="owner")
+    role = Column(String, default="administrator")
     subscription_tier = Column(String, default="free")
     avatar_url = Column(String, default="")
     email_verified = Column(Boolean, default=True)
@@ -40,7 +40,7 @@ class BoardMember(Base):
     id = Column(Integer, primary_key=True)
     board_id = Column(Integer, ForeignKey("boards.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    role = Column(String, default="owner")
+    role = Column(String, default="editor")
     permissions = Column(String, default="{}")
 
 

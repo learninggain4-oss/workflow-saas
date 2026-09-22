@@ -75,35 +75,16 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
         localStorage.setItem('selected_role', normalizeRoleValue(role));
       }
 
-      // FIXED: Verify role from backend - Role correct allenkil mathram allow
+      // The selected sign-in role is not authoritative; board access is resolved after login.
       try {
         const me = await auth.getMe();
         const actualRole = normalizeRoleValue(me.data?.role);
-        const selectedRole = normalizeRoleValue(role);
 
-        // SIGNIN modeil mathram role check - signupil actualRole = selectedRole thanne aakum
-        if (mode === 'signin' && actualRole!== selectedRole) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('selected_role');
-          localStorage.removeItem('user_role');
-          setError(`Role incorrect. Your account role is "${actualRole.toUpperCase()}" but you selected "${selectedRole.toUpperCase()}". Please select correct role.`);
-          setLoading(false);
-          return;
-        }
-
-        localStorage.setItem('user_role', actualRole || selectedRole);
+        localStorage.setItem('selected_role', actualRole || normalizeRoleValue(role));
+        localStorage.setItem('user_role', actualRole || normalizeRoleValue(role));
         localStorage.setItem('user_email', me.data?.email || email.trim().toLowerCase());
       } catch (err) {
-        // If getMe fails after login, clear token and show error
-        if (mode === 'signin') {
-          const backendMsg = err.response?.data?.detail;
-          if (backendMsg && String(backendMsg).toLowerCase().includes('role')) {
-            localStorage.removeItem('token');
-            setError(backendMsg);
-            setLoading(false);
-            return;
-          }
-        }
+        localStorage.setItem('user_role', normalizeRoleValue(role));
       }
 
       if (onAuthSuccess) onAuthSuccess();

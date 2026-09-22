@@ -1,6 +1,16 @@
 import React from 'react';
 
 export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }) {
+  const normalizedRole = String(myRole || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
+  const roleLabels = {
+    owner: 'Owner',
+    administrator: 'Administrator',
+    editor: 'Editor',
+    guest: 'Guest',
+    subscriber: 'Subscriber',
+  };
+  const canManageBoard = normalizedRole === 'owner' || normalizedRole === 'administrator';
+
   return (
     <aside className={`w-72 flex-shrink-0 border-r soft-divider flex flex-col transition-colors duration-200 ${bgSide}`}>
       <div className="p-5 flex justify-between items-center shrink-0">
@@ -70,7 +80,7 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
         <div>
           <div className="flex items-center justify-between mb-3 px-2">
             <h2 className="font-semibold text-[10px] uppercase tracking-[0.2em] text-slate-500">Projects</h2>
-            <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full text-slate-600 dark:text-slate-300">{myRole}</span>
+            <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full text-slate-600 dark:text-slate-300">{roleLabels[normalizedRole] || 'Editor'}</span>
           </div>
           <div className="space-y-1.5 mb-4">
             {boardsList.map((b) => (
@@ -90,7 +100,7 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
           </div>
         </div>
 
-        {selectedBoard && (myRole === 'admin' || myRole === 'owner') && (
+        {selectedBoard && canManageBoard && (
           <div className={`border rounded-2xl p-4 shadow-sm ${subCard}`}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] mb-3 text-slate-500">Settings</p>
             <input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className={`border w-full p-2.5 rounded-xl text-sm mb-3 ${inputCls}`} placeholder="Rename board..." />
@@ -101,17 +111,17 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
           </div>
         )}
 
-        {(myRole === 'admin' || myRole === 'owner') && (
+        {canManageBoard && (
           <div className="pt-2">
             <h3 className="font-semibold text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-3 px-2">Team Members</h3>
             <div className="space-y-2">
               <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Email address" className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`} />
               <input type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} placeholder="Password for new user" className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`} />
               <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`}>
-                <option value="admin">Admin / Administrator</option>
-                <option value="member">Member / Editor</option>
-                <option value="contributor">Contributor / Guest</option>
-                <option value="viewer">Viewer / Subscriber</option>
+                <option value="administrator">Administrator</option>
+                <option value="editor">Editor</option>
+                <option value="guest">Guest</option>
+                <option value="subscriber">Subscriber</option>
               </select>
               <button onClick={inviteUser} className={`w-full p-2.5 rounded-xl text-sm font-semibold shadow-sm ${primaryBtn}`}>Send Invite</button>
             </div>
