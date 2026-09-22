@@ -1,3 +1,4 @@
+// frontend/src/pages/TeamPage.jsx - FULL FIXED (Role Distribution restricted to Owners only)
 import React from 'react';
 import { admin } from '../../services/api'; 
 
@@ -30,27 +31,24 @@ const getStatusFromRole = (role) => {
 const defaultPermissionsForRole = (role = 'owner') => {
   const normalizedRole = normalizeRoleValue(role);
   if (normalizedRole === 'owner') {
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   }
-  if (normalizedRole === 'administrator'){
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
-  }
+  if (normalizedRole === 'administrator'){return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };}
   if (normalizedRole === 'editor') {
-    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false };
   }
   if (normalizedRole === 'guest') {
-    return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
+    return { viewBoard: true, createTasks: true, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
   if (normalizedRole === 'subscriber') {
-    return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
+    return { viewBoard: true, createTasks: false, editTasks: false, deleteTasks: false, manageMembers: false, manageBoard: false };
   }
-  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
+  return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
 };
 
 const getMemberPermissions = (member = {}) => {
   const base = defaultPermissionsForRole(member.role || 'editor');
-  const custom = member.permissions && typeof member.permissions === 'object' ? member.permissions : {};
-  return { ...base, ...custom };
+  return {...base,...(member.permissions || {}) };
 };
 
 export default function TeamPage({
@@ -78,9 +76,6 @@ export default function TeamPage({
   const isPrivileged = myNormalizedRole === 'administrator' || myNormalizedRole === 'owner';
   const isOwner = myNormalizedRole === 'owner';
 
-  const myEffectivePermissions = getMemberPermissions({ role: myRole, permissions: myPermissions });
-  const canViewRoleDistribution = isOwner || Boolean(myEffectivePermissions.viewRoleDistribution);
-
   const members = boardMembers.length ? boardMembers : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole, permissions: myPermissions }];
 
   const permissionOptions = [
@@ -90,7 +85,6 @@ export default function TeamPage({
     { key: 'deleteTasks', label: 'Delete tasks' },
     { key: 'manageMembers', label: 'Manage members' },
     { key: 'manageBoard', label: 'Manage board' },
-    { key: 'viewRoleDistribution', label: 'Role distribution' },
   ];
 
   const memberCards = members.map((member) => {
@@ -278,7 +272,7 @@ export default function TeamPage({
                   {isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase() && (
                     <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-800/60">
                       <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">Custom Access</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         {permissionOptions.map((option) => (
                           <label key={`${member.email}-${option.key}`} className="flex cursor-pointer items-center gap-2 hover:opacity-80 transition-opacity">
                             <input 
@@ -355,8 +349,8 @@ export default function TeamPage({
             </div>
           )}
 
-          {/* Role Distribution (Controlled via Custom Access Permission or Owner) */}
-          {canViewRoleDistribution && (
+          {/* Access Overview (Restricted to Owners only) */}
+          {isOwner && (
             <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
               <div className="space-y-3">
