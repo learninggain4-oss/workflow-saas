@@ -1,13 +1,16 @@
-// frontend/src/components/views/TemplatesPage.jsx - 200 TEMPLATES LIVE REAL
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { boards as boardsApi, tasks as tasksApi } from '../../services/api';
 
 export default function TemplatesPage({ bgCard, setViewMode }) {
   const [creating, setCreating] = useState(null);
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('All');
+  const [sortBy, setSortBy] = useState('default');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
-  const templates = [
+  // Expanded templates library
+  const templates = useMemo(() => [
     { name: 'Product Launch', category: 'Marketing', description: 'Coordinate milestones, launch tasks, and stakeholder approvals.', tiles: ['Define roadmap', 'Create campaign assets', 'Final launch checklist'], accent: 'from-indigo-500 to-violet-500' },
     { name: 'Content Calendar', category: 'Marketing', description: 'Plan editorial calendar, content creation and publishing schedule.', tiles: ['Content ideas', 'Draft & review', 'Publish & promote'], accent: 'from-fuchsia-500 to-pink-500' },
     { name: 'SEO Campaign', category: 'Marketing', description: 'Track keyword research, on-page optimization and backlink outreach.', tiles: ['Keyword research', 'On-page SEO', 'Link building'], accent: 'from-emerald-500 to-teal-500' },
@@ -18,6 +21,8 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
     { name: 'Market Research', category: 'Marketing', description: 'Conduct surveys, competitor analysis and insights synthesis.', tiles: ['Survey design', 'Competitor analysis', 'Insights report'], accent: 'from-blue-500 to-indigo-500' },
     { name: 'Ad Campaign', category: 'Marketing', description: 'Plan ad creatives, budget allocation and performance optimization.', tiles: ['Creative assets', 'Budget setup', 'Optimize performance'], accent: 'from-yellow-500 to-amber-500' },
     { name: 'Webinar Launch', category: 'Marketing', description: 'Prepare webinar content, promotion and post-event follow-up.', tiles: ['Content prep', 'Promotion', 'Follow-up & replay'], accent: 'from-teal-500 to-cyan-500' },
+    { name: 'Podcast Production', category: 'Marketing', description: 'Guest booking, recording schedule and episode promotion.', tiles: ['Book guests', 'Record & edit', 'Publish episode'], accent: 'from-indigo-500 to-blue-500' },
+    { name: 'Affiliate Program', category: 'Marketing', description: 'Set up affiliate tiers, recruit partners and track payouts.', tiles: ['Set tiers', 'Recruit partners', 'Process payouts'], accent: 'from-purple-500 to-fuchsia-500' },
     { name: 'Engineering Sprint', category: 'Development', description: 'Manage sprint planning, issue triage, QA, and release readiness.', tiles: ['Sprint planning', 'Backlog grooming', 'QA & release'], accent: 'from-sky-500 to-cyan-500' },
     { name: 'Bug Tracking', category: 'Development', description: 'Triage bugs, prioritize fixes and track resolution progress.', tiles: ['Bug reported', 'Triage & assign', 'Fix & verify'], accent: 'from-red-500 to-rose-500' },
     { name: 'Feature Release', category: 'Development', description: 'Scope feature, development and release communication.', tiles: ['Scope feature', 'Development', 'Release comms'], accent: 'from-indigo-500 to-violet-500' },
@@ -28,6 +33,8 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
     { name: 'Technical Debt', category: 'Development', description: 'Audit legacy code, prioritize refactor and track progress.', tiles: ['Audit code', 'Prioritize debt', 'Refactor'], accent: 'from-blue-500 to-indigo-500' },
     { name: 'Mobile App Release', category: 'Development', description: 'Plan app store assets, beta testing and release.', tiles: ['Store assets', 'Beta testing', 'App release'], accent: 'from-yellow-500 to-amber-500' },
     { name: 'Security Audit', category: 'Development', description: 'Run vulnerability scan, remediation and compliance check.', tiles: ['Vuln scan', 'Remediation', 'Compliance'], accent: 'from-teal-500 to-cyan-500' },
+    { name: 'Database Migration', category: 'Development', description: 'Plan schema changes, script writing and data transfer.', tiles: ['Schema design', 'Migration script', 'Data verification'], accent: 'from-gray-500 to-slate-500' },
+    { name: 'Architecture Review', category: 'Development', description: 'System design, scalability planning and review meetings.', tiles: ['System design', 'Scalability check', 'Final review'], accent: 'from-indigo-600 to-blue-600' },
     { name: 'Design System', category: 'Design', description: 'Review design tokens, components and documentation updates.', tiles: ['Component audit', 'Design review', 'Docs update'], accent: 'from-teal-500 to-cyan-500' },
     { name: 'UI Redesign', category: 'Design', description: 'Research, redesign screens and handoff for development.', tiles: ['Research', 'Redesign screens', 'Handoff'], accent: 'from-indigo-500 to-violet-500' },
     { name: 'User Research', category: 'Design', description: 'Plan interviews, synthesize insights and share findings.', tiles: ['Interview plan', 'Synthesis', 'Share findings'], accent: 'from-fuchsia-500 to-pink-500' },
@@ -38,6 +45,8 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
     { name: 'Icon Set Design', category: 'Design', description: 'Define icon grid, design set and export for dev.', tiles: ['Grid setup', 'Design icons', 'Export & handoff'], accent: 'from-blue-500 to-indigo-500' },
     { name: 'Landing Page Design', category: 'Design', description: 'Copy, design and optimize landing page for conversion.', tiles: ['Copywriting', 'Page design', 'Optimize CRO'], accent: 'from-yellow-500 to-amber-500' },
     { name: 'Design Handoff', category: 'Design', description: 'Prepare specs, assets and dev handoff checklist.', tiles: ['Specs & tokens', 'Asset export', 'Handoff meeting'], accent: 'from-emerald-500 to-teal-500' },
+    { name: '3D Modeling', category: 'Design', description: 'Concept modeling, texturing and rendering.', tiles: ['Base mesh', 'Texturing', 'Final render'], accent: 'from-purple-500 to-indigo-500' },
+    { name: 'Motion Graphics', category: 'Design', description: 'Storyboard, animation and final export.', tiles: ['Storyboard', 'Animation', 'Export video'], accent: 'from-pink-500 to-rose-500' },
     { name: 'Sales Pipeline', category: 'Sales', description: 'Manage leads from prospect to negotiation and closed-won.', tiles: ['Lead qualification', 'Demo & proposal', 'Negotiation & close'], accent: 'from-blue-500 to-indigo-500' },
     { name: 'Lead Qualification', category: 'Sales', description: 'Score leads, discovery call and qualification criteria.', tiles: ['Lead scoring', 'Discovery call', 'Qualify'], accent: 'from-indigo-500 to-violet-500' },
     { name: 'Client Proposal', category: 'Sales', description: 'Draft proposal, pricing and client presentation.', tiles: ['Draft proposal', 'Pricing', 'Client presentation'], accent: 'from-emerald-500 to-teal-500' },
@@ -48,6 +57,8 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
     { name: 'Sales Forecast', category: 'Sales', description: 'Review pipeline, forecast revenue and risks.', tiles: ['Pipeline review', 'Forecast revenue', 'Risk analysis'], accent: 'from-red-500 to-rose-500' },
     { name: 'Partnership Outreach', category: 'Sales', description: 'Find partners, pitch and co-marketing plan.', tiles: ['Partner list', 'Pitch deck', 'Co-marketing'], accent: 'from-yellow-500 to-amber-500' },
     { name: 'CRM Cleanup', category: 'Sales', description: 'Deduplicate contacts, update fields and hygiene check.', tiles: ['Deduplicate', 'Update fields', 'Hygiene check'], accent: 'from-teal-500 to-cyan-500' },
+    { name: 'Cold Calling', category: 'Sales', description: 'Script prep, call list and follow-up logging.', tiles: ['Script prep', 'Make calls', 'Log follow-ups'], accent: 'from-orange-500 to-red-500' },
+    { name: 'Trade Show Prep', category: 'Sales', description: 'Booth design, rep scheduling and lead capture setup.', tiles: ['Booth prep', 'Schedule reps', 'Lead capture'], accent: 'from-blue-600 to-indigo-600' },
     { name: 'Event Planning', category: 'Operations', description: 'Coordinate venue, vendors, promotion and post-event followup.', tiles: ['Venue & vendors', 'Promotion plan', 'Event day & followup'], accent: 'from-yellow-500 to-amber-500' },
     { name: 'Customer Success', category: 'Operations', description: 'Track onboarding phases, renewals, health scoring, and follow-ups.', tiles: ['Client onboarding', 'Health score review', 'Renewal follow-up'], accent: 'from-emerald-500 to-teal-500' },
     { name: 'Vendor Management', category: 'Operations', description: 'Evaluate vendors, contract and performance review.', tiles: ['Vendor evaluation', 'Contracting', 'Performance review'], accent: 'from-indigo-500 to-violet-500' },
@@ -58,6 +69,8 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
     { name: 'Risk Assessment', category: 'Operations', description: 'Identify risks, impact analysis and mitigation plan.', tiles: ['Identify risks', 'Impact analysis', 'Mitigation'], accent: 'from-red-500 to-rose-500' },
     { name: 'Supply Chain', category: 'Operations', description: 'Track suppliers, logistics and delivery timeline.', tiles: ['Supplier list', 'Logistics plan', 'Delivery tracking'], accent: 'from-blue-500 to-indigo-500' },
     { name: 'Business Continuity', category: 'Operations', description: 'Create BCP, disaster recovery and testing schedule.', tiles: ['BCP draft', 'DR plan', 'Test schedule'], accent: 'from-teal-500 to-cyan-500' },
+    { name: 'Fleet Management', category: 'Operations', description: 'Vehicle maintenance, routing and driver scheduling.', tiles: ['Maintenance check', 'Route planning', 'Driver schedule'], accent: 'from-slate-500 to-gray-500' },
+    { name: 'Facilities Maintenance', category: 'Operations', description: 'HVAC checks, cleaning schedules and repair logs.', tiles: ['HVAC check', 'Cleaning schedule', 'Repair log'], accent: 'from-cyan-500 to-blue-500' },
     { name: 'HR Onboarding', category: 'People', description: 'Streamline new hire paperwork, training and team introductions.', tiles: ['Paperwork & access', 'Training plan', 'Team intro & buddy'], accent: 'from-violet-500 to-purple-500' },
     { name: 'Employee Offboarding', category: 'People', description: 'Knowledge transfer, access revocation and exit interview.', tiles: ['Knowledge transfer', 'Revoke access', 'Exit interview'], accent: 'from-indigo-500 to-violet-500' },
     { name: 'Performance Review', category: 'People', description: 'Self review, manager feedback and goal setting.', tiles: ['Self review', 'Manager feedback', 'Goal setting'], accent: 'from-emerald-500 to-teal-500' },
@@ -108,7 +121,6 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
     { name: 'Licensing', category: 'Legal', description: 'Evaluate license needs, application and compliance.', tiles: ['Evaluate needs', 'Application', 'Compliance'], accent: 'from-blue-500 to-indigo-500' },
     { name: 'Legal Risk Review', category: 'Legal', description: 'Identify legal risks, mitigation plan and monitoring.', tiles: ['Identify risks', 'Mitigation plan', 'Monitoring'], accent: 'from-yellow-500 to-amber-500' },
     { name: 'Document Management', category: 'Legal', description: 'Organize docs, access control and retention policy.', tiles: ['Organize', 'Access control', 'Retention'], accent: 'from-teal-500 to-cyan-500' },
-    // --- 100 MORE NEW ---
     { name: 'Course Planning', category: 'Education', description: 'Plan syllabus, lessons and assessments for semester.', tiles: ['Syllabus', 'Lesson plans', 'Assessments'], accent: 'from-indigo-500 to-violet-500' },
     { name: 'Student Onboarding', category: 'Education', description: 'Welcome students, orientation and resource access.', tiles: ['Welcome pack', 'Orientation', 'Resource access'], accent: 'from-emerald-500 to-teal-500' },
     { name: 'Curriculum Development', category: 'Education', description: 'Design curriculum, learning objectives and materials.', tiles: ['Objectives', 'Materials', 'Review'], accent: 'from-sky-500 to-cyan-500' },
@@ -203,26 +215,67 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
     { name: 'Hypothesis Development', category: 'Research', description: 'Research questions, hypothesis and variables.', tiles: ['Research questions', 'Hypothesis', 'Variables'], accent: 'from-emerald-500 to-teal-500' },
     { name: 'Experiment Design', category: 'Research', description: 'Design experiments, controls and sample size.', tiles: ['Design', 'Controls', 'Sample size'], accent: 'from-sky-500 to-cyan-500' },
     { name: 'Data Collection', category: 'Research', description: 'Collection protocol, tools and quality check.', tiles: ['Protocol', 'Tools', 'Quality check'], accent: 'from-amber-500 to-orange-500' },
-    { name: 'Research Data Analysis', category: 'Research', description: 'Clean data, statistical analysis and interpretation.', tiles: ['Clean data', 'Statistical analysis', 'Interpretation'], accent: 'from-fuchsia-500 to-pink-500' },
+    { name: 'Data Cleaning', category: 'Research', description: 'Remove outliers, format data and missing values.', tiles: ['Identify outliers', 'Format structuring', 'Impute missing'], accent: 'from-purple-500 to-fuchsia-500' },
+    { name: 'Statistical Analysis', category: 'Research', description: 'Run tests, p-values and interpret significance.', tiles: ['Run tests', 'Check p-values', 'Interpret stats'], accent: 'from-fuchsia-500 to-pink-500' },
     { name: 'Peer Review', category: 'Research', description: 'Draft circulation, feedback incorporation and revision.', tiles: ['Circulation', 'Incorporate feedback', 'Revision'], accent: 'from-violet-500 to-purple-500' },
     { name: 'Publication Prep', category: 'Research', description: 'Journal selection, manuscript formatting and submission.', tiles: ['Journal selection', 'Formatting', 'Submission'], accent: 'from-red-500 to-rose-500' },
     { name: 'Grant Application', category: 'Research', description: 'Funding search, proposal writing and budget.', tiles: ['Funding search', 'Proposal writing', 'Budget'], accent: 'from-blue-500 to-indigo-500' },
     { name: 'Lab Notebook', category: 'Research', description: 'Daily logs, observations and protocol updates.', tiles: ['Daily logs', 'Observations', 'Protocol updates'], accent: 'from-yellow-500 to-amber-500' },
     { name: 'Research Ethics', category: 'Research', description: 'Ethics application, consent forms and approval.', tiles: ['Ethics application', 'Consent forms', 'Approval'], accent: 'from-teal-500 to-cyan-500' },
-  ];
+    { name: 'IT Helpdesk', category: 'IT', description: 'Manage IT tickets, hardware requests and network issues.', tiles: ['Ticket triage', 'Hardware prep', 'Network fix'], accent: 'from-indigo-600 to-blue-600' },
+    { name: 'Server Migration', category: 'IT', description: 'Plan downtime, backup data and migrate servers.', tiles: ['Downtime plan', 'Data backup', 'Migration execution'], accent: 'from-emerald-600 to-teal-600' },
+    { name: 'Software Rollout', category: 'IT', description: 'Test software, draft comms and push deployment.', tiles: ['Testing phase', 'User comms', 'Deployment push'], accent: 'from-rose-600 to-red-600' },
+    { name: 'On-Call Rota', category: 'IT', description: 'Set schedules, define escalation paths and handoffs.', tiles: ['Schedule creation', 'Escalation paths', 'Shift handoffs'], accent: 'from-amber-600 to-orange-600' },
+    { name: 'Hardware Audit', category: 'IT', description: 'Log assets, check warranties and order replacements.', tiles: ['Asset logging', 'Warranty check', 'Order parts'], accent: 'from-violet-600 to-purple-600' },
+    { name: 'Cloud Migration', category: 'IT', description: 'Assess infrastructure, select cloud provider and migrate.', tiles: ['Infra assessment', 'Provider choice', 'Migration run'], accent: 'from-sky-600 to-blue-600' },
+    { name: 'Access Review', category: 'IT', description: 'Audit user permissions, revoke stale access and compliance.', tiles: ['Audit permissions', 'Revoke access', 'Compliance log'], accent: 'from-fuchsia-600 to-pink-600' },
+    { name: 'Disaster Recovery', category: 'IT', description: 'Setup backups, define RTO/RPO and run drill.', tiles: ['Backup setup', 'Define metrics', 'Run drill'], accent: 'from-gray-600 to-slate-600' },
+    { name: 'Game Concept', category: 'Game Dev', description: 'Define mechanics, storyline and art style.', tiles: ['Mechanics doc', 'Story outline', 'Art style guide'], accent: 'from-purple-500 to-indigo-500' },
+    { name: 'Level Design', category: 'Game Dev', description: 'Greyboxing, asset placement and playtesting.', tiles: ['Greyboxing', 'Asset placement', 'Playtesting'], accent: 'from-green-500 to-emerald-500' },
+    { name: 'Character Rigging', category: 'Game Dev', description: 'Bone setup, weight painting and animation test.', tiles: ['Bone setup', 'Weight painting', 'Anim test'], accent: 'from-red-500 to-orange-500' },
+    { name: 'Audio Implementation', category: 'Game Dev', description: 'SFX creation, voice lines and engine mixing.', tiles: ['SFX creation', 'Voice lines', 'Engine mixing'], accent: 'from-blue-500 to-cyan-500' },
+    { name: 'Game QA Testing', category: 'Game Dev', description: 'Boundary testing, bug logging and performance profiling.', tiles: ['Boundary tests', 'Bug logging', 'Performance profile'], accent: 'from-yellow-500 to-amber-500' },
+    { name: 'Video Pre-production', category: 'Media', description: 'Scripting, casting and location scouting.', tiles: ['Scripting', 'Casting', 'Location scout'], accent: 'from-pink-500 to-rose-500' },
+    { name: 'Film Shoot', category: 'Media', description: 'Call sheet, gear check and daily shooting schedule.', tiles: ['Call sheet', 'Gear check', 'Daily schedule'], accent: 'from-indigo-500 to-violet-500' },
+    { name: 'Post-Production', category: 'Media', description: 'Editing, color grading and sound mixing.', tiles: ['Rough cut', 'Color grading', 'Sound mixing'], accent: 'from-emerald-500 to-teal-500' },
+    { name: 'Book Publishing', category: 'Publishing', description: 'Drafting, developmental edit and cover design.', tiles: ['Draft completion', 'Dev edit', 'Cover design'], accent: 'from-amber-500 to-orange-500' },
+    { name: 'Magazine Issue', category: 'Publishing', description: 'Article pitching, layout design and printing.', tiles: ['Article pitches', 'Layout design', 'Send to print'], accent: 'from-fuchsia-500 to-pink-500' },
+    { name: 'Restaurant Opening', category: 'Hospitality', description: 'Menu design, staff hiring and soft launch.', tiles: ['Menu design', 'Staff hiring', 'Soft launch'], accent: 'from-red-500 to-rose-500' },
+    { name: 'Kitchen Prep', category: 'Hospitality', description: 'Inventory check, ingredient prep and station setup.', tiles: ['Inventory check', 'Ingredient prep', 'Station setup'], accent: 'from-blue-500 to-indigo-500' },
+    { name: 'Hotel Maintenance', category: 'Hospitality', description: 'Room checks, pool cleaning and HVAC service.', tiles: ['Room checks', 'Pool cleaning', 'HVAC service'], accent: 'from-teal-500 to-cyan-500' },
+    { name: 'Travel Itinerary', category: 'Personal', description: 'Flight booking, hotel reservation and daily activities.', tiles: ['Flight booking', 'Hotel reservation', 'Daily activities'], accent: 'from-sky-500 to-blue-500' },
+    { name: 'Wedding Planning', category: 'Personal', description: 'Guest list, venue booking and catering tasting.', tiles: ['Guest list', 'Venue booking', 'Catering tasting'], accent: 'from-pink-400 to-rose-400' },
+    { name: 'Home Renovation', category: 'Personal', description: 'Budgeting, contractor quotes and material shopping.', tiles: ['Budgeting', 'Contractor quotes', 'Material shopping'], accent: 'from-stone-500 to-gray-500' },
+    { name: 'Fitness Program', category: 'Personal', description: 'Goal setting, meal prep and workout tracking.', tiles: ['Goal setting', 'Meal prep', 'Workout tracking'], accent: 'from-green-500 to-emerald-500' },
+  ], []);
 
-  const allCats = ['All',...Array.from(new Set(templates.map(t => t.category)))];
-  const filtered = templates.filter(t => {
-    const matchCat = cat === 'All' || t.category === cat;
-    const matchQuery =!query || t.name.toLowerCase().includes(query.toLowerCase()) || t.description.toLowerCase().includes(query.toLowerCase());
-    return matchCat && matchQuery;
-  });
+  const allCats = ['All', ...Array.from(new Set(templates.map(t => t.category)))].sort();
+
+  // Filter and Sort Logic
+  const processedTemplates = useMemo(() => {
+    let result = templates.filter(t => {
+      const matchCat = cat === 'All' || t.category === cat;
+      const matchQuery = !query || t.name.toLowerCase().includes(query.toLowerCase()) || t.description.toLowerCase().includes(query.toLowerCase());
+      return matchCat && matchQuery;
+    });
+
+    if (sortBy === 'az') result.sort((a, b) => a.name.localeCompare(b.name));
+    if (sortBy === 'za') result.sort((a, b) => b.name.localeCompare(a.name));
+    if (sortBy === 'tasks-high') result.sort((a, b) => b.tiles.length - a.tiles.length);
+    if (sortBy === 'tasks-low') result.sort((a, b) => a.tiles.length - b.tiles.length);
+
+    return result;
+  }, [templates, cat, query, sortBy]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(processedTemplates.length / itemsPerPage);
+  const currentTemplates = processedTemplates.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const totalTasks = templates.reduce((s, t) => s + t.tiles.length, 0);
 
   const stats = [
     { label: 'Live templates', value: templates.length, tone: 'text-indigo-600 dark:text-indigo-400' },
-    { label: 'Showing', value: filtered.length, tone: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Total Tasks', value: totalTasks, tone: 'text-emerald-600 dark:text-emerald-400' },
     { label: 'Categories', value: allCats.length - 1, tone: 'text-sky-600 dark:text-sky-400' },
   ];
 
@@ -257,18 +310,25 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-2">
+    <div className="mx-auto max-w-7xl space-y-6 p-2 pb-12">
       <div className={`rounded-2xl border p-6 shadow-sm ${bgCard}`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-500">Templates</p>
-            <h2 className="mt-2 text-2xl font-bold">200 ready-made workflows for every team</h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{filtered.length} of {templates.length} templates • {totalTasks} starter tasks</p>
+            <h2 className="mt-2 text-2xl font-bold">Ready-made workflows for every team</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Showing {processedTemplates.length} of {templates.length} templates</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search templates..." className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white w-full sm:w-56" />
-            <select value={cat} onChange={e => setCat(e.target.value)} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+            <input value={query} onChange={e => {setQuery(e.target.value); setCurrentPage(1);}} placeholder="Search templates..." className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white w-full sm:w-56" />
+            <select value={cat} onChange={e => {setCat(e.target.value); setCurrentPage(1);}} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white">
               {allCats.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={sortBy} onChange={e => {setSortBy(e.target.value); setCurrentPage(1);}} className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white">
+              <option value="default">Sort by</option>
+              <option value="az">A-Z</option>
+              <option value="za">Z-A</option>
+              <option value="tasks-high">Most Tasks</option>
+              <option value="tasks-low">Fewest Tasks</option>
             </select>
             <button type="button" onClick={() => setViewMode('dashboard')} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-indigo-300 hover:text-indigo-600 dark:border-gray-700 dark:text-gray-200">Dashboard</button>
             <button type="button" onClick={handleCreateScratch} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Create from scratch</button>
@@ -285,31 +345,51 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
         ))}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        {filtered.map((template) => (
-          <div key={template.name} className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
-            <div className={`mb-4 h-28 rounded-2xl bg-gradient-to-br ${template.accent} p-4 text-white`}>
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-white/20 px-2 py-1 text- font-bold uppercase tracking-[0.2em]">{template.category}</span>
-                <span className="rounded-full bg-white/10 px-2 py-1 text- font-bold uppercase tracking-[0.2em]">{template.tiles.length} tasks</span>
+      {processedTemplates.length === 0 ? (
+        <div className={`rounded-2xl border p-12 text-center shadow-sm ${bgCard}`}>
+          <p className="text-gray-500 dark:text-gray-400">No templates found matching your criteria.</p>
+          <button onClick={() => {setQuery(''); setCat('All'); setSortBy('default');}} className="mt-4 text-indigo-600 hover:underline">Clear filters</button>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-5 xl:grid-cols-2">
+            {currentTemplates.map((template) => (
+              <div key={template.name} className={`flex flex-col justify-between rounded-2xl border p-5 shadow-sm ${bgCard}`}>
+                <div>
+                  <div className={`mb-4 h-28 rounded-2xl bg-gradient-to-br ${template.accent} p-4 text-white`}>
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-white/20 px-2 py-1 text-xs font-bold uppercase tracking-[0.2em]">{template.category}</span>
+                      <span className="rounded-full bg-white/10 px-2 py-1 text-xs font-bold uppercase tracking-[0.2em]">{template.tiles.length} tasks</span>
+                    </div>
+                    <h3 className="mt-8 text-xl font-black truncate">{template.name}</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{template.description}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {template.tiles.map((tile) => (
+                      <span key={tile} className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">{tile}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 dark:border-gray-800">
+                  <span className="text-xs uppercase tracking-[0.2em] text-gray-500">{template.category} • {template.tiles.length} tasks</span>
+                  <button type="button" onClick={() => handleUseTemplate(template)} disabled={creating === template.name} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50">
+                    {creating === template.name ? 'Creating...' : 'Use template'}
+                  </button>
+                </div>
               </div>
-              <h3 className="mt-8 text-xl font-black truncate">{template.name}</h3>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{template.description}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {template.tiles.map((tile) => (
-                <span key={tile} className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">{tile}</span>
-              ))}
-            </div>
-            <div className="mt-5 flex items-center justify-between">
-              <span className="text-xs uppercase tracking-[0.2em] text-gray-500">{template.category} • {template.tiles.length} tasks</span>
-              <button type="button" onClick={() => handleUseTemplate(template)} disabled={creating === template.name} className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
-                {creating === template.name? 'Creating...' : 'Use template'}
-              </button>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className={`flex items-center justify-between rounded-2xl border p-4 shadow-sm ${bgCard}`}>
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800">Previous</button>
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Page {currentPage} of {totalPages}</span>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800">Next</button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
