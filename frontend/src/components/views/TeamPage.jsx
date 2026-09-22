@@ -1,6 +1,6 @@
-// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner can change any role)
+// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner can change any role & View Owners List)
 import React from 'react';
-import { admin } from '../../services/api'; // FIXED:../../services/api ->../services/api
+import { admin } from '../../services/api'; 
 
 const normalizeRoleValue = (role) => {
   const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
@@ -137,42 +137,75 @@ export default function TeamPage({
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-bold">Board members</h3>
-            {selectedBoard && (<span className="text-xs font-medium text-gray-500 dark:text-gray-400">{memberCards.length} active</span>)}
-          </div>
-          <div className="space-y-3">
-            {memberCards.map((member) => (
-              <div key={`${member.email}-${member.role}`} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-800">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white">{(member.name || member.email || 'U').slice(0, 2).toUpperCase()}</div>
-                  <div>
-                    <p className="text-sm font-semibold">{member.name || member.email}</p>
-                    <p className="text-xs text-gray-500">{normalizeRoleValue(member.role)}</p>
+        <div className="flex flex-col gap-6">
+          <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Board members</h3>
+              {selectedBoard && (<span className="text-xs font-medium text-gray-500 dark:text-gray-400">{memberCards.length} active</span>)}
+            </div>
+            <div className="space-y-3">
+              {memberCards.map((member) => (
+                <div key={`${member.email}-${member.role}`} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white">{(member.name || member.email || 'U').slice(0, 2).toUpperCase()}</div>
+                    <div>
+                      <p className="text-sm font-semibold">{member.name || member.email}</p>
+                      <p className="text-xs text-gray-500">{normalizeRoleValue(member.role)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isPrivileged && String(member.email).toLowerCase()!== String(currentEmail).toLowerCase() && (
+                      <>
+                        <select value={normalizeRoleValue(member.role)} onChange={(e) => { const nextRole = e.target.value; updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole)); }} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200">
+                          <option value="owner">Owner</option>
+                          <option value="administrator">Administrator</option>
+                          <option value="editor">Editor</option>
+                          <option value="guest">Guest</option>
+                          <option value="subscriber">Subscriber</option>
+                        </select>
+                        <button type="button" onClick={() => removeMember?.(member.id || member.email)} className="rounded-lg border border-red-200 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">Remove</button>
+                      </>
+                    )}
+                    <div className="text-right">
+                      <p className="text-xs font-semibold text-gray-500">{member.status}</p>
+                      <p className="text-xs text-gray-400">{member.tasks} task{member.tasks === 1? '' : 's'}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {isPrivileged && String(member.email).toLowerCase()!== String(currentEmail).toLowerCase() && (
-                    <>
-                      <select value={normalizeRoleValue(member.role)} onChange={(e) => { const nextRole = e.target.value; updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole)); }} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200">
-                        <option value="owner">Owner</option>
-                        <option value="administrator">Administrator</option>
-                        <option value="editor">Editor</option>
-                        <option value="guest">Guest</option>
-                        <option value="subscriber">Subscriber</option>
-                      </select>
-                      <button type="button" onClick={() => removeMember?.(member.id || member.email)} className="rounded-lg border border-red-200 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">Remove</button>
-                    </>
-                  )}
-                  <div className="text-right">
-                    <p className="text-xs font-semibold text-gray-500">{member.status}</p>
-                    <p className="text-xs text-gray-400">{member.tasks} task{member.tasks === 1? '' : 's'}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+
+          {/* NEW SECTION: Owners List */}
+          <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Owners List</h3>
+              <span className="text-xs font-medium text-indigo-500 dark:text-indigo-400">{roleBreakdown.owner} Owner(s)</span>
+            </div>
+            <div className="space-y-3">
+              {memberCards.filter((member) => member.role === 'owner').map((owner) => (
+                <div key={`owner-list-${owner.email}`} className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3 dark:border-indigo-900/50 dark:bg-indigo-900/10">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-blue-600 text-sm font-bold text-white shadow-sm">
+                      {(owner.name || owner.email || 'U').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{owner.name || owner.email}</p>
+                      <p className="text-xs text-indigo-600 dark:text-indigo-400">{owner.email}</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-800 shadow-sm dark:bg-indigo-900/60 dark:text-indigo-200">
+                    Board Owner
+                  </span>
+                </div>
+              ))}
+              {roleBreakdown.owner === 0 && (
+                <p className="text-sm text-gray-500 text-center py-2">No owners found.</p>
+              )}
+            </div>
+          </div>
+          {/* END NEW SECTION */}
+
         </div>
 
         <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
