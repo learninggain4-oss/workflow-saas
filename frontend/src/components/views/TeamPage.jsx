@@ -52,7 +52,7 @@ const getMemberPermissions = (member = {}) => {
 };
 
 export default function TeamPage({
-  bgCard,
+  bgCard = 'bg-white dark:bg-[#09090b]',
   setViewMode,
   boardMembers = [],
   registeredUsers = [],
@@ -77,7 +77,7 @@ export default function TeamPage({
   const isPrivileged = myNormalizedRole === 'administrator' || myNormalizedRole === 'owner';
   const isOwner = myNormalizedRole === 'owner';
 
-  const members = boardMembers.length? boardMembers : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole, permissions: myPermissions }];
+  const members = boardMembers.length ? boardMembers : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole, permissions: myPermissions }];
 
   const permissionOptions = [
     { key: 'viewBoard', label: 'View board' },
@@ -101,7 +101,7 @@ export default function TeamPage({
     guest: memberCards.filter((member) => normalizeRoleValue(member.role) === 'guest').length,
     subscriber: memberCards.filter((member) => normalizeRoleValue(member.role) === 'subscriber').length,
   };
-  const ownerManagedUsers = (registeredUsers || []).filter((user) => String(user.email).toLowerCase()!== String(currentEmail).toLowerCase());
+  const ownerManagedUsers = (registeredUsers || []).filter((user) => String(user.email).toLowerCase() !== String(currentEmail).toLowerCase());
 
   const updateRegisteredUserRole = async (userId, nextRole) => {
     if (!nextRole) return;
@@ -115,6 +115,7 @@ export default function TeamPage({
   };
 
   const deleteRegisteredUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to delete this user?")) return;
     try {
       await admin.deleteUser(userId);
       const refreshed = await admin.getUsers();
@@ -125,173 +126,279 @@ export default function TeamPage({
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-2">
-      <div className={`rounded-2xl border p-6 shadow-sm ${bgCard}`}>
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-500">Team</p>
-            <h2 className="mt-2 text-2xl font-bold">People & permissions</h2>
-          </div>
-          <button type="button" onClick={() => setViewMode('dashboard')} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-indigo-300 hover:text-indigo-600 dark:border-gray-700 dark:text-gray-200 dark:hover:text-indigo-400">Dashboard</button>
+    <div className="mx-auto max-w-7xl space-y-8 p-4 sm:p-6 lg:p-8">
+      {/* Page Header */}
+      <div className={`flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-indigo-500 mb-1">Team Management</p>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">People & Permissions</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your team members and their access levels.</p>
         </div>
+        <button 
+          type="button" 
+          onClick={() => setViewMode('dashboard')} 
+          className="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus:ring-offset-gray-900"
+        >
+          Back to Dashboard
+        </button>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="flex flex-col gap-6">
-          <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold">Board members</h3>
-              {selectedBoard && (<span className="text-xs font-medium text-gray-500 dark:text-gray-400">{memberCards.length} active</span>)}
+      {/* Main Layout Grid */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+        
+        {/* LEFT COLUMN (Members & Owners) */}
+        <div className="flex flex-col gap-8 lg:col-span-7 xl:col-span-8">
+          
+          {/* Owners List Section */}
+          <div className={`rounded-2xl border border-indigo-100 dark:border-indigo-900/50 p-6 shadow-sm bg-gradient-to-br from-indigo-50/50 to-white dark:from-indigo-900/10 dark:to-[#09090b]`}>
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Workspace Owners</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Users with full access to this board.</p>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
+                {roleBreakdown.owner} Owner(s)
+              </span>
             </div>
-            <div className="space-y-3">
-              {memberCards.map((member) => (
-                <div key={`${member.email}-${member.role}`} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-800">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white">{(member.name || member.email || 'U').slice(0, 2).toUpperCase()}</div>
-                    <div>
-                      <p className="text-sm font-semibold">{member.name || member.email}</p>
-                      <p className="text-xs text-gray-500">{normalizeRoleValue(member.role)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isPrivileged && String(member.email).toLowerCase()!== String(currentEmail).toLowerCase() && (
-                      <>
-                        <select value={normalizeRoleValue(member.role)} onChange={(e) => { const nextRole = e.target.value; updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole)); }} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200">
-                          <option value="owner">Owner</option>
-                          <option value="administrator">Administrator</option>
-                          <option value="editor">Editor</option>
-                          <option value="guest">Guest</option>
-                          <option value="subscriber">Subscriber</option>
-                        </select>
-                        <button type="button" onClick={() => removeMember?.(member.id || member.email)} className="rounded-lg border border-red-200 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">Remove</button>
-                      </>
-                    )}
-                    <div className="text-right">
-                      <p className="text-xs font-semibold text-gray-500">{member.status}</p>
-                      <p className="text-xs text-gray-400">{member.tasks} task{member.tasks === 1? '' : 's'}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* NEW SECTION: Owners List */}
-          <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold">Owners List</h3>
-              <span className="text-xs font-medium text-indigo-500 dark:text-indigo-400">{roleBreakdown.owner} Owner(s)</span>
-            </div>
-            <div className="space-y-3">
+            
+            <div className="grid gap-4 sm:grid-cols-2">
               {memberCards.filter((member) => member.role === 'owner').map((owner) => (
-                <div key={`owner-list-${owner.email}`} className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3 dark:border-indigo-900/50 dark:bg-indigo-900/10">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-blue-600 text-sm font-bold text-white shadow-sm">
-                      {(owner.name || owner.email || 'U').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">{owner.name || owner.email}</p>
-                      <p className="text-xs text-indigo-600 dark:text-indigo-400">{owner.email}</p>
-                    </div>
+                <div key={`owner-list-${owner.email}`} className="flex items-center gap-4 rounded-xl border border-indigo-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-indigo-800 dark:bg-[#09090b]">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-blue-600 text-lg font-bold text-white shadow-inner">
+                    {(owner.name || owner.email || 'U').slice(0, 2).toUpperCase()}
                   </div>
-                  <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-800 shadow-sm dark:bg-indigo-900/60 dark:text-indigo-200">
-                    Board Owner
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{owner.name || owner.email}</p>
+                    <p className="truncate text-xs text-indigo-600 dark:text-indigo-400">{owner.email}</p>
+                  </div>
                 </div>
               ))}
               {roleBreakdown.owner === 0 && (
-                <p className="text-sm text-gray-500 text-center py-2">No owners found.</p>
+                <div className="col-span-full py-8 text-center text-sm text-gray-500">
+                  No owners found for this board.
+                </div>
               )}
             </div>
           </div>
-          {/* END NEW SECTION */}
 
-        </div>
-
-        <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
-          <h3 className="text-lg font-bold">Custom access</h3>
-          <div className="mt-4 space-y-3">
-            {memberCards.filter((member) => isPrivileged && String(member.email).toLowerCase()!== String(currentEmail).toLowerCase()).map((member) => (
-              <div key={`permissions-${member.email}`} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">{member.name || member.email}</p>
-                    <p className="text- uppercase tracking-[0.2em] text-gray-500">{normalizeRoleValue(member.role)}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {permissionOptions.map((option) => (
-                    <label key={`${member.email}-${option.key}`} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200">
-                      <input type="checkbox" checked={Boolean(member.permissions?.[option.key])} onChange={(e) => { const nextPermissions = {...member.permissions, [option.key]: e.target.checked }; updateMemberRole?.(member.id || member.email, member.role, nextPermissions); }} className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                      {option.label}
-                    </label>
-                  ))}
-                </div>
+          {/* Board Members Section */}
+          <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden ${bgCard}`}>
+            <div className="border-b border-gray-200 dark:border-gray-800 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">All Board Members</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Manage everyone collaborating on this project.</p>
               </div>
-            ))}
-          </div>
-
-          <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
-            <h3 className="text-lg font-bold">Access overview</h3>
-            <div className="mt-4 space-y-3">
-              {[{ label: 'Owner', value: roleBreakdown.owner }, { label: 'Administrator', value: roleBreakdown.administrator }, { label: 'Editor', value: roleBreakdown.editor }, { label: 'Guest', value: roleBreakdown.guest }, { label: 'Subscriber', value: roleBreakdown.subscriber }].map((item) => (
-                <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-gray-800">
-                  <div>
-                    <p className="text-sm font-semibold">{item.label}</p>
-                    <p className="text- uppercase tracking-[0.2em] text-gray-500">Permissions</p>
+              {selectedBoard && (
+                <span className="rounded-md bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                  {memberCards.length} Active Members
+                </span>
+              )}
+            </div>
+            
+            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              {memberCards.map((member) => (
+                <div key={`${member.email}-${member.role}`} className="flex flex-col p-4 sm:flex-row sm:items-center sm:justify-between gap-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-sm font-bold text-white shadow-sm dark:from-gray-600 dark:to-gray-800">
+                      {(member.name || member.email || 'U').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">{member.name || member.email}</p>
+                      <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span className="capitalize">{normalizeRoleValue(member.role)}</span>
+                        <span>•</span>
+                        <span>{member.tasks} Task{member.tasks === 1 ? '' : 's'}</span>
+                        <span>•</span>
+                        <span className="font-medium text-indigo-600 dark:text-indigo-400">{member.status}</span>
+                      </div>
+                    </div>
                   </div>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">{item.value}</span>
+                  
+                  {isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase() && (
+                    <div className="flex items-center gap-3">
+                      <select 
+                        value={normalizeRoleValue(member.role)} 
+                        onChange={(e) => { 
+                          const nextRole = e.target.value; 
+                          updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole)); 
+                        }} 
+                        className="block w-36 rounded-lg border-gray-300 bg-white py-2 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white"
+                      >
+                        <option value="owner">Owner</option>
+                        <option value="administrator">Administrator</option>
+                        <option value="editor">Editor</option>
+                        <option value="guest">Guest</option>
+                        <option value="subscriber">Subscriber</option>
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={() => removeMember?.(member.id || member.email)} 
+                        className="inline-flex items-center justify-center rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20 dark:focus:ring-offset-[#09090b]"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+          </div>
+        </div>
 
-            {isOwner && ownerManagedUsers.length > 0 && (
-              <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Owner controls</h4>
-                  <span className="rounded-full bg-indigo-50 px-2 py-1 text- font-semibold uppercase tracking-[0.15em] text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">Registered users</span>
+        {/* RIGHT COLUMN (Controls, Invites, Settings) */}
+        <div className="flex flex-col gap-6 lg:col-span-5 xl:col-span-4">
+          
+          {/* Invite Teammate */}
+          {isPrivileged && selectedBoard && (
+            <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Invite New Teammate</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                  <input 
+                    value={inviteEmail} 
+                    onChange={(e) => setInviteEmail(e.target.value)} 
+                    placeholder="colleague@company.com" 
+                    className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white dark:placeholder-gray-500" 
+                  />
                 </div>
-                <div className="space-y-2">
-                  {ownerManagedUsers.map((user) => (
-                    <div key={user.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold">{user.name || user.email}</p>
-                          <p className="text-xs text-gray-500">{user.email}</p>
-                        </div>
-                        <button type="button" onClick={() => deleteRegisteredUser(user.id)} className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">Delete</button>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <select value={normalizeRoleValue(user.role)} onChange={(e) => updateRegisteredUserRole(user.id, e.target.value)} className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200">
-                          <option value="owner">Owner</option>
-                          <option value="administrator">Administrator</option>
-                          <option value="editor">Editor</option>
-                          <option value="guest">Guest</option>
-                          <option value="subscriber">Subscriber</option>
-                        </select>
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Temporary Password</label>
+                  <input 
+                    type="password" 
+                    value={invitePassword} 
+                    onChange={(e) => setInvitePassword(e.target.value)} 
+                    placeholder="Set a secure password" 
+                    className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white dark:placeholder-gray-500" 
+                  />
                 </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Assign Role</label>
+                  <select 
+                    value={inviteRole} 
+                    onChange={(e) => setInviteRole(e.target.value)} 
+                    className="block w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-white"
+                  >
+                    <option value="owner">Owner</option>
+                    <option value="administrator">Administrator</option>
+                    <option value="editor">Editor</option>
+                    <option value="guest">Guest</option>
+                    <option value="subscriber">Subscriber</option>
+                  </select>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={inviteUser} 
+                  className="mt-2 w-full flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-[#09090b]"
+                >
+                  Send Invitation
+                </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {isPrivileged && selectedBoard && (
-              <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Invite teammate</h4>
-                <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Email address" className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100" />
-                <input type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} placeholder="Password for new user" className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100" />
-                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-100">
-                  <option value="owner">Owner</option>
-                  <option value="administrator">Administrator</option>
-                  <option value="editor">Editor</option>
-                  <option value="guest">Guest</option>
-                  <option value="subscriber">Subscriber</option>
-                </select>
-                <button type="button" onClick={inviteUser} className="w-full rounded-xl bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Send invite</button>
+          {/* Access Overview */}
+          <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Owner', value: roleBreakdown.owner }, 
+                { label: 'Administrator', value: roleBreakdown.administrator }, 
+                { label: 'Editor', value: roleBreakdown.editor }, 
+                { label: 'Guest', value: roleBreakdown.guest }, 
+                { label: 'Subscriber', value: roleBreakdown.subscriber }
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800 dark:bg-gray-800/30">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white border border-gray-200 dark:border-gray-700">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Access (Granular Permissions) */}
+          <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Custom Access</h3>
+            {memberCards.filter((member) => isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase()).length === 0 ? (
+               <p className="text-sm text-gray-500">No members available to configure custom access.</p>
+            ) : (
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {memberCards.filter((member) => isPrivileged && String(member.email).toLowerCase() !== String(currentEmail).toLowerCase()).map((member) => (
+                  <div key={`permissions-${member.email}`} className="rounded-xl border border-gray-200 bg-gray-50/30 p-4 dark:border-gray-800 dark:bg-[#09090b]/50">
+                    <div className="mb-4 border-b border-gray-200 pb-3 dark:border-gray-800">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">{member.name || member.email}</p>
+                      <p className="text-xs uppercase tracking-widest text-indigo-500 mt-1">{normalizeRoleValue(member.role)}</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {permissionOptions.map((option) => (
+                        <label key={`${member.email}-${option.key}`} className="flex cursor-pointer items-center justify-between rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 p-1.5 transition-colors">
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{option.label}</span>
+                          <div className="relative flex items-start">
+                            <div className="flex h-5 items-center">
+                              <input 
+                                type="checkbox" 
+                                checked={Boolean(member.permissions?.[option.key])} 
+                                onChange={(e) => { 
+                                  const nextPermissions = {...member.permissions, [option.key]: e.target.checked }; 
+                                  updateMemberRole?.(member.id || member.email, member.role, nextPermissions); 
+                                }} 
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-900" 
+                              />
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
+
+          {/* Owner Controls (Registered Users) */}
+          {isOwner && ownerManagedUsers.length > 0 && (
+            <div className={`rounded-2xl border border-orange-200 dark:border-orange-900/50 p-6 shadow-sm bg-orange-50/30 dark:bg-orange-900/10`}>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Workspace Admin Controls</h3>
+                <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-800 dark:bg-orange-900/50 dark:text-orange-300">
+                  Global Users
+                </span>
+              </div>
+              <div className="space-y-3">
+                {ownerManagedUsers.map((user) => (
+                  <div key={user.id} className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm dark:border-orange-800/50 dark:bg-[#09090b]">
+                    <div className="mb-3 flex items-start justify-between">
+                      <div className="min-w-0 pr-2">
+                        <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{user.name || user.email}</p>
+                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => deleteRegisteredUser(user.id)} 
+                        className="shrink-0 rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <select 
+                      value={normalizeRoleValue(user.role)} 
+                      onChange={(e) => updateRegisteredUserRole(user.id, e.target.value)} 
+                      className="block w-full rounded-lg border-gray-300 bg-gray-50 py-2 pl-3 pr-8 text-sm shadow-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="owner">Owner</option>
+                      <option value="administrator">Administrator</option>
+                      <option value="editor">Editor</option>
+                      <option value="guest">Guest</option>
+                      <option value="subscriber">Subscriber</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
