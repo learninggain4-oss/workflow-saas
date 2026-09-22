@@ -1,4 +1,4 @@
-// src/services/api.js - UPDATED FOR ROLE SELECT AT SIGN IN
+// frontend/src/services/api.js - FULL FIXED FOR OWNER ROLE CHANGE
 import axios from 'axios';
 
 const getApiBaseUrl = () => {
@@ -26,33 +26,38 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const normalizeRole = (role) => String(role || 'editor').trim().toLowerCase();
+
 export const auth = {
-  // UPDATED: accepts both URLSearchParams and object { username/email, password, role }
+  // accepts both URLSearchParams and object { username/email, password, role }
   login: (data) => {
     let formData;
     if (data instanceof URLSearchParams) {
       formData = data;
+      // FIXED: ensure role in URLSearchParams is lowercased
+      if (formData.has('role')) {
+        formData.set('role', normalizeRole(formData.get('role')));
+      }
     } else {
       formData = new URLSearchParams();
       const username = data.username || data.email || '';
-      formData.append('username', username);
+      formData.append('username', username.toLowerCase());
       formData.append('password', data.password || '');
       if (data.role) {
-        formData.append('role', String(data.role).toLowerCase());
+        formData.append('role', normalizeRole(data.role));
       }
     }
     return api.post('/api/login', formData, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
   },
-  // UPDATED: role included in register payload
+  // role included in register payload
   register: (data) => {
-    // Expected: { email, password, name, role }
     const payload = {
-      email: data.email,
+      email: String(data.email || '').toLowerCase(),
       password: data.password,
       name: data.name || data.email?.split('@')[0],
-      role: data.role || 'editor',
+      role: normalizeRole(data.role || 'editor'),
     };
     return api.post('/api/register', payload);
   },
@@ -63,8 +68,9 @@ export const auth = {
 
 export const admin = {
   getUsers: () => api.get('/api/admin/users'),
-  updateUserRole: (userId, role) => api.put(`/api/admin/users/${userId}`, { role }),
-  deleteUser: (userId) => api.delete(`/api/admin/users/${userId}`),
+  // FIXED: normalize role + encode userId
+  updateUserRole: (userId, role) => api.put(`/api/admin/users/${encodeURIComponent(userId)}`, { role: normalizeRole(role) }),
+  deleteUser: (userId) => api.delete(`/api/admin/users/${encodeURIComponent(userId)}`),
 };
 
 export const boards = {
@@ -72,10 +78,27 @@ export const boards = {
   create: (name) => api.post('/api/boards', { name }),
   rename: (id, name) => api.put(`/api/boards/${id}`, { name }),
   delete: (id) => api.delete(`/api/boards/${id}`),
-  invite: (id, email, role, password = '') => api.post(`/api/boards/${id}/invite`, { email, role, password }),
+  // FIXED: email lowercased + role normalized + password included for invite email
+  invite: (id, email, role, password = '') => api.post(`/api/boards/${id}/invite`, {
+    email: String(email).toLowerCase(),
+    role: normalizeRole(role),
+    password
+  }),
   getMembers: (id) => api.get(`/api/boards/${id}/members`),
-  updateMemberRole: (boardId, userId, role) => api.put(`/api/boards/${boardId}/members/${userId}`, { role }),
-  removeMember: (boardId, userId) => api.delete(`/api/boards/${boardId}/members/${userId}`),
+  // FIXED: MAIN BUG - accept both string role and object {role, permissions}, normalize, encode userId
+  updateMemberRole: (boardId, userId, roleData) => {
+    let payload;
+    if (typeof roleData === 'string') {
+      payload = { role: normalizeRole(roleData) };
+    } else if (roleData && typeof roleData === 'object') {
+      payload = {...roleData };
+      if (payload.role) payload.role = normalizeRole(payload.role);
+    } else {
+      payload = { role: 'editor' };
+    }
+    return api.put(`/api/boards/${boardId}/members/${encodeURIComponent(userId)}`, payload);
+  },
+  removeMember: (boardId, userId) => api.delete(`/api/boards/${boardId}/members/${encodeURIComponent(userId)}`),
   getActivities: (id) => api.get(`/api/boards/${id}/activities`),
   exportCSV: (id) => api.get(`/api/boards/${id}/export`, { responseType: 'blob' }),
 };
