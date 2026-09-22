@@ -203,14 +203,28 @@ PERMISSION_KEYS = [
     "manageBoard",
 ]
 
+# FIXED: Added admin, member, viewer, super_admin aliases
 ROLE_ALIASES = {
     "owner": "owner",
+    "super_admin": "owner",
+    "superadmin": "owner",
     "administrator": "administrator",
+    "admin": "administrator",
     "editor": "editor",
+    "member": "editor",
+    "contributor": "editor",
     "guest": "guest",
     "subscriber": "subscriber",
+    "viewer": "subscriber",
 }
 
+ROLE_HIERARCHY = {
+    "owner": 5,
+    "administrator": 4,
+    "editor": 3,
+    "guest": 2,
+    "subscriber": 1,
+}
 
 def normalize_role(role):
     if role is None:
@@ -218,20 +232,25 @@ def normalize_role(role):
     candidate = str(role).strip().lower().replace("-", "_").replace(" ", "_")
     if candidate in ROLE_ALIASES:
         return ROLE_ALIASES[candidate]
+    # fallback: check if already canonical
     for alias, canonical in ROLE_ALIASES.items():
         if candidate == alias or candidate == canonical:
             return canonical
     return "editor"
 
-
 def default_permissions_for_role(role):
     role_name = normalize_role(role)
-    if role_name in {"owner"}:
-        return {key: True for key in PERMISSION_KEYS}
-    if role_name in {"administrator"}:
+    if role_name in {"owner", "administrator"}:
         return {key: True for key in PERMISSION_KEYS}
     if role_name == "editor":
-        return {key: True for key in PERMISSION_KEYS}
+        return {
+            "viewBoard": True,
+            "createTasks": True,
+            "editTasks": True,
+            "deleteTasks": True,
+            "manageMembers": False,
+            "manageBoard": False,
+        }
     if role_name == "guest":
         return {
             "viewBoard": True,
@@ -241,6 +260,7 @@ def default_permissions_for_role(role):
             "manageMembers": False,
             "manageBoard": False,
         }
+    # subscriber / viewer
     return {
         "viewBoard": True,
         "createTasks": False,
@@ -250,7 +270,6 @@ def default_permissions_for_role(role):
         "manageBoard": False,
     }
 
-
 def normalize_permissions(role, custom_permissions=None):
     permissions = default_permissions_for_role(role)
     if isinstance(custom_permissions, dict):
@@ -258,7 +277,6 @@ def normalize_permissions(role, custom_permissions=None):
             if key in custom_permissions and isinstance(custom_permissions[key], bool):
                 permissions[key] = bool(custom_permissions[key])
     return permissions
-
 
 def is_owner_user(user, db: Session = None):
     if user is None:
@@ -272,7 +290,6 @@ def is_owner_user(user, db: Session = None):
         return False
     return user.id == first_user.id
 
-
 def get_board_member_role(board_id: int, user_id: int, db: Session):
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
     if not board:
@@ -282,12 +299,16 @@ def get_board_member_role(board_id: int, user_id: int, db: Session):
     members = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).all()
     if not members:
         return None
-    role_order = ["subscriber", "guest", "editor", "administrator", "owner"]
-    for role in role_order:
-        if any(normalize_role((m.role or "editor").strip()) == role for m in members):
-            return role
-    return normalize_role((members[0].role or "editor").strip())
-
+    # FIXED: Return highest role, not lowest
+    highest_role = None
+    highest_level = -1
+    for m in members:
+        r = normalize_role((m.role or "editor").strip())
+        level = ROLE_HIERARCHY.get(r, 0)
+        if level > highest_level:
+            highest_level = level
+            highest_role = r
+    return highest_role or normalize_role((members[0].role or "editor").strip())
 
 def get_board_member_permissions(board_id: int, user_id: int, db: Session):
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
@@ -319,7 +340,6 @@ def get_board_member_permissions(board_id: int, user_id: int, db: Session):
 
     return normalize_permissions(resolved_role, custom_permissions)
 
-
 def ensure_board_access(board_id: int, user, db: Session, required_role: str = "subscriber", action: str = "Board access", required_permission: str = None):
     if board_id is None:
         raise HTTPException(status_code=403, detail=f"{action} denied")
@@ -328,19 +348,27 @@ def ensure_board_access(board_id: int, user, db: Session, required_role: str = "
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
 
+    # Board owner always has full access
     if board.owner_id == user.id:
+        return board
+
+    # Check if user is global owner
+    if normalize_role(getattr(user, "role", "")) == "owner":
         return board
 
     permissions = get_board_member_permissions(board_id, user.id, db)
     permission_map = {
-        "subscriber": "viewBoard",
-        "editor": "createTasks",
+        "owner": "manageBoard",
         "administrator": "manageBoard",
+        "admin": "manageBoard",
+        "editor": "createTasks",
+        "member": "createTasks",
+        "guest": "viewBoard",
+        "subscriber": "viewBoard",
+        "viewer": "viewBoard",
     }
     resolved_permission = required_permission or permission_map.get((required_role or "subscriber").lower(), "viewBoard")
     if not permissions.get(resolved_permission, False):
         raise HTTPException(status_code=403, detail=f"{action} requires {resolved_permission} permission")
 
     return board
-
-#(Email, JWT, Security, WebSockets)

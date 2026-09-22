@@ -65,7 +65,7 @@ def ensure_database_migrations():
                     ("tasks", "labels", "VARCHAR DEFAULT ''"),
                     ("comments", "user_name", "VARCHAR DEFAULT ''"),
                     ("comments", "created_at", "VARCHAR DEFAULT ''"),
-                    ("board_members", "role", "VARCHAR DEFAULT 'member'"),
+                    ("board_members", "role", "VARCHAR DEFAULT 'editor'"),
                     ("board_members", "permissions", "TEXT DEFAULT '{}'"),
                 ]
                 tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
@@ -109,7 +109,7 @@ def ensure_database_migrations():
                     ("created_at", "VARCHAR DEFAULT ''"),
                 ],
                 "board_members": [
-                    ("role", "VARCHAR DEFAULT 'member'"),
+                    ("role", "VARCHAR DEFAULT 'editor'"),
                     ("permissions", "TEXT DEFAULT '{}'"),
                 ],
             }
@@ -142,13 +142,19 @@ models.Base.metadata.create_all(bind=engine)
 
 
 def normalize_existing_users_to_owner():
+    """FIXED: Don't make everyone owner, only ensure at least one owner exists"""
     try:
         db = SessionLocal()
-        users = db.query(models.User).all()
-        for user in users:
-            if utils.normalize_role(getattr(user, "role", "administrator")) != "owner":
-                user.role = "owner"
-        db.commit()
+        users = db.query(models.User).order_by(models.User.id.asc()).all()
+        if not users:
+            db.close()
+            return
+        has_owner = any(utils.normalize_role(getattr(u, "role", "administrator")) == "owner" for u in users)
+        if not has_owner:
+            # Make first user owner if no owner exists
+            first = users[0]
+            first.role = "owner"
+            db.commit()
         db.close()
     except Exception:
         traceback.print_exc()
@@ -812,7 +818,7 @@ def update_registered_user_role(user_id: int, payload: dict, current_user=Depend
     if target.id == current_user.id:
         raise HTTPException(status_code=400, detail="Owner cannot change own role here")
 
-    role = utils.normalize_role(payload.get("role", "admin") or "admin")
+    role = utils.normalize_role(payload.get("role", "administrator") or "administrator")
     if role not in {"owner", "administrator", "editor", "guest", "subscriber"}:
         raise HTTPException(status_code=400, detail="Role must be owner, administrator, editor, guest, subscriber")
 
@@ -1013,7 +1019,7 @@ def create_board(payload: schemas.BoardCreate, current_user=Depends(get_current_
 
 @app.put("/api/boards/{board_id}")
 def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board rename", required_permission="manageBoard")
+    b = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Board rename", required_permission="manageBoard")
     b.name = payload.name
     db.commit()
     db.refresh(b)
@@ -1022,7 +1028,7 @@ def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depen
 
 @app.delete("/api/boards/{board_id}")
 async def delete_board(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    b = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board delete", required_permission="manageBoard")
+    b = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Board delete", required_permission="manageBoard")
     tids = [t.id for t in db.query(models.Task).filter(models.Task.board_id == board_id).all()]
     if tids:
         db.query(models.Comment).filter(models.Comment.task_id.in_(tids)).delete(synchronize_session=False)
@@ -1056,9 +1062,16 @@ def export_board_csv(board_id: int, current_user=Depends(get_current_user), db: 
 
 @app.post("/api/boards/{board_id}/invite")
 def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    board = utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Board invite", required_permission="manageMembers")
+    board = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Board invite", required_permission="manageMembers")
     target = db.query(models.User).filter(models.User.email == payload.email).first()
-    role = utils.normalize_role(payload.role or "member")
+    # FIXED: normalize with admin alias support
+    role = utils.normalize_role(payload.role or "editor")
+    
+    # FIXED: Only owner can invite owner role
+    if role == "owner" and utils.normalize_role(getattr(current_user, "role", "")) != "owner":
+        if not utils.is_owner_user(current_user, db):
+            raise HTTPException(status_code=403, detail="Only owner can invite with owner role")
+    
     permissions = utils.normalize_permissions(role, getattr(payload, "permissions", None))
 
     if not target:
@@ -1098,11 +1111,13 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
         log_activity_safe(board_id, current_user.name, f"invited {payload.email} as {role}")
         create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}'", "invite", f"Invited to {board.name}")
     else:
+        # FIXED: Preserve correct role position - update with normalized role
         bm.role = role
         bm.permissions = json.dumps(permissions, ensure_ascii=False)
         db.commit()
+        log_activity_safe(board_id, current_user.name, f"updated {payload.email} role to {role}")
 
-    return {"ok": True, "message": "Invite sent successfully", "user_created": target.id is not None and not target.id == 0}
+    return {"ok": True, "message": "Invite sent successfully", "role": role, "user_created": target.id is not None}
 
 
 @app.get("/api/boards/{board_id}/members")
@@ -1115,9 +1130,12 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
             members.append({"email": owner.email, "name": owner.name, "role": "owner", "id": owner.id, "permissions": utils.default_permissions_for_role("owner")})
             
         for m in db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id).all():
+            # Skip if this member is the board owner (already added)
+            if m.user_id == board.owner_id:
+                continue
             u = db.query(models.User).filter(models.User.id == m.user_id).first()
             if u: 
-                normalized_role = utils.normalize_role((m.role or "member").strip())
+                normalized_role = utils.normalize_role((m.role or "editor").strip())
                 permissions = utils.normalize_permissions(normalized_role, _parse_json(m.permissions, {}))
                 members.append({"email": u.email, "name": u.name, "role": normalized_role, "id": u.id, "permissions": permissions})
                 
@@ -1126,14 +1144,20 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
 
 @app.put("/api/boards/{board_id}/members/{user_id}")
 def update_board_member_role(board_id: int, user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    utils.ensure_board_access(board_id, current_user, db, required_role="admin", action="Member role update", required_permission="manageMembers")
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Member role update", required_permission="manageMembers")
 
-    if user_id == db.query(models.Board).filter(models.Board.id == board_id).first().owner_id:
-        raise HTTPException(status_code=400, detail="Owner access cannot be changed here")
+    board = db.query(models.Board).filter(models.Board.id == board_id).first()
+    if user_id == board.owner_id:
+        raise HTTPException(status_code=400, detail="Board owner role cannot be changed")
 
     role = utils.normalize_role(payload.get("role", "editor") or "editor")
     if role not in {"owner", "administrator", "editor", "guest", "subscriber"}:
         raise HTTPException(status_code=400, detail="Role must be owner, administrator, editor, guest, subscriber")
+
+    # FIXED: Only owner can assign owner role
+    if role == "owner" and utils.normalize_role(getattr(current_user, "role", "")) != "owner":
+        if not utils.is_owner_user(current_user, db):
+            raise HTTPException(status_code=403, detail="Only owner can assign owner role")
 
     permissions_payload = payload.get("permissions") or {}
     permissions = utils.normalize_permissions(role, permissions_payload)

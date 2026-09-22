@@ -43,7 +43,7 @@ export default function App() {
   const [newBoardName, setNewBoardName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [invitePassword, setInvitePassword] = useState("");
-  const [inviteRole, setInviteRole] = useState("admin");
+  const [inviteRole, setInviteRole] = useState("administrator");
   const [renameValue, setRenameValue] = useState("");
 
   const [taskComments, setTaskComments] = useState([]);
@@ -174,12 +174,20 @@ export default function App() {
     const aliases = {
       owner: 'owner',
       administrator: 'administrator',
+      admin: 'administrator',
+      super_admin: 'owner',
+      superadmin: 'owner',
       editor: 'editor',
+      member: 'editor',
       guest: 'guest',
       subscriber: 'subscriber',
+      viewer: 'subscriber',
     };
     return aliases[value] || 'editor';
   };
+
+  // FIX: Alias to prevent ReferenceError if old code uses normalizedRoleValue
+  const normalizedRoleValue = normalizeRoleValue;
 
   const defaultPermissionsForRole = (role = 'owner') => {
     const normalizedRole = normalizeRoleValue(role);
@@ -219,6 +227,9 @@ export default function App() {
   }, [boardMembers, currentEmail]);
 
   const canEdit = Boolean(myPermissions.createTasks || myPermissions.editTasks || myPermissions.deleteTasks || myPermissions.manageBoard);
+
+  // FIX: Centralized admin check - was checking 'admin' but actual value is 'administrator'
+  const isAdminOrOwner = myRole === 'owner' || myRole === 'administrator';
 
   const fetchInitialData = async () => {
     if (!token) return;
@@ -322,22 +333,9 @@ export default function App() {
 
   const handlePlanSelection = async (planName) => {
     const tier = (planName || '').toLowerCase();
-
-    if (tier === 'pro') {
-      await handleUpgrade();
-      return;
-    }
-
-    if (tier === 'free') {
-      alert("You are already on the free plan or can stay on it without any upgrade.");
-      return;
-    }
-
-    if (tier === 'enterprise') {
-      alert("Enterprise pricing is handled through sales. Please contact support to set up a custom workspace plan.");
-      return;
-    }
-
+    if (tier === 'pro') { await handleUpgrade(); return; }
+    if (tier === 'free') { alert("You are already on the free plan"); return; }
+    if (tier === 'enterprise') { alert("Enterprise pricing is handled through sales."); return; }
     alert("This plan is not currently available from the app.");
   };
 
@@ -400,26 +398,24 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Error"); }
   };
   const renameBoard = async () => {
-    if (!renameValue.trim() || !selectedBoard || myRole !== 'administrator') return;
+    if (!renameValue.trim() || !selectedBoard || !isAdminOrOwner) return;
     await boards.rename(selectedBoard, renameValue); await fetchInitialData();
   };
   const deleteBoard = async () => {
-    if (!selectedBoard || myRole !== 'administrator' || !confirm("Delete board?")) return;
+    if (!selectedBoard || !isAdminOrOwner || !confirm("Delete board?")) return;
     await boards.delete(selectedBoard); setSelectedBoard(null); await fetchInitialData();
   };
   const inviteUser = async () => {
-    if (!inviteEmail.trim() || !selectedBoard || (myRole !== 'administrator' && myRole !== 'owner')) return alert("Only owners and admins can invite");
+    if (!inviteEmail.trim() || !selectedBoard || !isAdminOrOwner) return alert("Only owners and admins can invite");
     try {
       const res = await boards.invite(selectedBoard, inviteEmail, inviteRole, invitePassword);
       alert(res.data.message || "Invited!");
-      setInviteEmail("");
-      setInvitePassword("");
-      fetchBoardData();
+      setInviteEmail(""); setInvitePassword(""); fetchBoardData();
     } catch (e) { alert(e.response?.data?.detail || "Invite failed"); }
   };
 
   const updateMemberRole = async (userId, role, permissions = null) => {
-    if (!selectedBoard || myRole !== 'administrator') return;
+    if (!selectedBoard || !isAdminOrOwner) return;
     try {
       const payload = permissions ? { role, permissions } : { role };
       await boards.updateMemberRole(selectedBoard, userId, payload);
@@ -430,11 +426,10 @@ export default function App() {
   };
 
   const removeMember = async (userId) => {
-    if (!selectedBoard || myRole !== 'administrator') return;
+    if (!selectedBoard || !isAdminOrOwner) return;
     const member = boardMembers.find((m) => String(m.id) === String(userId));
     const confirmed = window.confirm(`Remove ${member?.name || member?.email || 'this member'} from this board?`);
     if (!confirmed) return;
-
     try {
       await boards.removeMember(selectedBoard, userId);
       await fetchBoardData();
@@ -463,27 +458,15 @@ export default function App() {
 
   const handleProfileUpdate = async (e) => {
     if (e) e.preventDefault();
-
     const name = profileForm.name.trim();
     const emailValue = profileForm.email.trim();
     const passwordValue = profileForm.password.trim();
-
-    if (!name) {
-      alert("Name is required");
-      return;
-    }
-
-    if (!emailValue) {
-      alert("Email is required");
-      return;
-    }
-
+    if (!name) { alert("Name is required"); return; }
+    if (!emailValue) { alert("Email is required"); return; }
     setSavingProfile(true);
     try {
       const payload = {
-        name,
-        email: emailValue,
-        password: passwordValue || "",
+        name, email: emailValue, password: passwordValue || "",
         avatar_url: profileAvatar || "",
         profile_preferences: profilePreferences,
         workspace_defaults: workspaceDefaults,
@@ -513,11 +496,7 @@ export default function App() {
         localStorage.setItem("token", res.data.access_token);
         setToken(res.data.access_token);
       }
-      setProfileForm({
-        name: updatedUser?.name || name,
-        email: updatedUser?.email || emailValue,
-        password: "",
-      });
+      setProfileForm({ name: updatedUser?.name || name, email: updatedUser?.email || emailValue, password: "" });
       if (updatedUser?.avatar_url) setProfileAvatar(updatedUser.avatar_url);
       addAccountActivity("Updated profile settings");
       alert("Profile updated successfully");
@@ -536,15 +515,9 @@ export default function App() {
   const handleAvatarUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Avatar image must be under 2MB");
-      return;
-    }
-
+    if (file.size > 2 * 1024 * 1024) { alert("Avatar image must be under 2MB"); return; }
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const formData = new FormData(); formData.append("file", file);
       const res = await uploadFile(formData);
       const avatarUrl = res.data?.url || "";
       setProfileAvatar(avatarUrl);
@@ -565,24 +538,14 @@ export default function App() {
       }
       addAccountActivity("Updated profile photo");
       alert("Profile photo updated");
-    } catch {
-      alert("Profile photo upload failed");
-    }
+    } catch { alert("Profile photo upload failed"); }
   };
 
   const handleDeleteAccount = () => {
     const confirmed = window.confirm("This will clear your stored session and local profile data on this device. Continue?");
     if (!confirmed) return;
-
-    localStorage.clear();
-    setToken("");
-    setUserData(null);
-    setBoards([]);
-    setTasks([]);
-    setNotifications([]);
-    setProfileForm({ name: "", email: "", password: "" });
-    setProfileAvatar("");
-    setViewMode("board");
+    localStorage.clear(); setToken(""); setUserData(null); setBoards([]); setTasks([]); setNotifications([]);
+    setProfileForm({ name: "", email: "", password: "" }); setProfileAvatar(""); setViewMode("board");
   };
 
   const handleVerifyEmail = () => {
@@ -601,9 +564,7 @@ export default function App() {
   const toggleConnectedApp = (id) => {
     setSecuritySettings((prev) => ({
       ...prev,
-      connectedApps: prev.connectedApps.map((app) =>
-        app.id === id ? { ...app, connected: !app.connected } : app
-      ),
+      connectedApps: prev.connectedApps.map((app) => app.id === id ? { ...app, connected: !app.connected } : app),
     }));
   };
 
@@ -643,7 +604,6 @@ export default function App() {
   const y = calDate.getFullYear(); const m = calDate.getMonth();
   const daysInMonth = new Date(y, m + 1, 0).getDate(); const firstDay = new Date(y, m, 1).getDay();
 
-  // Modern Professional UI Variables
   const bgMain = darkMode ? "bg-[#09090b] text-gray-100" : "bg-[#f8fafc] text-gray-900";
   const bgSide = darkMode ? "bg-[#121214] border-gray-800 text-gray-300" : "bg-white border-gray-200 text-gray-700";
   const bgCard = darkMode ? "bg-[#18181b] border-gray-800" : "bg-white border-gray-200";
@@ -661,40 +621,11 @@ export default function App() {
     <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
       <div className="app-shell h-full w-full overflow-hidden rounded-[28px] border border-white/10 flex">
         <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }} />
-
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }} />
-
           <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar">
           {viewMode === "settings" ? (
-            <AccountSettingsPage {...{
-              userData,
-              profileForm,
-              setProfileForm,
-              handleProfileUpdate,
-              savingProfile,
-              profilePreferences,
-              setProfilePreferences,
-              workspaceDefaults,
-              setWorkspaceDefaults,
-              resetProfilePreferences,
-              darkMode,
-              setDarkMode,
-              profileAvatar,
-              setProfileAvatar,
-              handleAvatarUpload,
-              handleDeleteAccount,
-              accountActivity,
-              handleUpgrade,
-              securitySettings,
-              handleVerifyEmail,
-              toggleTwoFactor,
-              toggleConnectedApp,
-              bgCard,
-              inputCls,
-              primaryBtn,
-              setViewMode,
-            }} />
+            <AccountSettingsPage {...{ userData, profileForm, setProfileForm, handleProfileUpdate, savingProfile, profilePreferences, setProfilePreferences, workspaceDefaults, setWorkspaceDefaults, resetProfilePreferences, darkMode, setDarkMode, profileAvatar, setProfileAvatar, handleAvatarUpload, handleDeleteAccount, accountActivity, handleUpgrade, securitySettings, handleVerifyEmail, toggleTwoFactor, toggleConnectedApp, bgCard, inputCls, primaryBtn, setViewMode }} />
           ) : viewMode === "billing" ? (
             <BillingPage {...{ userData, bgCard, setViewMode, handleUpgrade, handlePlanSelection }} />
           ) : viewMode === "reports" ? (
@@ -718,19 +649,14 @@ export default function App() {
           ) : (
             <>
               {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard }} />}
-
               {viewMode === "board" && <BoardView {...{ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask }} />}
-
               {viewMode === "timeline" && <Timeline {...{ tasksList, setEditing, timelineDays, bgCard }} />}
-
               {viewMode === "calendar" && <CalendarView {...{ calDate, tasksList, setEditing, firstDay, daysInMonth, m, y, bgCard, subCard }} />}
             </>
           )}
         </div>
       </main>
-
       {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn }} />}
-
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
