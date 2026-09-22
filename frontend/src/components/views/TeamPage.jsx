@@ -1,4 +1,3 @@
-// frontend/src/pages/TeamPage.jsx - FULL FIXED (Role Distribution visibility controlled via Custom Access)
 import React from 'react';
 import { admin } from '../../services/api'; 
 
@@ -33,7 +32,9 @@ const defaultPermissionsForRole = (role = 'owner') => {
   if (normalizedRole === 'owner') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
   }
-  if (normalizedRole === 'administrator'){return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };}
+  if (normalizedRole === 'administrator'){
+    return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true, viewRoleDistribution: true };
+  }
   if (normalizedRole === 'editor') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: false, manageBoard: false, viewRoleDistribution: false };
   }
@@ -48,7 +49,8 @@ const defaultPermissionsForRole = (role = 'owner') => {
 
 const getMemberPermissions = (member = {}) => {
   const base = defaultPermissionsForRole(member.role || 'editor');
-  return {...base,...(member.permissions || {}) };
+  const custom = member.permissions && typeof member.permissions === 'object' ? member.permissions : {};
+  return { ...base, ...custom };
 };
 
 export default function TeamPage({

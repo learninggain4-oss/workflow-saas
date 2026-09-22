@@ -1,10 +1,9 @@
-// frontend/src/services/api.js - FULL FIXED FOR OWNER ROLE CHANGE + ROLE LOGIN CHECK
 import axios from 'axios';
 
 const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/$/, '');
 
-  if (typeof window!== 'undefined') {
+  if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8000';
@@ -91,7 +90,7 @@ export const boards = {
     if (typeof roleData === 'string') {
       payload = { role: normalizeRole(roleData) };
     } else if (roleData && typeof roleData === 'object') {
-      payload = {...roleData };
+      payload = { ...roleData };
       if (payload.role) payload.role = normalizeRole(payload.role);
     } else {
       payload = { role: 'editor' };
