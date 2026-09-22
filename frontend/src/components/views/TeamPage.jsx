@@ -1,4 +1,4 @@
-// frontend/src/pages/TeamPage.jsx - FULL FIXED (Role Distribution restricted to Owners only)
+// frontend/src/pages/TeamPage.jsx - FULL FIXED (Owner Controls renamed & Restricted to Owners only)
 import React from 'react';
 import { admin } from '../../services/api'; 
 
@@ -349,28 +349,26 @@ export default function TeamPage({
             </div>
           )}
 
-          {/* Access Overview (Restricted to Owners only) */}
-          {isOwner && (
-            <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
-              <div className="space-y-3">
-                {[
-                  { label: 'Owner', value: roleBreakdown.owner }, 
-                  { label: 'Administrator', value: roleBreakdown.administrator }, 
-                  { label: 'Editor', value: roleBreakdown.editor }, 
-                  { label: 'Guest', value: roleBreakdown.guest }, 
-                  { label: 'Subscriber', value: roleBreakdown.subscriber }
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800 dark:bg-gray-800/30">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white border border-gray-200 dark:border-gray-700">
-                      {item.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {/* Access Overview */}
+          <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${bgCard}`}>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Role Distribution</h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Owner', value: roleBreakdown.owner }, 
+                { label: 'Administrator', value: roleBreakdown.administrator }, 
+                { label: 'Editor', value: roleBreakdown.editor }, 
+                { label: 'Guest', value: roleBreakdown.guest }, 
+                { label: 'Subscriber', value: roleBreakdown.subscriber }
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-800 dark:bg-gray-800/30">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-gray-900 shadow-sm dark:bg-gray-900 dark:text-white border border-gray-200 dark:border-gray-700">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Owner Controls (Registered Users - Strictly Restricted to Owners Only) */}
           {isOwner && ownerManagedUsers.length > 0 && (
