@@ -1,4 +1,4 @@
-// src/pages/AuthPage.jsx - UPDATED WITH ROLE SELECT AT SIGN IN
+// src/pages/AuthPage.jsx - FIXED - Role correct allenkil mathram login
 import React, { useState } from 'react';
 import { auth } from '../services/api';
 
@@ -26,7 +26,7 @@ const ROLES = [
 ];
 
 export default function AuthPage({ setViewMode, onAuthSuccess }) {
-  const [mode, setMode] = useState('signin'); // signin | signup
+  const [mode, setMode] = useState('signin');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -50,7 +50,6 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
     setLoading(true);
     try {
       if (mode === 'signup') {
-        // REGISTER - with role select
         await auth.register({
           email: email.trim().toLowerCase(),
           password: password,
@@ -58,7 +57,6 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
           role: normalizeRoleValue(role),
         });
 
-        // Auto login after register
         const formData = new URLSearchParams();
         formData.append('username', email.trim().toLowerCase());
         formData.append('password', password);
@@ -66,11 +64,10 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
         localStorage.setItem('token', loginRes.data.access_token);
         localStorage.setItem('selected_role', normalizeRoleValue(role));
       } else {
-        // SIGN IN - with role select (as you requested)
+        // SIGN IN - with role select
         const formData = new URLSearchParams();
         formData.append('username', email.trim().toLowerCase());
         formData.append('password', password);
-        // Sending role also if backend supports it, otherwise stored for frontend check
         formData.append('role', normalizeRoleValue(role));
 
         const res = await auth.login(formData);
@@ -78,15 +75,35 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
         localStorage.setItem('selected_role', normalizeRoleValue(role));
       }
 
-      // Verify role from backend
+      // FIXED: Verify role from backend - Role correct allenkil mathram allow
       try {
         const me = await auth.getMe();
-        // Optional check: if user selected a role different from actual role, warn
-        // We don't block, just store actual role
-        localStorage.setItem('user_role', me.data?.role || normalizeRoleValue(role));
-        localStorage.setItem('user_email', me.data?.email || email);
+        const actualRole = normalizeRoleValue(me.data?.role);
+        const selectedRole = normalizeRoleValue(role);
+
+        // SIGNIN modeil mathram role check - signupil actualRole = selectedRole thanne aakum
+        if (mode === 'signin' && actualRole!== selectedRole) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('selected_role');
+          localStorage.removeItem('user_role');
+          setError(`Role incorrect. Your account role is "${actualRole.toUpperCase()}" but you selected "${selectedRole.toUpperCase()}". Please select correct role.`);
+          setLoading(false);
+          return;
+        }
+
+        localStorage.setItem('user_role', actualRole || selectedRole);
+        localStorage.setItem('user_email', me.data?.email || email.trim().toLowerCase());
       } catch (err) {
-        // ignore if getMe fails
+        // If getMe fails after login, clear token and show error
+        if (mode === 'signin') {
+          const backendMsg = err.response?.data?.detail;
+          if (backendMsg && String(backendMsg).toLowerCase().includes('role')) {
+            localStorage.removeItem('token');
+            setError(backendMsg);
+            setLoading(false);
+            return;
+          }
+        }
       }
 
       if (onAuthSuccess) onAuthSuccess();
@@ -170,7 +187,6 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
             />
           </div>
 
-          {/* ROLE SELECT - THIS IS THE NEW REQUIREMENT AT SIGN IN */}
           <div>
             <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">
               Select Role <span className="text-red-500">*</span>
@@ -187,7 +203,8 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
                 </option>
               ))}
             </select>
-            <p className="mt-1.5 text- text-gray-500 dark:text-gray-400">
+            {/* FIXED: text- -> text-xs */}
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
               {ROLES.find((r) => r.value === role)?.desc}
             </p>
           </div>

@@ -1,4 +1,4 @@
-// frontend/src/services/api.js - FULL FIXED FOR OWNER ROLE CHANGE
+// frontend/src/services/api.js - FULL FIXED FOR OWNER ROLE CHANGE + ROLE LOGIN CHECK
 import axios from 'axios';
 
 const getApiBaseUrl = () => {
@@ -34,7 +34,7 @@ export const auth = {
     let formData;
     if (data instanceof URLSearchParams) {
       formData = data;
-      // FIXED: ensure role in URLSearchParams is lowercased
+      // ensure role in URLSearchParams is lowercased - for role correct check
       if (formData.has('role')) {
         formData.set('role', normalizeRole(formData.get('role')));
       }
@@ -68,7 +68,7 @@ export const auth = {
 
 export const admin = {
   getUsers: () => api.get('/api/admin/users'),
-  // FIXED: normalize role + encode userId
+  // normalize role + encode userId - owner can change any role
   updateUserRole: (userId, role) => api.put(`/api/admin/users/${encodeURIComponent(userId)}`, { role: normalizeRole(role) }),
   deleteUser: (userId) => api.delete(`/api/admin/users/${encodeURIComponent(userId)}`),
 };
@@ -78,14 +78,14 @@ export const boards = {
   create: (name) => api.post('/api/boards', { name }),
   rename: (id, name) => api.put(`/api/boards/${id}`, { name }),
   delete: (id) => api.delete(`/api/boards/${id}`),
-  // FIXED: email lowercased + role normalized + password included for invite email
+  // email lowercased + role normalized + password included for invite email
   invite: (id, email, role, password = '') => api.post(`/api/boards/${id}/invite`, {
     email: String(email).toLowerCase(),
     role: normalizeRole(role),
     password
   }),
   getMembers: (id) => api.get(`/api/boards/${id}/members`),
-  // FIXED: MAIN BUG - accept both string role and object {role, permissions}, normalize, encode userId
+  // MAIN FIX - accept both string role and object {role, permissions}, normalize, encode userId
   updateMemberRole: (boardId, userId, roleData) => {
     let payload;
     if (typeof roleData === 'string') {
