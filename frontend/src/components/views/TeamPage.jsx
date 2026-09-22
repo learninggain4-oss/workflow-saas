@@ -94,13 +94,39 @@ export default function TeamPage({
     return {...member, role: safeRole, permissions: getMemberPermissions({...member, role: safeRole }), status: getStatusFromRole(safeRole), tasks: taskCount };
   });
 
+  // NEW LOGIC: Fetch Owners from both Board Members and Database (registeredUsers) without duplicates
+  const workspaceOwnersMap = new Map();
+  
+  memberCards.forEach((member) => {
+    if (member.role === 'owner') {
+      workspaceOwnersMap.set(String(member.email).toLowerCase(), member);
+    }
+  });
+
+  (registeredUsers || []).forEach((user) => {
+    if (normalizeRoleValue(user.role) === 'owner') {
+      if (!workspaceOwnersMap.has(String(user.email).toLowerCase())) {
+        workspaceOwnersMap.set(String(user.email).toLowerCase(), {
+          ...user,
+          role: 'owner',
+          status: 'Owner',
+          tasks: tasksList.filter((task) => String(task.assigned_to || '').toLowerCase() === String(user.email || '').toLowerCase()).length,
+          permissions: defaultPermissionsForRole('owner')
+        });
+      }
+    }
+  });
+
+  const workspaceOwnersList = Array.from(workspaceOwnersMap.values());
+
   const roleBreakdown = {
-    owner: memberCards.filter((member) => normalizeRoleValue(member.role) === 'owner').length,
+    owner: workspaceOwnersList.length, // Updated to use the merged owners list length
     administrator: memberCards.filter((member) => normalizeRoleValue(member.role) === 'administrator').length,
     editor: memberCards.filter((member) => normalizeRoleValue(member.role) === 'editor').length,
     guest: memberCards.filter((member) => normalizeRoleValue(member.role) === 'guest').length,
     subscriber: memberCards.filter((member) => normalizeRoleValue(member.role) === 'subscriber').length,
   };
+  
   const ownerManagedUsers = (registeredUsers || []).filter((user) => String(user.email).toLowerCase() !== String(currentEmail).toLowerCase());
 
   const updateRegisteredUserRole = async (userId, nextRole) => {
@@ -154,7 +180,7 @@ export default function TeamPage({
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">Workspace Owners</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Users with full access to this board.</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Users with full access to this workspace.</p>
               </div>
               <span className="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
                 {roleBreakdown.owner} Owner(s)
@@ -162,8 +188,8 @@ export default function TeamPage({
             </div>
             
             <div className="grid gap-4 sm:grid-cols-2">
-              {memberCards.filter((member) => member.role === 'owner').map((owner) => (
-                <div key={`owner-list-${owner.email}`} className="flex items-center gap-4 rounded-xl border border-indigo-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-indigo-800 dark:bg-[#09090b]">
+              {workspaceOwnersList.map((owner) => (
+                <div key={`owner-list-${owner.id || owner.email}`} className="flex items-center gap-4 rounded-xl border border-indigo-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-indigo-800 dark:bg-[#09090b]">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-blue-600 text-lg font-bold text-white shadow-inner">
                     {(owner.name || owner.email || 'U').slice(0, 2).toUpperCase()}
                   </div>
@@ -173,9 +199,9 @@ export default function TeamPage({
                   </div>
                 </div>
               ))}
-              {roleBreakdown.owner === 0 && (
+              {workspaceOwnersList.length === 0 && (
                 <div className="col-span-full py-8 text-center text-sm text-gray-500">
-                  No owners found for this board.
+                  No owners found for this workspace.
                 </div>
               )}
             </div>
