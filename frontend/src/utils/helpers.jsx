@@ -12,10 +12,20 @@ export const AVAILABLE_LABELS = [
 export const getLabelCls = (name) => AVAILABLE_LABELS.find(l=>l.name===name)?.cls || "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700";
 
 export const formatDate = (d) => {
-  const y = d.getFullYear(); 
-  const m = String(d.getMonth() + 1).padStart(2, '0'); 
-  const day = String(d.getDate()).padStart(2, '0'); 
+  if (!d) return '';
+  const dateObj = d instanceof Date ? d : new Date(d);
+  if (isNaN(dateObj.getTime())) return '';
+  const y = dateObj.getFullYear(); 
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0'); 
+  const day = String(dateObj.getDate()).padStart(2, '0'); 
   return `${y}-${m}-${day}`;
 };
 
-export const formatMentions = (text) => text.split(/(@[\w\.-]+@[\w\.-]+)/g).map((p, i) => p.startsWith("@") ? <b key={i} className="text-indigo-500 font-semibold">{p}</b> : p);
+// FIXED: Now supports @username, @john.doe, and email-like @user@domain.com mentions
+export const formatMentions = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  // Matches @username and email patterns
+  return text.split(/(@[a-zA-Z0-9._-]+(?:@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})?)/g).map((p, i) => 
+    p.startsWith("@") && p.length > 1 ? <b key={i} className="text-indigo-500 font-semibold">{p}</b> : p
+  );
+};

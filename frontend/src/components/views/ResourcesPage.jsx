@@ -78,7 +78,8 @@ export default function ResourcesPage({ bgCard, setViewMode }) {
           <div key={resource.title} className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
             <div className={`mb-4 h-24 rounded-2xl bg-gradient-to-br ${resource.accent} p-4 text-white`}>
               <div className="flex items-center justify-between">
-                <span className="rounded-full bg-white/20 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                {/* FIXED: text- -> text- */}
+                <span className="rounded-full bg-white/20 px-2 py-1 text- font-bold uppercase tracking-[0.2em]">
                   {resource.type}
                 </span>
                 <span className="text-sm font-semibold">{resource.meta}</span>

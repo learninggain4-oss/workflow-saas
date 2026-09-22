@@ -78,10 +78,12 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
           <div key={template.name} className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
             <div className={`mb-4 h-28 rounded-2xl bg-gradient-to-br ${template.accent} p-4 text-white`}>
               <div className="flex items-center justify-between">
-                <span className="rounded-full bg-white/20 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                {/* FIXED: text- -> text- */}
+                <span className="rounded-full bg-white/20 px-2 py-1 text- font-bold uppercase tracking-[0.2em]">
                   {template.category}
                 </span>
-                <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                {/* FIXED: text- -> text- */}
+                <span className="rounded-full bg-white/10 px-2 py-1 text- font-bold uppercase tracking-[0.2em]">
                   Popular
                 </span>
               </div>

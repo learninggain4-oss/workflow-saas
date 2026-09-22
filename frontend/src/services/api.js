@@ -1,9 +1,10 @@
+// src/services/api.js - UPDATED FOR ROLE SELECT AT SIGN IN
 import axios from 'axios';
 
 const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/$/, '');
 
-  if (typeof window !== 'undefined') {
+  if (typeof window!== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:8000';
@@ -26,8 +27,35 @@ api.interceptors.request.use((config) => {
 });
 
 export const auth = {
-  login: (data) => api.post('/api/login', data, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }),
-  register: (data) => api.post('/api/register', data),
+  // UPDATED: accepts both URLSearchParams and object { username/email, password, role }
+  login: (data) => {
+    let formData;
+    if (data instanceof URLSearchParams) {
+      formData = data;
+    } else {
+      formData = new URLSearchParams();
+      const username = data.username || data.email || '';
+      formData.append('username', username);
+      formData.append('password', data.password || '');
+      if (data.role) {
+        formData.append('role', String(data.role).toLowerCase());
+      }
+    }
+    return api.post('/api/login', formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+  },
+  // UPDATED: role included in register payload
+  register: (data) => {
+    // Expected: { email, password, name, role }
+    const payload = {
+      email: data.email,
+      password: data.password,
+      name: data.name || data.email?.split('@')[0],
+      role: data.role || 'editor',
+    };
+    return api.post('/api/register', payload);
+  },
   getMe: () => api.get('/api/users/me'),
   updateProfile: (data) => api.put('/api/users/me', data),
   upgrade: () => api.post('/api/upgrade'),
@@ -82,5 +110,3 @@ export const uploadFile = (formData) => api.post('/api/upload', formData, { head
 export const WS_BASE = API_URL.replace("https://", "wss://").replace("http://", "ws://");
 
 export default api;
-
-//(All API calls separated)

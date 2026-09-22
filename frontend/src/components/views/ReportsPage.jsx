@@ -60,7 +60,8 @@ export default function ReportsPage({ analytics, bgCard, setViewMode }) {
             {chartBars.map((value, index) => (
               <div key={index} className="flex flex-1 flex-col items-center gap-2">
                 <div className="flex w-full items-end justify-center rounded-t-2xl bg-gradient-to-t from-indigo-600 to-violet-500" style={{ height: `${value}%` }} />
-                <span className="text-[10px] uppercase tracking-[0.2em] text-gray-400">{['M', 'T', 'W', 'T', 'F', 'S', 'S', 'M'][index]}</span>
+                {/* FIXED: text- -> text- */}
+                <span className="text- uppercase tracking-[0.2em] text-gray-400">{['M', 'T', 'W', 'T', 'F', 'S', 'S', 'M'][index]}</span>
               </div>
             ))}
           </div>

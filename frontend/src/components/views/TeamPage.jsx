@@ -16,7 +16,6 @@ const normalizeRoleValue = (role) => {
   return aliases[value] || 'editor';
 };
 
-// FIX: alias for old buggy name
 const normalizedRoleValue = normalizeRoleValue;
 
 const getStatusFromRole = (role) => {
@@ -28,9 +27,9 @@ const getStatusFromRole = (role) => {
     case 'editor':
       return 'Active';
     case 'guest':
-      return 'guest';
+      return 'Guest';
     case 'subscriber':
-      return 'view only';
+      return 'View only';
     default:
       return 'Available';
   }
@@ -38,7 +37,7 @@ const getStatusFromRole = (role) => {
 
 const defaultPermissionsForRole = (role = 'owner') => {
   const normalizedRole = normalizeRoleValue(role);
-  if (normalizedRole === 'owner' ) {
+  if (normalizedRole === 'owner') {
     return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
   }
   if (normalizedRole === 'administrator'){return { viewBoard: true, createTasks: true, editTasks: true, deleteTasks: true, manageMembers: true, manageBoard: true };
@@ -57,7 +56,7 @@ const defaultPermissionsForRole = (role = 'owner') => {
 
 const getMemberPermissions = (member = {}) => {
   const base = defaultPermissionsForRole(member.role || 'editor');
-  return { ...base, ...(member.permissions || {}) };
+  return {...base,...(member.permissions || {}) };
 };
 
 export default function TeamPage({
@@ -82,7 +81,7 @@ export default function TeamPage({
   removeMember,
 }) {
   const members = boardMembers.length
-    ? boardMembers
+   ? boardMembers
     : [{ email: 'you@workflow.app', name: 'Workspace owner', role: myRole, permissions: myPermissions }];
 
   const permissionOptions = [
@@ -98,9 +97,9 @@ export default function TeamPage({
     const taskCount = tasksList.filter((task) => String(task.assigned_to || '').toLowerCase() === String(member.email || '').toLowerCase()).length;
     const safeRole = normalizeRoleValue(member.role);
     return {
-      ...member,
+     ...member,
       role: safeRole,
-      permissions: getMemberPermissions({ ...member, role: safeRole }),
+      permissions: getMemberPermissions({...member, role: safeRole }),
       status: getStatusFromRole(safeRole),
       tasks: taskCount,
     };
@@ -113,7 +112,7 @@ export default function TeamPage({
     guest: memberCards.filter((member) => normalizeRoleValue(member.role) === 'guest').length,
     subscriber: memberCards.filter((member) => normalizeRoleValue(member.role) === 'subscriber').length,
   };
-  const ownerManagedUsers = (registeredUsers || []).filter((user) => user.email !== currentEmail);
+  const ownerManagedUsers = (registeredUsers || []).filter((user) => user.email!== currentEmail);
 
   const updateRegisteredUserRole = async (userId, nextRole) => {
     if (!nextRole) return;
@@ -178,13 +177,13 @@ export default function TeamPage({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {(myRole === 'administrator' || myRole === 'owner') && member.email !== currentEmail && (
+                  {(myRole === 'administrator' || myRole === 'owner') && member.email!== currentEmail && (
                     <>
                       <select
                         value={normalizeRoleValue(member.role)}
                         onChange={(e) => {
                           const nextRole = e.target.value;
-                          updateMemberRole?.(member.id, nextRole, defaultPermissionsForRole(nextRole));
+                          updateMemberRole?.(member.id || member.email, nextRole, defaultPermissionsForRole(nextRole));
                         }}
                         className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-indigo-500 dark:border-gray-700 dark:bg-[#09090b] dark:text-gray-200"
                       >
@@ -194,10 +193,11 @@ export default function TeamPage({
                         <option value="guest">Guest</option>
                         <option value="subscriber">Subscriber</option>
                       </select>
+                      {/* FIXED: text- -> text-xs */}
                       <button
                         type="button"
-                        onClick={() => removeMember?.(member.id)}
-                        className="rounded-lg border border-red-200 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                        onClick={() => removeMember?.(member.id || member.email)}
+                        className="rounded-lg border border-red-200 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
                       >
                         Remove
                       </button>
@@ -205,7 +205,8 @@ export default function TeamPage({
                   )}
                   <div className="text-right">
                     <p className="text-xs font-semibold text-gray-500">{member.status}</p>
-                    <p className="text-[11px] text-gray-400">{member.tasks} task{member.tasks === 1 ? '' : 's'}</p>
+                    {/* FIXED: text- -> text-xs */}
+                    <p className="text-xs text-gray-400">{member.tasks} task{member.tasks === 1? '' : 's'}</p>
                   </div>
                 </div>
               </div>
@@ -216,12 +217,13 @@ export default function TeamPage({
         <div className={`rounded-2xl border p-5 shadow-sm ${bgCard}`}>
           <h3 className="text-lg font-bold">Custom access</h3>
           <div className="mt-4 space-y-3">
-            {memberCards.filter((member) => (myRole === 'administrator' || myRole === 'owner') && member.email !== currentEmail).map((member) => (
+            {memberCards.filter((member) => (myRole === 'administrator' || myRole === 'owner') && member.email!== currentEmail).map((member) => (
               <div key={`permissions-${member.email}`} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">{member.name || member.email}</p>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">{normalizeRoleValue(member.role)}</p>
+                    {/* FIXED: text- -> text- */}
+                    <p className="text- uppercase tracking-[0.2em] text-gray-500">{normalizeRoleValue(member.role)}</p>
                   </div>
                 </div>
 
@@ -233,10 +235,10 @@ export default function TeamPage({
                         checked={Boolean(member.permissions?.[option.key])}
                         onChange={(e) => {
                           const nextPermissions = {
-                            ...member.permissions,
+                           ...member.permissions,
                             [option.key]: e.target.checked,
                           };
-                          updateMemberRole?.(member.id, member.role, nextPermissions);
+                          updateMemberRole?.(member.id || member.email, member.role, nextPermissions);
                         }}
                         className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
@@ -255,7 +257,8 @@ export default function TeamPage({
                 <div key={item.label} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                   <div>
                     <p className="text-sm font-semibold">{item.label}</p>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">Permissions</p>
+                    {/* FIXED: text- -> text- */}
+                    <p className="text- uppercase tracking-[0.2em] text-gray-500">Permissions</p>
                   </div>
                   <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
                     {item.value}
@@ -268,7 +271,8 @@ export default function TeamPage({
               <div className="mt-5 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Owner controls</h4>
-                  <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                  {/* FIXED: text- -> text- */}
+                  <span className="rounded-full bg-indigo-50 px-2 py-1 text- font-semibold uppercase tracking-[0.15em] text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
                     Registered users
                   </span>
                 </div>
@@ -278,12 +282,14 @@ export default function TeamPage({
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold">{user.name || user.email}</p>
-                          <p className="text-[11px] text-gray-500">{user.email}</p>
+                          {/* FIXED: text- -> text-xs */}
+                          <p className="text-xs text-gray-500">{user.email}</p>
                         </div>
+                        {/* FIXED: text- -> text-xs */}
                         <button
                           type="button"
                           onClick={() => deleteRegisteredUser(user.id)}
-                          className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                          className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
                         >
                           Delete
                         </button>
