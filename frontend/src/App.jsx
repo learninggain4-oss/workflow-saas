@@ -646,7 +646,10 @@ export default function App() {
           ) : viewMode === "automations"? (
             <AdvancedAutomations {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn }} />
           ) : viewMode === "integrations"? (
-            <IntegrationsPage {...{ bgCard, setViewMode, securitySettings }} />
+            <>
+              {/* പാസ്സ് ചെയ്തിരിക്കുന്ന പ്രോപ്പർട്ടികൾ അപ്ഡേറ്റ് ചെയ്തു */}
+              <IntegrationsPage {...{ bgCard, setViewMode, securitySettings, darkMode, inputCls, primaryBtn }} />
+            </>
           ) : viewMode === "audit"? (
             <AuditLogPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "templates"? (
