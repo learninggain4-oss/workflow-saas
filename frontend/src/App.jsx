@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking & Task Dependencies
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies & Board Chat
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -24,6 +24,7 @@ import OnboardingPage from './components/views/OnboardingPage';
 import ResourcesPage from './components/views/ResourcesPage';
 import FeedbackPage from './components/views/FeedbackPage';
 import TimeTracker from './components/views/TimeTracker'; 
+import BoardChat from './components/views/BoardChat'; // NEW IMPORT
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -65,6 +66,9 @@ export default function App() {
   const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
   const [profileAvatar, setProfileAvatar] = useState(localStorage.getItem("profileAvatar") || "");
   const [savingProfile, setSavingProfile] = useState(false);
+  
+  // NEW STATE FOR CHAT
+  const [isChatOpen, setIsChatOpen] = useState(false); 
 
   const [activeTimer, setActiveTimer] = useState(() => {
     try { return JSON.parse(localStorage.getItem("activeTimer")) || null; } catch { return null; }
@@ -268,6 +272,8 @@ export default function App() {
     setBoardMembers([]);
     setBoardMembersBoardId(selectedBoard || null);
     fetchBoardData(selectedBoard);
+    // Close chat if switching board
+    setIsChatOpen(false);
   }, [selectedBoard]);
   useEffect(() => { if (editing) fetchTaskDetails(editing.id); }, [editing]);
 
@@ -344,13 +350,11 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Error adding task"); }
   };
 
-  // --- NEW: Task Dependency Check in Drag & Drop ---
   const onDragEnd = async (r) => {
     if (!canEdit || !r.destination) return;
     const id = r.draggableId; 
     const ns = r.destination.droppableId;
     
-    // Check for Dependencies (Blockers) before allowing move
     const taskToMove = tasksList.find(t => String(t.id) === String(id));
     if (taskToMove && (ns === "doing" || ns === "done")) {
       const deps = taskToMove.dependencies || [];
@@ -627,11 +631,38 @@ export default function App() {
         </div>
       </main>
       
-      {/* Task Modal with NEW tasksList prop for dependencies */}
       {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList }} />}
       
-      {/* Floating Time Tracker Widget */}
       {activeTimer && <TimeTracker activeTimer={activeTimer} setActiveTimer={setActiveTimer} tasksList={tasksList} setTasks={setTasks} tasksApi={tasks} darkMode={darkMode} />}
+
+      {/* NEW: Board Chat Component */}
+      <BoardChat 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        selectedBoard={selectedBoard} 
+        boardMembers={boardMembers} 
+        userData={userData} 
+        bgCard={bgCard} 
+        inputCls={inputCls} 
+        primaryBtn={primaryBtn} 
+        subCard={subCard} 
+        darkMode={darkMode}
+      />
+
+      {/* NEW: Floating Chat Button */}
+      {selectedBoard && !['settings', 'billing', 'reports', 'team', 'automations', 'integrations', 'audit', 'templates', 'onboarding', 'resources', 'feedback'].includes(viewMode) && (
+        <button 
+          onClick={() => setIsChatOpen(!isChatOpen)} 
+          className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-105 z-40"
+          title="Board Chat"
+        >
+          {isChatOpen ? (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          ) : (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+          )}
+        </button>
+      )}
 
       <style dangerouslySetInnerHTML={{__html: `
        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
