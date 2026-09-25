@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution to permissions
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution & Time Tracking
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -23,6 +23,7 @@ import TemplatesPage from './components/views/TemplatesPage';
 import OnboardingPage from './components/views/OnboardingPage';
 import ResourcesPage from './components/views/ResourcesPage';
 import FeedbackPage from './components/views/FeedbackPage';
+import TimeTracker from './components/views/TimeTracker'; // NEW: Time Tracking Component
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -64,6 +65,20 @@ export default function App() {
   const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
   const [profileAvatar, setProfileAvatar] = useState(localStorage.getItem("profileAvatar") || "");
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // NEW: Time Tracking State 
+  const [activeTimer, setActiveTimer] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("activeTimer")) || null; } catch { return null; }
+  });
+  
+  useEffect(() => { 
+    localStorage.setItem("activeTimer", JSON.stringify(activeTimer)); 
+  }, [activeTimer]);
+
+  const startTimer = (taskId) => {
+    setActiveTimer({ taskId, startTime: Date.now(), accumulated: 0, isRunning: true });
+  };
+
   const defaultAccountActivity = [
     { id: 1, title: "Signed in", time: "Today" },
     { id: 2, title: "Updated profile", time: "Today" },
@@ -556,7 +571,7 @@ export default function App() {
 
   return (
     <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
-      <div className="app-shell h-full w-full overflow-hidden rounded- border border-white/10 flex">
+      <div className="app-shell h-full w-full overflow-hidden rounded- border border-white/10 flex relative">
         <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }} />
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }} />
@@ -593,7 +608,13 @@ export default function App() {
           )}
         </div>
       </main>
-      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn }} />}
+      
+      {/* Task Modal with new timer props */}
+      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer }} />}
+      
+      {/* Floating Time Tracker Widget */}
+      {activeTimer && <TimeTracker activeTimer={activeTimer} setActiveTimer={setActiveTimer} tasksList={tasksList} setTasks={setTasks} tasksApi={tasks} darkMode={darkMode} />}
+
       <style dangerouslySetInnerHTML={{__html: `
        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
