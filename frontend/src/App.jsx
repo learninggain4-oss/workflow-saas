@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat & Advanced Automations
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -26,6 +26,9 @@ import ResourcesPage from './components/views/ResourcesPage';
 import FeedbackPage from './components/views/FeedbackPage';
 import TimeTracker from './components/views/TimeTracker'; 
 import BoardChat from './components/views/BoardChat'; 
+
+// NEW: Recurring Tasks Component
+import RecurringTaskModal from './components/views/RecurringTaskModal';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -70,6 +73,10 @@ export default function App() {
   
   // NEW STATE FOR CHAT
   const [isChatOpen, setIsChatOpen] = useState(false); 
+
+  // NEW STATE FOR RECURRING TASKS
+  const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
+  const [recurringTargetTask, setRecurringTargetTask] = useState(null);
 
   const [activeTimer, setActiveTimer] = useState(() => {
     try { return JSON.parse(localStorage.getItem("activeTimer")) || null; } catch { return null; }
@@ -550,6 +557,32 @@ export default function App() {
     setEditing({...editing, labels: next.join(",") });
   };
 
+  // RECURRING TASK HANDLER
+  const handleSaveRecurringConfig = async (taskId, recurringData) => {
+    try {
+      // Assuming tasks.update can handle storing extra metadata. 
+      // If your backend supports a specific endpoint for recurrences, use that instead.
+      const updatedTask = await tasks.update(taskId, { recurring: recurringData });
+      alert(`Recurring task setup completed successfully!`);
+      
+      // Update local state if needed or re-fetch board data
+      if (editing && editing.id === taskId) {
+        setEditing({...editing, recurring: recurringData});
+      }
+      fetchBoardData();
+      setIsRecurringModalOpen(false);
+      setRecurringTargetTask(null);
+    } catch (e) {
+      alert("Failed to save recurring configuration.");
+    }
+  };
+
+  // Helper to open recurring modal from TaskModal or anywhere else
+  const openRecurringModalForTask = (task) => {
+    setRecurringTargetTask(task);
+    setIsRecurringModalOpen(true);
+  };
+
   const analytics = useMemo(() => {
     const total = tasksList.length;
     const done = tasksList.filter(t => t.status === "done").length;
@@ -632,8 +665,20 @@ export default function App() {
         </div>
       </main>
       
-      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList }} />}
+      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList, openRecurringModalForTask }} />}
       
+      {/* Recurring Task Modal Rendering */}
+      <RecurringTaskModal 
+        isOpen={isRecurringModalOpen} 
+        onClose={() => setIsRecurringModalOpen(false)} 
+        task={recurringTargetTask} 
+        onSave={handleSaveRecurringConfig} 
+        bgCard={bgCard} 
+        inputCls={inputCls} 
+        primaryBtn={primaryBtn} 
+        darkMode={darkMode}
+      />
+
       {activeTimer && <TimeTracker activeTimer={activeTimer} setActiveTimer={setActiveTimer} tasksList={tasksList} setTasks={setTasks} tasksApi={tasks} darkMode={darkMode} />}
 
       {/* NEW: Board Chat Component */}

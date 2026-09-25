@@ -2,23 +2,75 @@ import React from 'react';
 import { AVAILABLE_LABELS, formatMentions } from '../utils/helpers';
 import TaskDependencies from '../components/views/TaskDependencies';
 
-
-export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, startTimer, tasksList }) {
+export default function TaskModal({ 
+  editing, 
+  setEditing, 
+  canEdit, 
+  saveEdit, 
+  delTask, 
+  subtasksList, 
+  toggleSubtask, 
+  delSubtask, 
+  newSubtask, 
+  setNewSubtask, 
+  addSubtask, 
+  taskComments, 
+  newComment, 
+  setNewComment, 
+  addComment, 
+  boardMembers, 
+  toggleLabel, 
+  handleFileUpload, 
+  uploading, 
+  userData, 
+  bgCard, 
+  inputCls, 
+  subCard, 
+  primaryBtn, 
+  startTimer, 
+  tasksList,
+  openRecurringModalForTask 
+}) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
       <div className={`rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border ${bgCard} overflow-hidden transform transition-all`}>
         
-        {/* Header Section with Start Timer Button */}
+        {/* Header Section with Start Timer & Set Recurring Buttons */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-[#18181b]">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="font-extrabold text-lg text-gray-900 dark:text-gray-100">Task Details</h2>
+            
             {/* Start Timer Button */}
-            <button onClick={() => startTimer(editing.id)} className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <button 
+              onClick={() => startTimer(editing.id)} 
+              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
               Start Timer
             </button>
+
+            {/* Set Recurring Button */}
+            {openRecurringModalForTask && (
+              <button 
+                onClick={() => openRecurringModalForTask(editing)} 
+                className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Set Recurring
+              </button>
+            )}
           </div>
-          <button onClick={() => setEditing(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 transition-colors">✕</button>
+          
+          <button 
+            onClick={() => setEditing(null)} 
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 transition-colors"
+          >
+            ✕
+          </button>
         </div>
         
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
@@ -104,7 +156,7 @@ export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delT
                 <input disabled={!canEdit} type="date" value={editing.due_date || ""} onChange={e => setEditing({ ...editing, due_date: e.target.value })} className={`border p-2.5 rounded-lg w-full text-sm ${inputCls}`} />
               </div>
 
-              {/* TaskDependencies Component added here */}
+              {/* TaskDependencies Component */}
               <TaskDependencies 
                 editing={editing} 
                 setEditing={setEditing} 
