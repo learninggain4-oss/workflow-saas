@@ -18,6 +18,7 @@ import Dashboard from './components/views/Dashboard';
 import BoardView from './components/views/BoardView';
 import Timeline from './components/views/Timeline';
 import CalendarView from './components/views/CalendarView';
+import GanttChartView from './components/views/GanttChartView'; // NEW: Gantt Chart View Import
 import TaskModal from './components/TaskModal';
 import AccountSettingsPage from './components/views/AccountSettingsPage';
 import BillingPage from './components/views/BillingPage';
@@ -760,6 +761,7 @@ export default function App() {
               {viewMode === "board" && <BoardView {...{ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask, t, changeLanguage: i18n.changeLanguage }} />}
               {viewMode === "timeline" && <Timeline {...{ tasksList, setEditing, timelineDays, bgCard, t, changeLanguage: i18n.changeLanguage }} />}
               {viewMode === "calendar" && <CalendarView {...{ calDate, tasksList, setEditing, firstDay, daysInMonth, m, y, bgCard, subCard, t, changeLanguage: i18n.changeLanguage }} />}
+              {viewMode === "gantt" && <GanttChartView {...{ tasksList, setEditing, bgCard, darkMode, t, changeLanguage: i18n.changeLanguage }} />}
             </>
           )}
         </div>

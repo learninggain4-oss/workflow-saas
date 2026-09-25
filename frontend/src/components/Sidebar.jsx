@@ -62,6 +62,7 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
             {[
               { label: 'Overview', value: 'dashboard' },
               { label: 'Board', value: 'board' },
+              { label: 'Gantt', value: 'gantt' },
               { label: 'Reports', value: 'reports' },
               { label: 'Team', value: 'team' },
             ].map((item) => (
