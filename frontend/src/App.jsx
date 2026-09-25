@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -29,6 +29,9 @@ import BoardChat from './components/views/BoardChat';
 
 // NEW: Recurring Tasks Component
 import RecurringTaskModal from './components/views/RecurringTaskModal';
+
+// NEW: Global Search Component
+import GlobalSearch from './components/GlobalSearch';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -693,6 +696,15 @@ export default function App() {
         primaryBtn={primaryBtn} 
         subCard={subCard} 
         darkMode={darkMode}
+      />
+
+      {/* NEW: Global Search Component */}
+      <GlobalSearch 
+        boardsList={boardsList} 
+        tasksList={tasksList} 
+        setSelectedBoard={setSelectedBoard} 
+        setEditing={setEditing} 
+        darkMode={darkMode} 
       />
 
       {/* NEW: Floating Chat Button */}
