@@ -1,7 +1,9 @@
 import React from 'react';
 import { AVAILABLE_LABELS, formatMentions } from '../utils/helpers';
+import TaskDependencies from '../components/views/TaskDependencies';
 
-export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, startTimer }) {
+
+export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, startTimer, tasksList }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
       <div className={`rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border ${bgCard} overflow-hidden transform transition-all`}>
@@ -101,6 +103,16 @@ export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delT
                 <label className="block text-xs font-semibold text-gray-500 mt-4 mb-1.5 uppercase tracking-wider">Due Date</label>
                 <input disabled={!canEdit} type="date" value={editing.due_date || ""} onChange={e => setEditing({ ...editing, due_date: e.target.value })} className={`border p-2.5 rounded-lg w-full text-sm ${inputCls}`} />
               </div>
+
+              {/* TaskDependencies Component added here */}
+              <TaskDependencies 
+                editing={editing} 
+                setEditing={setEditing} 
+                tasksList={tasksList} 
+                canEdit={canEdit} 
+                inputCls={inputCls} 
+                subCard={subCard} 
+              />
 
               <div className={`p-4 rounded-xl border shadow-sm ${subCard}`}>
                 <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Labels</label>

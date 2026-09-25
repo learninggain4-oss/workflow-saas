@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution & Time Tracking
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking & Task Dependencies
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -23,7 +23,7 @@ import TemplatesPage from './components/views/TemplatesPage';
 import OnboardingPage from './components/views/OnboardingPage';
 import ResourcesPage from './components/views/ResourcesPage';
 import FeedbackPage from './components/views/FeedbackPage';
-import TimeTracker from './components/views/TimeTracker'; // NEW: Time Tracking Component
+import TimeTracker from './components/views/TimeTracker'; 
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -66,7 +66,6 @@ export default function App() {
   const [profileAvatar, setProfileAvatar] = useState(localStorage.getItem("profileAvatar") || "");
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // NEW: Time Tracking State 
   const [activeTimer, setActiveTimer] = useState(() => {
     try { return JSON.parse(localStorage.getItem("activeTimer")) || null; } catch { return null; }
   });
@@ -157,7 +156,6 @@ export default function App() {
     const aliases = { owner: 'owner', administrator: 'administrator', admin: 'administrator', super_admin: 'owner', superadmin: 'owner', editor: 'editor', member: 'editor', guest: 'guest', subscriber: 'subscriber', viewer: 'subscriber' };
     return aliases[value] || 'editor';
   };
-  const normalizedRoleValue = normalizeRoleValue;
 
   const defaultPermissionsForRole = (role = 'owner') => {
     const normalizedRole = normalizeRoleValue(role);
@@ -190,7 +188,6 @@ export default function App() {
     return boardMembers.find(x => String(x.email || '').trim().toLowerCase() === String(currentEmail || '').trim().toLowerCase()) || null;
   }, [boardMembers, boardMembersBoardId, currentEmail, selectedBoard]);
 
-  // Ensure the signed-in user's role comes from the selected board, not a stale board or global account role.
   const myRole = useMemo(() => {
     if (!selectedBoard) return normalizeRoleValue(userData?.role || 'editor');
     if (currentBoardMember) return normalizeRoleValue(currentBoardMember.role);
@@ -347,9 +344,24 @@ export default function App() {
     } catch (e) { alert(e.response?.data?.detail || "Error adding task"); }
   };
 
+  // --- NEW: Task Dependency Check in Drag & Drop ---
   const onDragEnd = async (r) => {
-    if (!canEdit ||!r.destination) return;
-    const id = r.draggableId; const ns = r.destination.droppableId;
+    if (!canEdit || !r.destination) return;
+    const id = r.draggableId; 
+    const ns = r.destination.droppableId;
+    
+    // Check for Dependencies (Blockers) before allowing move
+    const taskToMove = tasksList.find(t => String(t.id) === String(id));
+    if (taskToMove && (ns === "doing" || ns === "done")) {
+      const deps = taskToMove.dependencies || [];
+      const incompleteDeps = tasksList.filter(t => deps.includes(String(t.id)) && t.status !== "done");
+      
+      if (incompleteDeps.length > 0) {
+        alert(`Cannot move this task. It is waiting on ${incompleteDeps.length} incomplete task(s) to be done first!`);
+        return;
+      }
+    }
+
     setTasks(p => p.map(t => String(t.id) === id? {...t, status: ns } : t));
     try { await tasks.update(id, { status: ns }); } catch {}
   };
@@ -485,6 +497,7 @@ export default function App() {
   };
 
   const resetProfilePreferences = () => { setProfilePreferences(defaultProfilePreferences); setWorkspaceDefaults(defaultWorkspaceDefaults); };
+  
   const handleAvatarUpload = async (event) => {
     const file = event.target.files?.[0]; if (!file) return;
     if (file.size > 2 * 1024 * 1024) { alert("Avatar image must be under 2MB"); return; }
@@ -503,13 +516,16 @@ export default function App() {
       addAccountActivity("Updated profile photo"); alert("Profile photo updated");
     } catch { alert("Profile photo upload failed"); }
   };
+
   const handleDeleteAccount = () => {
     const confirmed = window.confirm("This will clear your stored session and local profile data on this device. Continue?");
     if (!confirmed) return;
     localStorage.clear(); setToken(""); setUserData(null); setBoards([]); setTasks([]); setNotifications([]);
     setProfileForm({ name: "", email: "", password: "" }); setProfileAvatar(""); setViewMode("board");
   };
+
   const handleVerifyEmail = () => { setSecuritySettings((prev) => ({...prev, emailVerified: true })); addAccountActivity("Verified email address"); };
+  
   const toggleTwoFactor = () => {
     setSecuritySettings((prev) => {
       const nextState =!prev.twoFactorEnabled;
@@ -517,9 +533,11 @@ export default function App() {
       return {...prev, twoFactorEnabled: nextState };
     });
   };
+
   const toggleConnectedApp = (id) => {
     setSecuritySettings((prev) => ({...prev, connectedApps: prev.connectedApps.map((app) => app.id === id? {...app, connected:!app.connected } : app) }));
   };
+
   const toggleLabel = (lb) => {
     if (!canEdit ||!editing) return;
     const cur = (editing.labels || "").split(",").filter(Boolean);
@@ -609,8 +627,8 @@ export default function App() {
         </div>
       </main>
       
-      {/* Task Modal with new timer props */}
-      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer }} />}
+      {/* Task Modal with NEW tasksList prop for dependencies */}
+      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList }} />}
       
       {/* Floating Time Tracker Widget */}
       {activeTimer && <TimeTracker activeTimer={activeTimer} setActiveTimer={setActiveTimer} tasksList={tasksList} setTasks={setTasks} tasksApi={tasks} darkMode={darkMode} />}
