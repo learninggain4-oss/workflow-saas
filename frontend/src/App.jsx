@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat & Advanced Automations
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies & Board Chat
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -16,8 +16,7 @@ import AccountSettingsPage from './components/views/AccountSettingsPage';
 import BillingPage from './components/views/BillingPage';
 import ReportsPage from './components/views/ReportsPage';
 import TeamPage from './components/views/TeamPage';
-// Removed old AutomationPage import and added AdvancedAutomations
-import AdvancedAutomations from './components/views/AdvancedAutomations';
+import AutomationPage from './components/views/AutomationPage';
 import IntegrationsPage from './components/views/IntegrationsPage';
 import AuditLogPage from './components/views/AuditLogPage';
 import TemplatesPage from './components/views/TemplatesPage';
@@ -25,7 +24,7 @@ import OnboardingPage from './components/views/OnboardingPage';
 import ResourcesPage from './components/views/ResourcesPage';
 import FeedbackPage from './components/views/FeedbackPage';
 import TimeTracker from './components/views/TimeTracker'; 
-import BoardChat from './components/views/BoardChat'; 
+import BoardChat from './components/views/BoardChat'; // NEW IMPORT
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -608,7 +607,7 @@ export default function App() {
           ) : viewMode === "team"? (
             <TeamPage {...{ bgCard, setViewMode, boardMembers, registeredUsers, setRegisteredUsers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember }} />
           ) : viewMode === "automations"? (
-            <AdvancedAutomations {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn }} />
+            <AutomationPage {...{ bgCard, setViewMode }} />
           ) : viewMode === "integrations"? (
             <IntegrationsPage {...{ bgCard, setViewMode, securitySettings }} />
           ) : viewMode === "audit"? (
