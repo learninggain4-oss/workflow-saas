@@ -2,8 +2,24 @@ import React from 'react';
 import { AVAILABLE_LABELS, formatMentions } from '../utils/helpers';
 import TaskDependencies from '../components/views/TaskDependencies';
 
+export default function TaskModal({ 
+  editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, 
+  delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, 
+  setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, 
+  uploading, userData, bgCard, inputCls, subCard, primaryBtn, startTimer, tasksList, customFields 
+}) {
 
-export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, startTimer, tasksList }) {
+  // New function to handle custom field value changes
+  const handleCustomFieldChange = (fieldId, value) => {
+    setEditing(prev => ({
+      ...prev,
+      custom_field_values: {
+        ...(prev.custom_field_values || {}),
+        [fieldId]: value
+      }
+    }));
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
       <div className={`rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border ${bgCard} overflow-hidden transform transition-all`}>
@@ -104,7 +120,7 @@ export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delT
                 <input disabled={!canEdit} type="date" value={editing.due_date || ""} onChange={e => setEditing({ ...editing, due_date: e.target.value })} className={`border p-2.5 rounded-lg w-full text-sm ${inputCls}`} />
               </div>
 
-              {/* TaskDependencies Component added here */}
+              {/* TaskDependencies Component */}
               <TaskDependencies 
                 editing={editing} 
                 setEditing={setEditing} 
@@ -113,6 +129,55 @@ export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delT
                 inputCls={inputCls} 
                 subCard={subCard} 
               />
+
+              {/* NEW: Custom Fields Section */}
+              {customFields && customFields.length > 0 && (
+                <div className={`p-4 rounded-xl border shadow-sm ${subCard}`}>
+                  {/* Fixed: Removed 'block' and kept 'flex' to avoid tailwind conflict */}
+                  <h3 className="flex text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+                    Custom Fields
+                  </h3>
+                  <div className="space-y-4">
+                    {customFields.map(field => {
+                      const val = (editing.custom_field_values || {})[field.id] || "";
+                      return (
+                        <div key={field.id}>
+                          <label className="block text-xs font-semibold text-gray-500 mb-1.5">{field.name}</label>
+                          
+                          {field.type === 'text' && (
+                            <input type="text" disabled={!canEdit} value={val} onChange={e => handleCustomFieldChange(field.id, e.target.value)} className={`border w-full p-2.5 rounded-lg text-sm ${inputCls}`} />
+                          )}
+                          
+                          {field.type === 'number' && (
+                            <input type="number" disabled={!canEdit} value={val} onChange={e => handleCustomFieldChange(field.id, e.target.value)} className={`border w-full p-2.5 rounded-lg text-sm ${inputCls}`} />
+                          )}
+                          
+                          {field.type === 'date' && (
+                            <input type="date" disabled={!canEdit} value={val} onChange={e => handleCustomFieldChange(field.id, e.target.value)} className={`border w-full p-2.5 rounded-lg text-sm ${inputCls}`} />
+                          )}
+                          
+                          {field.type === 'checkbox' && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <input type="checkbox" disabled={!canEdit} checked={!!val} onChange={e => handleCustomFieldChange(field.id, e.target.checked)} className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700" />
+                              <span className="text-sm text-gray-700 dark:text-gray-300">Yes</span>
+                            </div>
+                          )}
+                          
+                          {field.type === 'dropdown' && (
+                            <select disabled={!canEdit} value={val} onChange={e => handleCustomFieldChange(field.id, e.target.value)} className={`border w-full p-2.5 rounded-lg text-sm ${inputCls}`}>
+                              <option value="">Select Option...</option>
+                              {field.options?.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className={`p-4 rounded-xl border shadow-sm ${subCard}`}>
                 <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Labels</label>
