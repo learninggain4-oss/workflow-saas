@@ -1,12 +1,21 @@
 import React from 'react';
 import { AVAILABLE_LABELS, formatMentions } from '../utils/helpers';
 
-export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn }) {
+export default function TaskModal({ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, startTimer }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
       <div className={`rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border ${bgCard} overflow-hidden transform transition-all`}>
+        
+        {/* Header Section with Start Timer Button */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-[#18181b]">
-          <h2 className="font-extrabold text-lg text-gray-900 dark:text-gray-100">Task Details</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="font-extrabold text-lg text-gray-900 dark:text-gray-100">Task Details</h2>
+            {/* Start Timer Button */}
+            <button onClick={() => startTimer(editing.id)} className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Start Timer
+            </button>
+          </div>
           <button onClick={() => setEditing(null)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 transition-colors">✕</button>
         </div>
         
