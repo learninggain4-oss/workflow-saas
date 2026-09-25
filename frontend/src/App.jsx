@@ -1,7 +1,10 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search & i18n (Multi-Language)
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language) & Offline PWA Sync
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
+
+// NEW: Offline Sync imports
+import { saveTasksLocally, getLocalTasks, saveOfflineAction, syncOfflineActions } from './services/offlineSync';
 
 // NEW: i18n import for Multi-Language Support
 import './i18n'; 
@@ -50,6 +53,9 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isRegister, setIsRegister] = useState(false);
+
+  // NEW STATE FOR OFFLINE SYNC
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   const [tasksList, setTasks] = useState([]);
   const [title, setTitle] = useState("");
@@ -148,6 +154,25 @@ export default function App() {
       return {...defaultSecuritySettings,...saved, connectedApps: saved.connectedApps?.length? saved.connectedApps : defaultSecuritySettings.connectedApps };
     } catch { return defaultSecuritySettings; }
   });
+
+  // NEW: Offline Sync Event Listeners
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOffline(false);
+      if (token) {
+        await syncOfflineActions(tasks);
+        fetchBoardData(); // Refresh data after syncing
+      }
+    };
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [token, selectedBoard]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -256,10 +281,21 @@ export default function App() {
   const fetchBoardData = async (boardId = selectedBoard) => {
     if (!boardId) return;
     const activeBoardId = boardId;
+
+    // OFFLINE MODE: Load data from LocalStorage
+    if (isOffline) {
+      const cachedTasks = getLocalTasks(activeBoardId);
+      if (String(selectedBoardRef.current) === String(activeBoardId)) {
+          setTasks(cachedTasks);
+      }
+      return;
+    }
+
     try {
       const tRes = await tasks.getAll(activeBoardId);
       if (String(selectedBoardRef.current) !== String(activeBoardId)) return;
       setTasks(tRes.data);
+      saveTasksLocally(activeBoardId, tRes.data); // Save for offline usage
 
       const aRes = await boards.getActivities(activeBoardId);
       if (String(selectedBoardRef.current) !== String(activeBoardId)) return;
@@ -281,7 +317,7 @@ export default function App() {
   };
 
   const fetchTaskDetails = async (id) => {
-    if (!id) return;
+    if (!id || isOffline) return; // Skip if offline
     try {
       const cRes = await comments.getAll(id); setTaskComments(cRes.data);
       const sRes = await subtasks.getAll(id); setSubtasks(sRes.data);
@@ -299,7 +335,7 @@ export default function App() {
   useEffect(() => { if (editing) fetchTaskDetails(editing.id); }, [editing]);
 
   useEffect(() => {
-    if (!selectedBoard ||!token) return;
+    if (!selectedBoard ||!token || isOffline) return;
     const ws = new WebSocket(`${WS_BASE}/ws/${selectedBoard}`);
     ws.onmessage = (e) => {
       try {
@@ -312,7 +348,7 @@ export default function App() {
       } catch {}
     };
     return () => { try { ws.close(); } catch {} };
-  }, [selectedBoard]);
+  }, [selectedBoard, isOffline]);
 
   const handleLogin = async () => {
     const f = new URLSearchParams(); f.append("username", email); f.append("password", password);
@@ -365,8 +401,21 @@ export default function App() {
     if (!canEdit) return alert("Viewers cannot add tasks");
     if (!title.trim() ||!selectedBoard) return alert("Select board and enter title");
     const prio = (title.toLowerCase().includes("urgent") || title.toLowerCase().includes("bug"))? "high" : "medium";
+    
+    const newTaskData = { title, status: "todo", priority: prio, board_id: selectedBoard };
+
+    // OFFLINE MODE: Save to queue and update UI
+    if (isOffline) {
+      const tempId = `temp_${Date.now()}`;
+      const tempTask = { ...newTaskData, id: tempId };
+      setTasks(prev => [...prev, tempTask]);
+      saveOfflineAction({ type: 'CREATE_TASK', payload: newTaskData });
+      setTitle("");
+      return;
+    }
+
     try {
-      await tasks.create({ title, status: "todo", priority: prio, board_id: selectedBoard });
+      await tasks.create(newTaskData);
       setTitle(""); fetchBoardData();
     } catch (e) { alert(e.response?.data?.detail || "Error adding task"); }
   };
@@ -388,29 +437,60 @@ export default function App() {
     }
 
     setTasks(p => p.map(t => String(t.id) === id? {...t, status: ns } : t));
+    
+    // OFFLINE MODE
+    if (isOffline) {
+        if (!String(id).startsWith('temp_')) {
+            saveOfflineAction({ type: 'UPDATE_TASK', taskId: id, payload: { status: ns } });
+        }
+        return;
+    }
+
     try { await tasks.update(id, { status: ns }); } catch {}
   };
 
   const saveEdit = async () => {
     if (!canEdit) return alert("Viewers cannot edit");
+
+    // OFFLINE MODE
+    if (isOffline) {
+        setTasks(p => p.map(t => String(t.id) === String(editing.id) ? editing : t));
+        if (!String(editing.id).startsWith('temp_')) {
+            saveOfflineAction({ type: 'UPDATE_TASK', taskId: editing.id, payload: editing });
+        }
+        setEditing(null);
+        return;
+    }
+
     await tasks.update(editing.id, editing); setEditing(null); fetchBoardData();
   };
 
   const delTask = async (id) => {
     if (!canEdit ||!confirm("Delete task?")) return;
+
+    // OFFLINE MODE
+    if (isOffline) {
+        setTasks(p => p.filter(t => String(t.id) !== String(id)));
+        if (!String(id).startsWith('temp_')) {
+            saveOfflineAction({ type: 'DELETE_TASK', taskId: id });
+        }
+        setEditing(null);
+        return;
+    }
+
     await tasks.delete(id); setEditing(null); fetchBoardData();
   };
 
   const addSubtask = async () => {
-    if (!canEdit ||!newSubtask.trim() ||!editing) return;
+    if (!canEdit ||!newSubtask.trim() ||!editing || isOffline) return;
     await subtasks.create(editing.id, newSubtask); setNewSubtask(""); fetchTaskDetails(editing.id);
   };
   const toggleSubtask = async (s) => {
-    if (!canEdit) return;
+    if (!canEdit || isOffline) return;
     await subtasks.update(s.id,!s.is_completed); fetchTaskDetails(editing.id);
   };
   const delSubtask = async (sId) => {
-    if (!canEdit) return;
+    if (!canEdit || isOffline) return;
     await subtasks.delete(sId); fetchTaskDetails(editing.id);
   };
 
@@ -470,12 +550,12 @@ export default function App() {
   };
 
   const addComment = async () => {
-    if (!newComment.trim() ||!editing) return;
+    if (!newComment.trim() ||!editing || isOffline) return;
     await comments.create(editing.id, newComment); setNewComment(""); fetchTaskDetails(editing.id);
   };
 
   const handleFileUpload = async (e) => {
-    if (!canEdit ||!e.target.files[0]) return;
+    if (!canEdit ||!e.target.files[0] || isOffline) return;
     const file = e.target.files[0];
     if (file.size > 5 * 1024 * 1024) return alert("Max 5MB");
     setUploading(true);
@@ -639,6 +719,15 @@ export default function App() {
       <div className="app-shell h-full w-full overflow-hidden rounded- border border-white/10 flex relative">
         <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+          
+          {/* OFFLINE INDICATOR BANNER */}
+          {isOffline && (
+            <div className="bg-yellow-500 text-black text-center text-xs py-1.5 font-semibold z-50 w-full flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"></path></svg>
+              You are currently offline. Changes will be synced when connection is restored.
+            </div>
+          )}
+
           <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, t, changeLanguage: i18n.changeLanguage }} />
           <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar">
           {viewMode === "settings"? (
