@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language) & Offline PWA Sync
+// frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language), Offline PWA Sync & Task Activity Log
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
@@ -42,6 +42,9 @@ import GlobalSearch from './components/GlobalSearch';
 
 // NEW: Rich Text Editor Component
 import RichTextEditor from './components/RichTextEditor';
+
+// NEW: Task Activity Log Component
+import TaskActivityLog from './components/TaskActivityLog';
 
 export default function App() {
   // i18n hooks Setup
@@ -771,9 +774,9 @@ export default function App() {
       </main>
       
       {/* 
-        NEW: Passed RichTextEditor into TaskModal 
+        NEW: Passed RichTextEditor and TaskActivityLog into TaskModal 
       */}
-      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList, openRecurringModalForTask, RichTextEditor, t, changeLanguage: i18n.changeLanguage }} />}
+      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList, openRecurringModalForTask, RichTextEditor, TaskActivityLog, t, changeLanguage: i18n.changeLanguage }} />}
       
       {/* Recurring Task Modal Rendering */}
       <RecurringTaskModal 

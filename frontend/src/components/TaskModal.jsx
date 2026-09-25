@@ -1,6 +1,7 @@
 import React from 'react';
 import { AVAILABLE_LABELS, formatMentions } from '../utils/helpers';
 import TaskDependencies from '../components/views/TaskDependencies';
+import TaskActivityLog from '../components/TaskActivityLog'; // ആവശ്യാനുസരണം പാത്ത് പരിശോധിക്കുക
 import RichTextEditor from './RichTextEditor'; // നിങ്ങളുടെ ഫയൽ സ്ട്രക്ച്ചർ അനുസരിച്ച് ഈ പാത്ത് മാറ്റുക
 
 export default function TaskModal({ 
@@ -30,7 +31,9 @@ export default function TaskModal({
   primaryBtn, 
   startTimer, 
   tasksList,
-  openRecurringModalForTask 
+  openRecurringModalForTask,
+  darkMode,
+  t 
 }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
@@ -112,6 +115,11 @@ export default function TaskModal({
                   ))}
                 </div>
                 {canEdit && <input value={newSubtask} onChange={e => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSubtask()} placeholder="Add an item..." className={`border p-2.5 rounded-lg text-sm w-full ${inputCls}`} />}
+              </div>
+
+              {/* Task Activity Log Integration */}
+              <div className={`border rounded-xl p-4 shadow-sm ${subCard}`}>
+                <TaskActivityLog activities={editing.activities} darkMode={darkMode} t={t} />
               </div>
 
               <div className="pt-4 mt-6 border-t border-gray-100 dark:border-gray-800">
