@@ -1,6 +1,7 @@
 import React from 'react';
 import { AVAILABLE_LABELS, formatMentions } from '../utils/helpers';
 import TaskDependencies from '../components/views/TaskDependencies';
+import RichTextEditor from './RichTextEditor'; // നിങ്ങളുടെ ഫയൽ സ്ട്രക്ച്ചർ അനുസരിച്ച് ഈ പാത്ത് മാറ്റുക
 
 export default function TaskModal({ 
   editing, 
@@ -83,7 +84,10 @@ export default function TaskModal({
               
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Description</label>
-                <textarea disabled={!canEdit} value={editing.description || ""} onChange={e => setEditing({ ...editing, description: e.target.value })} className={`border w-full p-3 rounded-xl min-h-[120px] text-sm shadow-sm resize-y ${inputCls}`} placeholder="Add a more detailed description..." />
+                <RichTextEditor 
+                  value={editing.description || ""} 
+                  onChange={(val) => setEditing({ ...editing, description: val })} 
+                />
               </div>
               
               <div className={`border rounded-xl p-4 shadow-sm ${subCard}`}>

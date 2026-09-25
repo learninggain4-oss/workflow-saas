@@ -40,6 +40,9 @@ import RecurringTaskModal from './components/views/RecurringTaskModal';
 // NEW: Global Search Component
 import GlobalSearch from './components/GlobalSearch';
 
+// NEW: Rich Text Editor Component
+import RichTextEditor from './components/RichTextEditor';
+
 export default function App() {
   // i18n hooks Setup
   const { t, i18n } = useTranslation();
@@ -767,7 +770,10 @@ export default function App() {
         </div>
       </main>
       
-      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList, openRecurringModalForTask, t, changeLanguage: i18n.changeLanguage }} />}
+      {/* 
+        NEW: Passed RichTextEditor into TaskModal 
+      */}
+      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList, openRecurringModalForTask, RichTextEditor, t, changeLanguage: i18n.changeLanguage }} />}
       
       {/* Recurring Task Modal Rendering */}
       <RecurringTaskModal 
