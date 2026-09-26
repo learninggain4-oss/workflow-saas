@@ -2065,13 +2065,15 @@ INTEGRATION_PROVIDERS = {
     "zapier":     {"label": "Zapier",          "kind": "webhook", "fields": ["webhook"]},
 }
 
-# Fields that must never be echoed back to the client.
-INTEGRATION_SECRET_FIELDS = {"webhook", "token", "api_key"}
-
-# Providers where we can make a real, harmless call to prove the credential works.
-INTEGRATION_PROBE = {
-    "github": lambda cfg: ("GET", "https://api.github.com/user", None, {"Authorization": f"Bearer {cfg.get('token') or cfg.get('api_key', '')}"}),
-}
+# Secrets are never returned to the client at all: `_integration_response` reports
+# only *which* fields are configured, never their values. The set of secret field
+# names therefore has no server-side use and is not duplicated here.
+#
+# (An earlier `INTEGRATION_SECRET_FIELDS` set and an `INTEGRATION_PROBE` lambda map
+# were left over from a first pass and were never referenced. The GitHub probe is
+# the right idea but needs a real `token` field, which the github provider does
+# not collect - it only takes `repo`. See test_integration for the current
+# behaviour.)
 
 
 def _integration_response(row: models.Integration) -> dict:
