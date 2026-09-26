@@ -92,13 +92,41 @@ def create_board(payload: schemas.BoardCreate, current_user=Depends(get_current_
     return _board_response(b, current_user, db)
 
 
+@router.get("/api/boards/{board_id}")
+def get_board(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Read a single project. Project settings needs the current values, and
+    the listing is the only other way to get them, which forces the whole list
+    to load just to open one dialog."""
+    b = utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Board view")
+    return _board_response(b, current_user, db)
+
+
 @router.put("/api/boards/{board_id}")
 def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     b = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Board rename", required_permission="manageBoard")
-    b.name = payload.name
+
+    # Trim, then reject a blank name. boards.name is NOT NULL, so an empty
+    # string would silently produce an unnamed project that the UI has to guess
+    # how to display.
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="A project name is required.")
+    if len(name) > 80:
+        raise HTTPException(status_code=422, detail="Project name must be 80 characters or fewer.")
+
+    description = (payload.description or "").strip()
+    if len(description) > 500:
+        raise HTTPException(status_code=422, detail="Description must be 500 characters or fewer.")
+
+    # The description used to be dropped here: the route was called "rename" and
+    # only wrote the name, so a project's description could be set at creation
+    # and never changed afterwards.
+    b.name = name
+    b.description = description
     db.commit()
     db.refresh(b)
-    return b
+    log_activity_safe(b.id, current_user.name, f"updated project '{b.name}'")
+    return _board_response(b, current_user, db)
 
 
 @router.delete("/api/boards/{board_id}")

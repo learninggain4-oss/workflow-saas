@@ -573,7 +573,11 @@ export default function App() {
   };
   const renameBoard = async () => {
     if (!renameValue.trim() ||!selectedBoard ||!isAdminOrOwner) return;
-    await boards.rename(selectedBoard, renameValue); await fetchInitialData();
+    // update() sends name and description together; read the current
+    // description first so a rename never blanks it.
+    const current = boardsList.find((b) => b.id === selectedBoard);
+    await boards.update(selectedBoard, { name: renameValue.trim(), description: current?.description || '' });
+    await fetchInitialData();
   };
   const deleteBoard = async () => {
     if (!selectedBoard ||!isAdminOrOwner ||!confirm("Delete board?")) return;
@@ -798,7 +802,7 @@ export default function App() {
   return (
     <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
       <div className="app-shell h-full w-full overflow-hidden rounded- border border-white/10 flex relative">
-        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage, open: sidebarOpen }} />
+        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage, open: sidebarOpen, refreshBoards: fetchInitialData }} />
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           
           {/* OFFLINE INDICATOR BANNER */}

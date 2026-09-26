@@ -111,7 +111,16 @@ export const boards = {
     template_id: templateId,
     name: (name || '').trim() || undefined,
   }),
-  rename: (id, name) => api.put(`/api/boards/${id}`, { name }),
+  getOne: (id) => api.get(`/api/boards/${id}`),
+  // The PUT handler writes name and description together, so a partial update
+  // has to send both. There is deliberately no `rename(id, name)` shorthand:
+  // it would clear the description every time someone renamed a project.
+  update: (id, nameOrPayload) => {
+    const payload = typeof nameOrPayload === 'string'
+      ? { name: nameOrPayload, description: '' }
+      : { name: nameOrPayload?.name, description: nameOrPayload?.description ?? '' };
+    return api.put(`/api/boards/${id}`, payload);
+  },
   delete: (id) => api.delete(`/api/boards/${id}`),
   // email lowercased + role normalized + password included for invite email
   invite: (id, email, role, password = '') => api.post(`/api/boards/${id}/invite`, {

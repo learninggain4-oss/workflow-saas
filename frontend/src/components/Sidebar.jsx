@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
+import ProjectSettingsModal from './ProjectSettingsModal';
 
-export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, open = true, t }) {
+export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, open = true, refreshBoards, t }) {
+  const [settingsBoard, setSettingsBoard] = useState(null);
   const normalizedRole = String(myRole || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
   const roleLabels = {
     owner: 'Owner',
@@ -94,14 +96,28 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
               <p className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">{t('No projects yet')}</p>
             )}
             {boardsList.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setSelectedBoard(b.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm truncate transition-all duration-200 flex items-center gap-2 ${selectedBoard === b.id ? 'bg-indigo-50 text-indigo-700 font-medium shadow-sm shadow-indigo-500/5 dark:bg-indigo-900/20 dark:text-indigo-300' : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-600 dark:text-slate-300'}`}
-              >
-                <span className={`inline-flex h-6 w-6 items-center justify-center rounded-lg text-[11px] ${selectedBoard === b.id ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>◈</span>
-                <span className="truncate">{b.name}</span>
-              </button>
+              <div key={b.id} className="group relative">
+                <button
+                  onClick={() => setSelectedBoard(b.id)}
+                  aria-current={selectedBoard === b.id ? 'true' : undefined}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm truncate transition-all duration-200 flex items-center gap-2 ${selectedBoard === b.id ? 'bg-indigo-50 text-indigo-700 font-medium shadow-sm shadow-indigo-500/5 dark:bg-indigo-900/20 dark:text-indigo-300' : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-600 dark:text-slate-300'}`}
+                >
+                  <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] ${selectedBoard === b.id ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>◈</span>
+                  <span className="truncate">{b.name}</span>
+                </button>
+                {/* Settings for THIS project, not just the selected one. */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSettingsBoard(b); }}
+                  title={t('Project Settings')}
+                  aria-label={`${t('Project Settings')}: ${b.name}`}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 opacity-0 transition-all hover:bg-slate-200 hover:text-indigo-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 group-hover:opacity-100 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-indigo-300"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 001.065-2.572zm4.675 7.883a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                  </svg>
+                </button>
+              </div>
             ))}
           </div>
           <div className="flex gap-2 px-1">
@@ -118,7 +134,16 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
 
         {selectedBoard && canManageBoard && (
           <div className={`border rounded-2xl p-4 shadow-sm ${subCard}`}>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] mb-3 text-slate-500">{t('Settings')}</p>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">{t('Settings')}</p>
+              <button
+                type="button"
+                onClick={() => setSettingsBoard(boardsList.find((b) => b.id === selectedBoard) || null)}
+                className="text-[10px] font-bold uppercase tracking-wide text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+              >
+                {t('Open')}
+              </button>
+            </div>
             <input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className={`border w-full p-2.5 rounded-xl text-sm mb-3 ${inputCls}`} placeholder={t('Rename board...')} />
             <div className="flex gap-2">
               <button onClick={renameBoard} className={`border flex-1 p-2.5 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${bgCard}`}>{t('Rename')}</button>
@@ -127,6 +152,31 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
           </div>
         )}
       </div>
+
+      {settingsBoard && (
+        <ProjectSettingsModal
+          {...{
+            board: settingsBoard,
+            bgCard,
+            subCard,
+            inputCls,
+            primaryBtn,
+            darkMode,
+            onClose: () => setSettingsBoard(null),
+            onSaved: () => { setSettingsBoard(null); refreshBoards(); },
+            onDeleted: (deletedId) => {
+              setSettingsBoard(null);
+              // Clear the selection when the open project is the one removed,
+              // otherwise every view keeps rendering a board that is gone.
+              if (selectedBoard === deletedId) setSelectedBoard(null);
+              refreshBoards();
+            },
+            setViewMode,
+            setSelectedBoard,
+            t,
+          }}
+        />
+      )}
 
       <div className="p-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
         <button onClick={() => { localStorage.clear(); setToken(''); }} className={`w-full text-sm border p-2.5 rounded-xl font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:hover:border-red-800 transition-colors ${bgCard}`}>
