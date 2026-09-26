@@ -762,7 +762,7 @@ export default function App() {
   return (
     <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
       <div className="app-shell h-full w-full overflow-hidden rounded- border border-white/10 flex relative">
-        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage, open: sidebarOpen }} />
+        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage, open: sidebarOpen }} />
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           
           {/* OFFLINE INDICATOR BANNER */}

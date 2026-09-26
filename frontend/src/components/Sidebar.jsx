@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, open = true }) {
+export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, open = true }) {
   const normalizedRole = String(myRole || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
   const roleLabels = {
     owner: 'Owner',
@@ -113,23 +113,6 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
             <div className="flex gap-2">
               <button onClick={renameBoard} className={`border flex-1 p-2.5 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${bgCard}`}>Rename</button>
               <button onClick={deleteBoard} className="bg-red-50 text-red-600 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 flex-1 p-2.5 rounded-xl text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">Delete</button>
-            </div>
-          </div>
-        )}
-
-        {canManageBoard && (
-          <div className="pt-2">
-            <h3 className="font-semibold text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-3 px-2">Team Members</h3>
-            <div className="space-y-2">
-              <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Email address" className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`} />
-              <input type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} placeholder="Password for new user" className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`} />
-              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className={`border w-full p-2.5 rounded-xl text-sm ${inputCls}`}>
-                <option value="administrator">Administrator</option>
-                <option value="editor">Editor</option>
-                <option value="guest">Guest</option>
-                <option value="subscriber">Subscriber</option>
-              </select>
-              <button onClick={inviteUser} className={`w-full p-2.5 rounded-xl text-sm font-semibold shadow-sm ${primaryBtn}`}>Send Invite</button>
             </div>
           </div>
         )}
