@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ProjectSettingsModal from './ProjectSettingsModal';
 
-export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, open = true, refreshBoards, t }) {
+export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, open = true, refreshBoards, t }) {
   const [settingsBoard, setSettingsBoard] = useState(null);
   const normalizedRole = String(myRole || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
   const roleLabels = {
@@ -11,7 +11,6 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
     guest: 'Guest',
     subscriber: 'Subscriber',
   };
-  const canManageBoard = normalizedRole === 'owner' || normalizedRole === 'administrator';
   const quickLinks = [
     { label: 'Overview', value: 'dashboard' },
     { label: 'Board', value: 'board' },
@@ -132,25 +131,6 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
           </div>
         </div>
 
-        {selectedBoard && canManageBoard && (
-          <div className={`border rounded-2xl p-4 shadow-sm ${subCard}`}>
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">{t('Settings')}</p>
-              <button
-                type="button"
-                onClick={() => setSettingsBoard(boardsList.find((b) => b.id === selectedBoard) || null)}
-                className="text-[10px] font-bold uppercase tracking-wide text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
-              >
-                {t('Open')}
-              </button>
-            </div>
-            <input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className={`border w-full p-2.5 rounded-xl text-sm mb-3 ${inputCls}`} placeholder={t('Rename board...')} />
-            <div className="flex gap-2">
-              <button onClick={renameBoard} className={`border flex-1 p-2.5 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${bgCard}`}>{t('Rename')}</button>
-              <button onClick={deleteBoard} className="bg-red-50 text-red-600 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 flex-1 p-2.5 rounded-xl text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">{t('Delete')}</button>
-            </div>
-          </div>
-        )}
       </div>
 
       {settingsBoard && (
