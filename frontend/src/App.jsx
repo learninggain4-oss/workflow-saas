@@ -8,7 +8,6 @@ import { saveTasksLocally, getLocalTasks, saveOfflineAction, syncOfflineActions 
 
 // NEW: i18n import for Multi-Language Support
 import './i18n';
-import { SUPPORTED_LANGUAGES } from './i18n';
 import { useTranslation } from 'react-i18next';
 
 // Components import
@@ -55,10 +54,6 @@ export default function App() {
     if (!lng || lng === i18n.resolvedLanguage) return;
     setLanguage(lng);
     i18n.changeLanguage(lng);
-  };
-
-  const handleLanguageChange = (e) => {
-    changeLanguage(e.target.value);
   };
 
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -755,8 +750,6 @@ export default function App() {
     };
   }, [tasksList]);
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications]);
-
   const filtered = tasksList.filter(t => {
     const ms = t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase());
     const mp = filterPrio === "all" || t.priority === filterPrio;
@@ -795,7 +788,7 @@ export default function App() {
             </div>
           )}
 
-          <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, bgCard, sidebarOpen, toggleSidebar: () => setSidebarOpen((prev) => !prev), t, changeLanguage }} />
+          <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, bgCard, sidebarOpen, toggleSidebar: () => setSidebarOpen((prev) => !prev), t, changeLanguage, language, showNotif, setShowNotif, notifications, setNotifications }} />
           <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar">
           {viewMode === "settings"? (
             <AccountSettingsPage {...{ userData, profileForm, setProfileForm, handleProfileUpdate, savingProfile, profilePreferences, setProfilePreferences, workspaceDefaults, setWorkspaceDefaults, resetProfilePreferences, darkMode, setDarkMode, profileAvatar, setProfileAvatar, handleAvatarUpload, handleDeleteAccount, accountActivity, handleUpgrade, securitySettings, handleVerifyEmail, toggleTwoFactor, toggleConnectedApp, bgCard, inputCls, primaryBtn, setViewMode, t, changeLanguage }} />
@@ -892,60 +885,6 @@ export default function App() {
         </button>
       )}
 
-      {/* NEW: Floating Language Switcher + Notifications UI (Bottom-Left) */}
-      <div className="fixed bottom-6 left-6 z-40 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-2 flex items-center gap-2 relative">
-        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path></svg>
-        <label htmlFor="language-switcher" className="sr-only">{t("Language")}</label>
-        <select
-          id="language-switcher"
-          onChange={handleLanguageChange}
-          value={language}
-          className="bg-transparent text-sm font-medium outline-none text-gray-700 dark:text-gray-300 cursor-pointer"
-        >
-          {SUPPORTED_LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code} className="dark:bg-[#18181b]">{l.native}</option>
-          ))}
-        </select>
-
-        <div className="w-px h-6 bg-gray-200 dark:bg-gray-800" />
-
-        <div className="shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowNotif(!showNotif)}
-            aria-label={t("Notifications")}
-            aria-expanded={showNotif}
-            className="relative p-1.5 rounded-lg transition-all hover:bg-gray-50 dark:hover:bg-gray-800"
-          >
-            <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-gradient-to-br from-rose-500 to-red-500 text-white text-[10px] font-bold w-4 h-4 flex justify-center items-center rounded-full border-2 border-white dark:border-[#18181b]">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {showNotif && (
-          <div className={`absolute bottom-full left-0 mb-2 w-80 max-w-[calc(100vw-3rem)] border rounded-2xl shadow-2xl z-50 max-h-96 overflow-auto custom-scrollbar ${bgCard}`}>
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-inherit z-10">
-              <span className="font-bold text-sm text-slate-900 dark:text-white">{t("Notifications")}</span>
-              <button onClick={() => { notifs.markAllRead(); notifs.getAll().then((r) => setNotifications(r.data)); }} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">{t("Mark all read")}</button>
-            </div>
-            <div className="py-2">
-              {notifications.length === 0 && <div className="p-4 text-center text-sm text-slate-500">{t("No new notifications")}</div>}
-              {notifications.map((n) => (
-                <div key={n.id} className="px-4 py-3 border-b border-slate-100 dark:border-slate-800/60 text-sm flex justify-between group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                  <span className={`pr-4 ${!n.is_read ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{n.message}</span>
-                  <button onClick={() => { notifs.delete(n.id); notifs.getAll().then((r) => setNotifications(r.data)); }} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-1">✕</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
 
       <style dangerouslySetInnerHTML={{__html: `
        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
