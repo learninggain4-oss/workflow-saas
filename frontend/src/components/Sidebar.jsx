@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode }) {
+export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, open = true }) {
   const normalizedRole = String(myRole || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');
   const roleLabels = {
     owner: 'Owner',
@@ -12,7 +12,12 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
   const canManageBoard = normalizedRole === 'owner' || normalizedRole === 'administrator';
 
   return (
-    <aside className={`w-72 flex-shrink-0 border-r soft-divider flex flex-col transition-colors duration-200 ${bgSide}`}>
+    <aside
+      id="app-sidebar"
+      aria-hidden={!open}
+      className={`sidebar-collapsible flex-shrink-0 border-r soft-divider flex flex-col overflow-hidden ${open ? 'w-72 opacity-100 visible' : 'w-0 opacity-0 invisible'} ${bgSide}`}
+    >
+      <div className="flex-1 min-h-0 w-72 flex flex-col">
       <div className="p-5 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-sky-500 text-white flex items-center justify-center text-sm font-black shadow-lg shadow-indigo-500/25">W</div>
@@ -134,6 +139,7 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
         <button onClick={() => { localStorage.clear(); setToken(''); }} className={`w-full text-sm border p-2.5 rounded-xl font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:hover:border-red-800 transition-colors ${bgCard}`}>
           Sign Out
         </button>
+      </div>
       </div>
     </aside>
   );

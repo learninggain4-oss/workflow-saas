@@ -110,6 +110,22 @@ html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.7);
 }
 
+/* Sidebar collapse/expand: width drives the layout, opacity + visibility keep the
+   panel out of the tab order and screen readers while it is hidden. */
+.sidebar-collapsible {
+  transition-property: width, opacity, visibility, background-color, border-color, color;
+  transition-duration: 260ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-collapsible,
+  .sidebar-toggle-icon {
+    transition-duration: 1ms;
+  }
+}
+
 @layer utilities {
   .glass-panel {
     background: var(--panel);

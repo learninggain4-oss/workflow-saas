@@ -1,7 +1,7 @@
 import React from 'react';
 import { notifs } from '../services/api';
 
-export default function Header({ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard }) {
+export default function Header({ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, sidebarOpen, toggleSidebar }) {
   const navGroups = [
     {
       title: 'Workspace',
@@ -21,6 +21,23 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
     <header className="flex-shrink-0 px-6 py-5 border-b border-slate-200/80 dark:border-slate-800 bg-transparent">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-controls="app-sidebar"
+            aria-expanded={sidebarOpen}
+            title={sidebarOpen ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
+            className={`shrink-0 border p-2.5 rounded-xl shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 ${bgCard}`}
+          >
+            <span className="sr-only">{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</span>
+            <svg
+              className={`sidebar-toggle-icon w-5 h-5 text-slate-500 dark:text-slate-300 transition-transform duration-300 ${sidebarOpen ? '' : 'rotate-180'}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h10M4 18h16" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={sidebarOpen ? 'M17 10l4 2-4 2' : 'M13 10l-4 2 4 2'} />
+            </svg>
+          </button>
           <div className="hidden md:flex items-center gap-2 rounded-full border border-indigo-200/80 bg-indigo-50/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
             Workspace
           </div>

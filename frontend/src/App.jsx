@@ -91,6 +91,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState("board");
   const [calDate, setCalDate] = useState(new Date());
   const [darkMode, setDarkMode] = useState(localStorage.getItem("darkMode") === "true");
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem("sidebarOpen") !== "false");
   const [profileForm, setProfileForm] = useState({ name: "", email: "", password: "" });
   const [profileAvatar, setProfileAvatar] = useState(localStorage.getItem("profileAvatar") || "");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -197,6 +198,23 @@ export default function App() {
   useEffect(() => { localStorage.setItem("securitySettings", JSON.stringify(securitySettings)); }, [securitySettings]);
   useEffect(() => { localStorage.setItem("profileAvatar", profileAvatar || ""); }, [profileAvatar]);
   useEffect(() => { localStorage.setItem("accountActivity", JSON.stringify(accountActivity)); }, [accountActivity]);
+
+  useEffect(() => {
+    localStorage.setItem("sidebarOpen", String(sidebarOpen));
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "b") return;
+      const el = document.activeElement;
+      const tag = el?.tagName;
+      if (el?.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      e.preventDefault();
+      setSidebarOpen((prev) => !prev);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const currentEmail = useMemo(() => {
     try { return token? JSON.parse(atob(token.split('.')[1])).sub || "" : ""; } catch { return ""; }
@@ -744,7 +762,7 @@ export default function App() {
   return (
     <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
       <div className="app-shell h-full w-full overflow-hidden rounded- border border-white/10 flex relative">
-        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage, open: sidebarOpen }} />
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           
           {/* OFFLINE INDICATOR BANNER */}
@@ -755,7 +773,7 @@ export default function App() {
             </div>
           )}
 
-          <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, t, changeLanguage: i18n.changeLanguage }} />
+          <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, sidebarOpen, toggleSidebar: () => setSidebarOpen((prev) => !prev), t, changeLanguage: i18n.changeLanguage }} />
           <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar">
           {viewMode === "settings"? (
             <AccountSettingsPage {...{ userData, profileForm, setProfileForm, handleProfileUpdate, savingProfile, profilePreferences, setProfilePreferences, workspaceDefaults, setWorkspaceDefaults, resetProfilePreferences, darkMode, setDarkMode, profileAvatar, setProfileAvatar, handleAvatarUpload, handleDeleteAccount, accountActivity, handleUpgrade, securitySettings, handleVerifyEmail, toggleTwoFactor, toggleConnectedApp, bgCard, inputCls, primaryBtn, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
