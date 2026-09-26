@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiBaseUrl } from '../../services/api';
 
 const describeError = (err, fallback) => {
   const detail = err?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
   if (err?.response) return `Request failed (HTTP ${err.response.status}).`;
-  if (err?.request) return "Couldn't reach the server.";
+  if (err?.request) return `Couldn't reach the API at ${apiBaseUrl()}.`;
   return fallback;
 };
 

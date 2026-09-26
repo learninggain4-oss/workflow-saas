@@ -1,6 +1,6 @@
 // frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language), Offline PWA Sync & Task Activity Log
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, integrations as integrationsApi, billing, WS_BASE } from './services/api';
+import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, integrations as integrationsApi, billing, apiBaseUrl, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
 
 // NEW: Offline Sync imports
@@ -451,9 +451,9 @@ export default function App() {
       } else {
         alert("Payment is processing. Your Pro access will appear as soon as Paddle confirms it.");
       }
-    } catch (e) {
+      } catch (e) {
       const detail = e?.response?.data?.detail;
-      alert(detail || "Could not start checkout. Please try again.");
+      alert(detail || `Could not start checkout. Check that the API at ${apiBaseUrl()} is reachable.`);
     } finally {
       setIsUpgrading(false);
     }

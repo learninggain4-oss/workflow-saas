@@ -16,6 +16,28 @@ const getApiBaseUrl = () => {
 
 const API_URL = getApiBaseUrl();
 
+/**
+ * The API host this build is actually talking to.
+ *
+ * Worth surfacing in error messages: when the API is unreachable the browser
+ * often reports a generic network failure, because a response that omits CORS
+ * headers (which a crashed or misrouted service does) is blocked before
+ * JavaScript can read its status. Without the resolved host, a user cannot tell
+ * a dead local backend from a wrong remote one. Note this value is inlined at
+ * build time, so it reflects the build, not the current environment.
+ */
+export const apiBaseUrl = () => API_URL;
+export const apiSource = import.meta.env.VITE_API_URL ? 'VITE_API_URL' : 'fallback';
+
+// A silently chosen API host is a real source of confusion: an unconfigured
+// frontend quietly talks to whatever the hardcoded fallback is. Make it loud.
+if (!import.meta.env.VITE_API_URL) {
+  console.warn(
+    `[api] VITE_API_URL is not set, so requests are going to the built-in fallback ${API_URL}. ` +
+    'Set VITE_API_URL in your environment and rebuild - it is inlined at build time, not read at runtime.'
+  );
+}
+
 const api = axios.create({
   baseURL: API_URL,
 });
