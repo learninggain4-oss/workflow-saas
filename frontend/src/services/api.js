@@ -16,19 +16,6 @@ const getApiBaseUrl = () => {
 
 const API_URL = getApiBaseUrl();
 
-/**
- * The API host this build is actually talking to.
- *
- * Worth surfacing in error messages: when the API is unreachable the browser
- * often reports a generic network failure, because a response that omits CORS
- * headers (which a crashed or misrouted service does) is blocked before
- * JavaScript can read its status. Without the resolved host, a user cannot tell
- * a dead local backend from a wrong remote one. Note this value is inlined at
- * build time, so it reflects the build, not the current environment.
- */
-export const apiBaseUrl = () => API_URL;
-export const apiSource = import.meta.env.VITE_API_URL ? 'VITE_API_URL' : 'fallback';
-
 // A silently chosen API host is a real source of confusion: an unconfigured
 // frontend quietly talks to whatever the hardcoded fallback is. Make it loud.
 if (!import.meta.env.VITE_API_URL) {
@@ -85,9 +72,9 @@ export const auth = {
   },
   getMe: () => api.get('/api/users/me'),
   updateProfile: (data) => api.put('/api/users/me', data),
-  // NOTE: the old `upgrade: () => api.post('/api/upgrade')` was removed along
-  // with the endpoint. It let any authenticated caller grant themselves Pro.
-  // Billing now goes through the `billing` service and the Paddle webhook.
+  // No `upgrade` helper here. The server still exposes POST /api/upgrade, which
+  // sets subscription_tier="pro" for any authenticated caller with no payment -
+  // it should not be driven from the client, and it is a known open issue.
 };
 
 export const admin = {
@@ -145,23 +132,6 @@ export const automations = {
 export const boardChat = {
   getMessages: (boardId) => api.get(`/api/boards/${boardId}/messages`),
   sendMessage: (boardId, text) => api.post(`/api/boards/${boardId}/messages`, { text }),
-};
-
-export const integrations = {
-  // Returns { providers, integrations }. The response contains no credentials -
-  // only which fields are configured.
-  getAll: (boardId) => api.get(`/api/boards/${boardId}/integrations`),
-  connect: (boardId, provider, config) => api.post(`/api/boards/${boardId}/integrations`, { provider, config }),
-  disconnect: (boardId, provider) => api.delete(`/api/boards/${boardId}/integrations/${provider}`),
-  test: (boardId, provider) => api.post(`/api/boards/${boardId}/integrations/${provider}/test`),
-};
-
-export const billing = {
-  // Authoritative state, written only by the verified Paddle webhook.
-  getSubscription: () => api.get('/api/billing/subscription'),
-  getInvoices: () => api.get('/api/billing/invoices'),
-  // Returns a short-lived Paddle client token. The Paddle API key stays server-side.
-  createCheckout: () => api.post('/api/billing/paddle/checkout'),
 };
 
 export const subtasks = {

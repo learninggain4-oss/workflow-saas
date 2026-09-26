@@ -123,68 +123,6 @@ class Notification(Base):
     created_at = Column(String, default="")
 
 
-class Integration(Base):
-    """A third-party integration bound to a single board.
-
-    `config_enc` holds a Fernet-encrypted JSON blob. Webhook URLs, API keys and
-    personal access tokens are bearer credentials: anyone who can read this table
-    can impersonate the connected account, so they are never stored in the clear
-    and never returned over the API."""
-    __tablename__ = "integrations"
-
-    id = Column(Integer, primary_key=True, index=True)
-    board_id = Column(Integer, ForeignKey("boards.id"), index=True)
-    provider = Column(String, index=True)
-    status = Column(String, default="disconnected")
-    config_enc = Column(Text, default="")
-    external_account = Column(String, default="")
-    last_synced_at = Column(String, default="")
-    last_error = Column(Text, default="")
-    created_by = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(String, default="")
-    updated_at = Column(String, default="")
-
-
-# ==========================================
-#               BILLING
-# ==========================================
-# `User.subscription_tier` is a convenience cache only. The authoritative
-# subscription state is `Subscription.status`, which is written solely by the
-# verified Paddle webhook - never by the browser and never by a client-supplied
-# flag.
-
-class Subscription(Base):
-    __tablename__ = "subscriptions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    paddle_subscription_id = Column(String, index=True)
-    paddle_customer_id = Column(String, default="")
-    status = Column(String, default="")          # active / trialing / past_due / canceled / paused
-    price_id = Column(String, default="")
-    current_period_end = Column(String, default="")
-    canceled_at = Column(String, default="")
-    created_at = Column(String, default="")
-    updated_at = Column(String, default="")
-
-
-class Invoice(Base):
-    """One row per settled Paddle transaction. Paddle calls these transactions;
-    they are what the customer sees as an invoice."""
-    __tablename__ = "invoices"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    paddle_transaction_id = Column(String, index=True)
-    paddle_invoice_id = Column(String, default="")
-    invoice_number = Column(String, default="")
-    status = Column(String, default="")          # completed / refunded / ready
-    currency_code = Column(String, default="USD")
-    total = Column(String, default="")           # kept as text to avoid float drift
-    billed_at = Column(String, default="")
-    created_at = Column(String, default="")
-
-
 # ==========================================
 #          AUTOMATIONS & BOARD CHAT
 # ==========================================

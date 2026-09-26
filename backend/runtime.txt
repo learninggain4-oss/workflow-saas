@@ -1,8 +1,1 @@
-# Render built with Python 3.14.3 even though this file previously said 3.11.11,
-# i.e. runtime.txt was being ignored. Both files now agree on 3.14.3, which is
-# the version the pinned requirements were validated against.
-#
-# If you would rather run 3.11, set the version here AND in .python-version AND
-# in the Render dashboard, then re-validate: the pins in requirements.txt were
-# verified on 3.14, not 3.11.
-3.14.3
+3.11.11

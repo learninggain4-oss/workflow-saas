@@ -1,33 +1,16 @@
-# Pinned to the exact versions validated against this codebase on Python 3.14
-# (11/11 pytest + 33/33 API end-to-end checks). Previously every dependency was
-# unpinned, so Render resolved SQLAlchemy 2.1.x, whose bare "postgresql://"
-# default driver changed from psycopg2 to psycopg (v3). Only psycopg2-binary was
-# installed, so create_engine() raised:
-#   ModuleNotFoundError: No module named 'psycopg'
-# database.py now also names the driver explicitly, so the two fixes are
-# independent: pinning stops the surprise, the explicit driver makes it
-# version-proof.
-#
-# Do not pin psycopg2-binary below 2.9.13 on Python 3.14 - earlier 2.9.x wheels
-# predate 3.14 and would fall back to a source build that needs pg_config.
-fastapi==0.141.1
-uvicorn[standard]==0.53.0
-sqlalchemy==2.0.54
-python-jose[cryptography]==3.5.0
-passlib==1.7.4
-bcrypt==5.0.0
-python-multipart==0.0.32
-python-dotenv==1.2.3
-pydantic==2.13.5
-websockets==16.1.1
-requests==2.34.2
-cloudinary==1.46.2
-psycopg2-binary==2.9.13
-
-# Pure-python process manager, only used if the Render start command is switched
-# to gunicorn. The current start command runs uvicorn directly.
-gunicorn==23.0.0
-
-# Removed: pydantic-settings and email-validator were unpinned but are not
-# imported anywhere in the codebase. Dropping them shrinks the install surface
-# on a bleeding-edge Python. Re-add if EmailStr/BaseSettings are introduced.
+fastapi
+uvicorn[standard]
+gunicorn
+sqlalchemy
+python-jose[cryptography]
+passlib
+bcrypt
+python-multipart
+python-dotenv
+pydantic
+pydantic-settings
+email-validator
+websockets
+requests
+cloudinary
+psycopg2-binary

@@ -88,14 +88,6 @@ class CommentCreate(BaseModel):
     text: str
 
 
-class IntegrationUpsert(BaseModel):
-    provider: str
-    # Free-form because the accepted keys depend on the provider; the endpoint
-    # validates the field names against INTEGRATION_PROVIDERS and encrypts the
-    # values before storage.
-    config: Optional[Dict[str, Any]] = None
-
-
 # NOTE: RecurringConfig, AutomationCreate/Update and BoardMessageCreate used to
 # live here, but the routes in main.py bind to AutomationCreatePayload and the
 # main.py BoardMessageCreate. Two BoardMessageCreate shapes existed with

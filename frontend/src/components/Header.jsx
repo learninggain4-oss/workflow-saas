@@ -9,11 +9,11 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
     },
     {
       title: 'Operations',
-      items: ['reports', 'team', 'automations', 'integrations'],
+      items: ['reports', 'team', 'automations'],
     },
     {
       title: 'Setup',
-      items: ['templates', 'onboarding', 'resources', 'feedback', 'audit', 'billing'],
+      items: ['templates', 'onboarding', 'resources', 'feedback', 'audit'],
     },
   ];
 

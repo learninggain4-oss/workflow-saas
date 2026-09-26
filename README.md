@@ -161,14 +161,11 @@ npm run dev -- --host 0.0.0.0
 See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for what each key does and how to
 generate the random ones.
 
-Two are required in production, and the app refuses to boot without them:
+Only one is required in production, and the app refuses to boot without it:
 
 ```bash
 # SECRET_KEY - signs login tokens
 python -c "import secrets; print(secrets.token_urlsafe(48))"
-
-# INTEGRATION_ENCRYPTION_KEY - encrypts third-party credentials at rest
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
 `SECRET_KEY` must stay the same across deploys, or every user is signed out.
