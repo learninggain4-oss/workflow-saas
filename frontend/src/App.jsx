@@ -44,6 +44,15 @@ import RichTextEditor from './components/RichTextEditor';
 // NEW: Task Activity Log Component
 import TaskActivityLog from './components/TaskActivityLog';
 
+// Views that cannot render anything meaningful without a selected project.
+// Everything else (settings, templates, onboarding, resources, feedback, audit)
+// must stay reachable on an empty workspace - Templates in particular is how a
+// user bootstraps their first project, so gating it behind the empty state
+// made the whole screen unreachable.
+const BOARD_SCOPED_VIEWS = [
+  'dashboard', 'board', 'timeline', 'calendar', 'gantt', 'reports', 'team', 'automations',
+];
+
 export default function App() {
   // i18n hooks Setup
   const { t, i18n } = useTranslation();
@@ -294,6 +303,8 @@ export default function App() {
 
   const canEdit = Boolean(myPermissions.createTasks || myPermissions.editTasks || myPermissions.deleteTasks || myPermissions.manageBoard);
   const isAdminOrOwner = myRole === 'owner' || myRole === 'administrator';
+  // Only board-scoped views get the empty-workspace panel; the rest render normally.
+  const needsBoard = BOARD_SCOPED_VIEWS.includes(viewMode) && boardsList.length === 0;
 
   const fetchInitialData = async () => {
     if (!token) return;
@@ -790,12 +801,28 @@ export default function App() {
 
           <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, bgCard, sidebarOpen, toggleSidebar: () => setSidebarOpen((prev) => !prev), t, changeLanguage, language, showNotif, setShowNotif, notifications, setNotifications }} />
           <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar">
-          {boardsList.length === 0? (
+          {needsBoard? (
             /* Empty workspace: no project is auto-created, the user names the first one. */
             <div className={`max-w-xl mx-auto mt-10 border rounded-2xl p-8 text-center shadow-sm ${bgCard}`}>
               <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-sky-500 text-white flex items-center justify-center text-lg font-black shadow-lg shadow-indigo-500/25">+</div>
               <h3 className="mt-4 text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">{t('Create your first project')}</h3>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{t('Name your project in the sidebar to get started. Nothing is created automatically.')}</p>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('templates')}
+                  className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:from-indigo-500 hover:to-violet-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  {t('Start from a template')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('settings')}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-indigo-300 hover:text-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200"
+                >
+                  {t('Account settings')}
+                </button>
+              </div>
             </div>
           ) : viewMode === "settings"? (
             <AccountSettingsPage {...{ userData, profileForm, setProfileForm, handleProfileUpdate, savingProfile, profilePreferences, setProfilePreferences, workspaceDefaults, setWorkspaceDefaults, resetProfilePreferences, darkMode, setDarkMode, profileAvatar, setProfileAvatar, handleAvatarUpload, handleDeleteAccount, accountActivity, handleUpgrade, securitySettings, handleVerifyEmail, toggleTwoFactor, toggleConnectedApp, bgCard, inputCls, primaryBtn, setViewMode, t, changeLanguage }} />
