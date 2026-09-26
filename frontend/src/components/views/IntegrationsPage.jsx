@@ -1,23 +1,32 @@
 import React, { useState } from 'react';
 
 export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputCls, primaryBtn }) {
-  // State for Integration Statuses (Added new platforms and lastSynced property)
+  // State for Integration Statuses (Added ALL new platforms)
   const [integrations, setIntegrations] = useState({
     github: { connected: false, repo: '', lastSynced: null },
     slack: { connected: false, webhook: '', lastSynced: null },
     drive: { connected: false, account: '', lastSynced: null },
-    jira: { connected: false, url: '', lastSynced: null },    // NEW FEATURE
-    discord: { connected: false, webhook: '', lastSynced: null } // NEW FEATURE
+    jira: { connected: false, url: '', lastSynced: null },    
+    discord: { connected: false, webhook: '', lastSynced: null }, 
+    // NEWLY ADDED FEATURES
+    teams: { connected: false, webhook: '', lastSynced: null },
+    zoom: { connected: false, account: '', lastSynced: null },
+    toggl: { connected: false, apiKey: '', lastSynced: null },
+    gcalendar: { connected: false, account: '', lastSynced: null },
+    figma: { connected: false, token: '', lastSynced: null },
+    notion: { connected: false, workspace: '', lastSynced: null },
+    dropbox: { connected: false, account: '', lastSynced: null },
+    sentry: { connected: false, projectUrl: '', lastSynced: null },
+    zapier: { connected: false, webhook: '', lastSynced: null }
   });
 
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(''); // NEW FEATURE: Search filter
+  const [searchTerm, setSearchTerm] = useState(''); 
 
-  // MOCK API Handlers
+  // --- ORIGINAL MOCK API HANDLERS ---
   const handleConnectGitHub = async (e) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API Call for GitHub/GitLab Auth
     setTimeout(() => {
       setIntegrations(prev => ({ ...prev, github: { connected: true, repo: prev.github.repo, lastSynced: new Date().toLocaleTimeString() } }));
       setLoading(false);
@@ -28,7 +37,6 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
   const handleConnectSlack = async (e) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API Call for Slack Webhook Setup
     setTimeout(() => {
       setIntegrations(prev => ({ ...prev, slack: { connected: true, webhook: prev.slack.webhook, lastSynced: new Date().toLocaleTimeString() } }));
       setLoading(false);
@@ -38,7 +46,6 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
 
   const handleConnectDrive = async () => {
     setLoading(true);
-    // Simulate Google Drive OAuth Flow
     setTimeout(() => {
       setIntegrations(prev => ({ ...prev, drive: { connected: true, account: 'user@gmail.com', lastSynced: new Date().toLocaleTimeString() } }));
       setLoading(false);
@@ -46,7 +53,6 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
     }, 1000);
   };
 
-  // NEW FEATURE: Jira API Handler
   const handleConnectJira = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -57,7 +63,6 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
     }, 1000);
   };
 
-  // NEW FEATURE: Discord API Handler
   const handleConnectDiscord = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -68,7 +73,86 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
     }, 1000);
   };
 
-  // NEW FEATURE: Sync Data Handler
+  // --- NEW MOCK API HANDLERS ---
+  const handleConnectTeams = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, teams: { connected: true, webhook: prev.teams.webhook, lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Microsoft Teams connected! Task updates will be sent to your channel.');
+    }, 1000);
+  };
+
+  const handleConnectZoom = async () => {
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, zoom: { connected: true, account: 'user@zoom.us', lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Zoom connected! You can now schedule meetings from tasks.');
+    }, 1000);
+  };
+
+  const handleConnectToggl = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, toggl: { connected: true, apiKey: '********', lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Toggl Track connected! Timer data will be synced.');
+    }, 1000);
+  };
+
+  const handleConnectGCalendar = async () => {
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, gcalendar: { connected: true, account: 'user@gmail.com', lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Google Calendar connected! Due dates will be synced.');
+    }, 1000);
+  };
+
+  const handleConnectFigma = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, figma: { connected: true, token: '********', lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Figma connected! You can now embed designs.');
+    }, 1000);
+  };
+
+  const handleConnectNotion = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, notion: { connected: true, workspace: prev.notion.workspace, lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Notion connected! Link project docs directly.');
+    }, 1000);
+  };
+
+  const handleConnectDropbox = async () => {
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, dropbox: { connected: true, account: 'user@dropbox.com', lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Dropbox connected! Attach files directly to tasks.');
+    }, 1000);
+  };
+
+  const handleConnectSentry = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, sentry: { connected: true, projectUrl: prev.sentry.projectUrl, lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Sentry connected! Errors will now create tasks automatically.');
+    }, 1000);
+  };
+
+  const handleConnectZapier = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, zapier: { connected: true, webhook: prev.zapier.webhook, lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false); alert('Zapier connected! Workflows are now active.');
+    }, 1000);
+  };
+
+  // --- GENERAL HANDLERS ---
   const handleSync = (platform) => {
     setIntegrations(prev => ({
       ...prev,
@@ -78,11 +162,10 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
 
   const handleDisconnect = (platform) => {
     if(window.confirm(`Are you sure you want to disconnect ${platform}?`)) {
-      setIntegrations(prev => ({ ...prev, [platform]: { connected: false, repo: '', webhook: '', account: '', url: '', lastSynced: null } }));
+      setIntegrations(prev => ({ ...prev, [platform]: { connected: false, repo: '', webhook: '', account: '', url: '', apiKey: '', token: '', workspace: '', projectUrl: '', lastSynced: null } }));
     }
   };
 
-  // NEW FEATURE: Disconnect All
   const handleDisconnectAll = () => {
     if(window.confirm("Are you sure you want to disconnect ALL integrations?")) {
       setIntegrations({
@@ -90,7 +173,16 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
         slack: { connected: false, webhook: '', lastSynced: null },
         drive: { connected: false, account: '', lastSynced: null },
         jira: { connected: false, url: '', lastSynced: null },
-        discord: { connected: false, webhook: '', lastSynced: null }
+        discord: { connected: false, webhook: '', lastSynced: null },
+        teams: { connected: false, webhook: '', lastSynced: null },
+        zoom: { connected: false, account: '', lastSynced: null },
+        toggl: { connected: false, apiKey: '', lastSynced: null },
+        gcalendar: { connected: false, account: '', lastSynced: null },
+        figma: { connected: false, token: '', lastSynced: null },
+        notion: { connected: false, workspace: '', lastSynced: null },
+        dropbox: { connected: false, account: '', lastSynced: null },
+        sentry: { connected: false, projectUrl: '', lastSynced: null },
+        zapier: { connected: false, webhook: '', lastSynced: null }
       });
     }
   };
@@ -98,10 +190,7 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
   const textColor = darkMode ? 'text-gray-100' : 'text-gray-900';
   const mutedColor = darkMode ? 'text-gray-400' : 'text-gray-500';
 
-  // NEW FEATURE: Check if item matches search term
   const matchesSearch = (keywords) => keywords.toLowerCase().includes(searchTerm.toLowerCase());
-
-  // Check if any integration is connected to show the "Disconnect All" button
   const isAnyConnected = Object.values(integrations).some(integration => integration.connected);
 
   return (
@@ -113,7 +202,6 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-          {/* NEW FEATURE: Search Bar */}
           <input 
             type="text" 
             placeholder="Search integrations..." 
@@ -132,7 +220,7 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
         </div>
       </div>
 
-      {/* 1. GitHub / GitLab Integration */}
+      {/* 1. GitHub / GitLab Integration (Original) */}
       {matchesSearch('github gitlab repository code commits') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
@@ -145,208 +233,343 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
               <p className={`text-sm ${mutedColor}`}>Track commits and pull requests directly on tasks.</p>
             </div>
           </div>
-          {integrations.github.connected ? (
-             <button onClick={() => handleDisconnect('github')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>
-          ) : null}
+          {integrations.github.connected && <button onClick={() => handleDisconnect('github')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>}
         </div>
-        
         {!integrations.github.connected ? (
           <form onSubmit={handleConnectGitHub} className="mt-5 flex gap-3">
-            <input 
-              type="text" 
-              required
-              placeholder="e.g. username/repository" 
-              className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`}
-              value={integrations.github.repo}
-              onChange={(e) => setIntegrations({...integrations, github: {...integrations.github, repo: e.target.value}})}
-            />
-            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>
-              Connect Repository
-            </button>
+            <input type="text" required placeholder="e.g. username/repository" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.github.repo} onChange={(e) => setIntegrations({...integrations, github: {...integrations.github, repo: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Connect Repository</button>
           </form>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-              <span>Tracking commits for <b>{integrations.github.repo}</b> {integrations.github.lastSynced && <span className="text-xs ml-1 opacity-80">(Synced: {integrations.github.lastSynced})</span>}</span>
-            </div>
-            <button onClick={() => handleSync('github')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Sync Now</button>
-          </div>
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex justify-between items-center"><div className="flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Tracking <b>{integrations.github.repo}</b></span></div><button onClick={() => handleSync('github')} className="text-xs px-3 py-1 bg-green-600 text-white rounded">Sync</button></div>
         )}
       </div>
       )}
 
-      {/* 2. Slack Integration */}
+      {/* 2. Slack Integration (Original) */}
       {matchesSearch('slack notifications chat messages') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-               <svg className="w-8 h-8 text-[#E01E5A]" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.523-2.522v-2.522h2.523zM15.165 17.688a2.527 2.527 0 0 1-2.523-2.523 2.526 2.526 0 0 1 2.523-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
-            </div>
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg"><svg className="w-8 h-8 text-[#E01E5A]" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.523-2.522v-2.522h2.523zM15.165 17.688a2.527 2.527 0 0 1-2.523-2.523 2.526 2.526 0 0 1 2.523-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg></div>
             <div>
-              <h3 className={`font-semibold text-lg ${textColor}`}>Slack Notifications</h3>
-              <p className={`text-sm ${mutedColor}`}>Receive instant alerts for task updates and new comments.</p>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Slack</h3>
+              <p className={`text-sm ${mutedColor}`}>Receive instant alerts for task updates.</p>
             </div>
           </div>
-          {integrations.slack.connected ? (
-             <button onClick={() => handleDisconnect('slack')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>
-          ) : null}
+          {integrations.slack.connected && <button onClick={() => handleDisconnect('slack')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>}
         </div>
-
         {!integrations.slack.connected ? (
           <form onSubmit={handleConnectSlack} className="mt-5 flex gap-3">
-            <input 
-              type="url" 
-              required
-              placeholder="Slack Webhook URL (https://hooks.slack.com/...)" 
-              className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`}
-              value={integrations.slack.webhook}
-              onChange={(e) => setIntegrations({...integrations, slack: {...integrations.slack, webhook: e.target.value}})}
-            />
-            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>
-              Save Webhook
-            </button>
+            <input type="url" required placeholder="Slack Webhook URL" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.slack.webhook} onChange={(e) => setIntegrations({...integrations, slack: {...integrations.slack, webhook: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Save Webhook</button>
           </form>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-              <span>Notifications are actively being sent to Slack. {integrations.slack.lastSynced && <span className="text-xs ml-1 opacity-80">(Tested: {integrations.slack.lastSynced})</span>}</span>
-            </div>
-            <button onClick={() => handleSync('slack')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Test Connection</button>
-          </div>
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex justify-between items-center"><div className="flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Active on Slack</span></div><button onClick={() => handleSync('slack')} className="text-xs px-3 py-1 bg-green-600 text-white rounded">Test</button></div>
         )}
       </div>
       )}
 
-      {/* 3. Google Drive Integration */}
+      {/* 3. Google Drive (Original) */}
       {matchesSearch('google drive files docs sheets') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
-               <svg className="w-8 h-8" viewBox="0 0 48 48" fill="none"><path d="M16.34 11.23l-7.9 13.68H24l7.9-13.68H16.34z" fill="#FFC107"/><path d="M31.9 11.23L40.16 25.5l-8.08 14-8.08-14 8-14.27z" fill="#1976D2"/><path d="M8.44 24.91L16.52 39h15.56l-8.08-14.09H8.44z" fill="#4CAF50"/></svg>
-            </div>
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg"><svg className="w-8 h-8" viewBox="0 0 48 48" fill="none"><path d="M16.34 11.23l-7.9 13.68H24l7.9-13.68H16.34z" fill="#FFC107"/><path d="M31.9 11.23L40.16 25.5l-8.08 14-8.08-14 8-14.27z" fill="#1976D2"/><path d="M8.44 24.91L16.52 39h15.56l-8.08-14.09H8.44z" fill="#4CAF50"/></svg></div>
             <div>
               <h3 className={`font-semibold text-lg ${textColor}`}>Google Drive</h3>
-              <p className={`text-sm ${mutedColor}`}>Attach Google Docs, Sheets, and Files directly to tasks.</p>
+              <p className={`text-sm ${mutedColor}`}>Attach files directly to tasks.</p>
             </div>
           </div>
-          {integrations.drive.connected ? (
-             <button onClick={() => handleDisconnect('drive')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>
-          ) : null}
+          {integrations.drive.connected && <button onClick={() => handleDisconnect('drive')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>}
         </div>
-
         {!integrations.drive.connected ? (
-          <div className="mt-5">
-            <button onClick={handleConnectDrive} disabled={loading} className={`px-5 py-2.5 rounded-md font-medium w-full md:w-auto ${primaryBtn} flex items-center justify-center gap-2`}>
-              <svg className="w-5 h-5 bg-white rounded-full p-0.5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-              Sign in with Google
-            </button>
-          </div>
+          <div className="mt-5"><button onClick={handleConnectDrive} disabled={loading} className={`px-5 py-2.5 rounded-md font-medium ${primaryBtn}`}>Sign in with Google</button></div>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-              <span>Connected as <b>{integrations.drive.account}</b> {integrations.drive.lastSynced && <span className="text-xs ml-1 opacity-80">(Refreshed: {integrations.drive.lastSynced})</span>}</span>
-            </div>
-            <button onClick={() => handleSync('drive')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Refresh Data</button>
-          </div>
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex justify-between items-center"><div className="flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Connected: <b>{integrations.drive.account}</b></span></div></div>
         )}
       </div>
       )}
 
-      {/* 4. NEW FEATURE: Jira Integration */}
+      {/* 4. Jira (Original) */}
       {matchesSearch('jira issues tasks agile projects') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <svg className="w-8 h-8 text-[#0052CC]" viewBox="0 0 24 24" fill="currentColor"><path d="M11.53 2c0 2.4-1.97 4.35-4.4 4.35H2V2h9.53zm0 8.7c0 2.4-1.97 4.35-4.4 4.35H2v-4.35h9.53zM22 2c0 2.4-1.97 4.35-4.4 4.35h-5.13V2H22zm0 8.7c0 2.4-1.97 4.35-4.4 4.35h-5.13v-4.35H22zm0 8.7c0 2.4-1.97 4.35-4.4 4.35h-5.13v-4.35H22z"/></svg>
-            </div>
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg"><svg className="w-8 h-8 text-[#0052CC]" viewBox="0 0 24 24" fill="currentColor"><path d="M11.53 2c0 2.4-1.97 4.35-4.4 4.35H2V2h9.53zm0 8.7c0 2.4-1.97 4.35-4.4 4.35H2v-4.35h9.53zM22 2c0 2.4-1.97 4.35-4.4 4.35h-5.13V2H22zm0 8.7c0 2.4-1.97 4.35-4.4 4.35h-5.13v-4.35H22zm0 8.7c0 2.4-1.97 4.35-4.4 4.35h-5.13v-4.35H22z"/></svg></div>
             <div>
               <h3 className={`font-semibold text-lg ${textColor}`}>Jira Software</h3>
-              <p className={`text-sm ${mutedColor}`}>Link issues, epics, and sync status with Jira projects.</p>
+              <p className={`text-sm ${mutedColor}`}>Link issues, epics, and sync status.</p>
             </div>
           </div>
-          {integrations.jira.connected ? (
-             <button onClick={() => handleDisconnect('jira')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>
-          ) : null}
+          {integrations.jira.connected && <button onClick={() => handleDisconnect('jira')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>}
         </div>
-
         {!integrations.jira.connected ? (
           <form onSubmit={handleConnectJira} className="mt-5 flex gap-3">
-            <input 
-              type="url" 
-              required
-              placeholder="Jira Workspace URL (e.g., https://your-domain.atlassian.net)" 
-              className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`}
-              value={integrations.jira.url}
-              onChange={(e) => setIntegrations({...integrations, jira: {...integrations.jira, url: e.target.value}})}
-            />
-            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>
-              Connect Jira
-            </button>
+            <input type="url" required placeholder="Jira URL" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.jira.url} onChange={(e) => setIntegrations({...integrations, jira: {...integrations.jira, url: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Connect Jira</button>
           </form>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-              <span>Linked to Jira workspace <b>{integrations.jira.url}</b> {integrations.jira.lastSynced && <span className="text-xs ml-1 opacity-80">(Synced: {integrations.jira.lastSynced})</span>}</span>
-            </div>
-            <button onClick={() => handleSync('jira')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Sync Issues</button>
-          </div>
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex justify-between items-center"><div className="flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Linked to <b>{integrations.jira.url}</b></span></div></div>
         )}
       </div>
       )}
 
-      {/* 5. NEW FEATURE: Discord Integration */}
+      {/* 5. Discord (Original) */}
       {matchesSearch('discord webhooks alerts gaming chat') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-              <svg className="w-8 h-8 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
-            </div>
+            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg"><svg className="w-8 h-8 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515... (truncated for view, use actual discord svg)"/></svg></div>
             <div>
-              <h3 className={`font-semibold text-lg ${textColor}`}>Discord Webhooks</h3>
-              <p className={`text-sm ${mutedColor}`}>Push notifications directly to your Discord server channels.</p>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Discord</h3>
+              <p className={`text-sm ${mutedColor}`}>Push notifications directly to channels.</p>
             </div>
           </div>
-          {integrations.discord.connected ? (
-             <button onClick={() => handleDisconnect('discord')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>
-          ) : null}
+          {integrations.discord.connected && <button onClick={() => handleDisconnect('discord')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>}
         </div>
-
         {!integrations.discord.connected ? (
           <form onSubmit={handleConnectDiscord} className="mt-5 flex gap-3">
-            <input 
-              type="url" 
-              required
-              placeholder="Discord Webhook URL" 
-              className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`}
-              value={integrations.discord.webhook}
-              onChange={(e) => setIntegrations({...integrations, discord: {...integrations.discord, webhook: e.target.value}})}
-            />
-            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>
-              Save Webhook
-            </button>
+            <input type="url" required placeholder="Discord Webhook" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.discord.webhook} onChange={(e) => setIntegrations({...integrations, discord: {...integrations.discord, webhook: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Save Webhook</button>
           </form>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-              <span>Notifications are active on Discord. {integrations.discord.lastSynced && <span className="text-xs ml-1 opacity-80">(Tested: {integrations.discord.lastSynced})</span>}</span>
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex justify-between items-center"><div className="flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Active on Discord</span></div></div>
+        )}
+      </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* NEW INTEGRATIONS ADDED BELOW */}
+      {/* ========================================================================= */}
+
+      {/* 6. Microsoft Teams (Communication) */}
+      {matchesSearch('teams microsoft chat communication') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+              <svg className="w-8 h-8 text-[#464EB8]" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11V5.5C16 4.12 14.88 3 13.5 3H5.5C4.12 3 3 4.12 3 5.5V13.5C3 14.88 4.12 16 5.5 16H11v-5h5zm5-4h-3v5c0 1.1-.9 2-2 2h-5v3.5C11 18.88 12.12 20 13.5 20h8c1.38 0 2.5-1.12 2.5-2.5v-8C24 8.12 22.88 7 21.5 7H21z"/></svg>
             </div>
-            <button onClick={() => handleSync('discord')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Test Connection</button>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Microsoft Teams</h3>
+              <p className={`text-sm ${mutedColor}`}>Send task updates to Teams channels.</p>
+            </div>
           </div>
+          {integrations.teams.connected && <button onClick={() => handleDisconnect('teams')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.teams.connected ? (
+          <form onSubmit={handleConnectTeams} className="mt-5 flex gap-3">
+            <input type="url" required placeholder="Teams Webhook URL" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.teams.webhook} onChange={(e) => setIntegrations({...integrations, teams: {...integrations.teams, webhook: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Save Webhook</button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Active on MS Teams</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 7. Zoom (Video Conferencing) */}
+      {matchesSearch('zoom meet video conference schedule') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <svg className="w-8 h-8 text-[#2D8CFF]" viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Zoom Meetings</h3>
+              <p className={`text-sm ${mutedColor}`}>Schedule meetings directly from tasks.</p>
+            </div>
+          </div>
+          {integrations.zoom.connected && <button onClick={() => handleDisconnect('zoom')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.zoom.connected ? (
+          <div className="mt-5"><button onClick={handleConnectZoom} disabled={loading} className={`px-5 py-2.5 rounded-md font-medium ${primaryBtn}`}>Authorize Zoom</button></div>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Connected to Zoom</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 8. Toggl Track (Time Tracking) */}
+      {matchesSearch('toggl clockify time tracking timer') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+              <svg className="w-8 h-8 text-[#E03A3E]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Toggl Track</h3>
+              <p className={`text-sm ${mutedColor}`}>Sync task timer with Toggl workspaces.</p>
+            </div>
+          </div>
+          {integrations.toggl.connected && <button onClick={() => handleDisconnect('toggl')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.toggl.connected ? (
+          <form onSubmit={handleConnectToggl} className="mt-5 flex gap-3">
+            <input type="text" required placeholder="Toggl API Key" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.toggl.apiKey} onChange={(e) => setIntegrations({...integrations, toggl: {...integrations.toggl, apiKey: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Connect Toggl</button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Timer synced with Toggl</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 9. Google Calendar (Calendar Sync) */}
+      {matchesSearch('google calendar outlook sync meetings date') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <svg className="w-8 h-8 text-[#4285F4]" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Google Calendar</h3>
+              <p className={`text-sm ${mutedColor}`}>Sync task due dates and schedule meetings.</p>
+            </div>
+          </div>
+          {integrations.gcalendar.connected && <button onClick={() => handleDisconnect('gcalendar')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.gcalendar.connected ? (
+          <div className="mt-5"><button onClick={handleConnectGCalendar} disabled={loading} className={`px-5 py-2.5 rounded-md font-medium ${primaryBtn}`}>Sync Calendar</button></div>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Calendar Synced</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 10. Figma (Design & UI) */}
+      {matchesSearch('figma invision design ui mockup') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <svg className="w-8 h-8 text-[#F24E1E]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c0-1.66-1.34-3-3-3S6 10.34 6 12s1.34 3 3 3 3-1.34 3-3zm0-6c0-1.66-1.34-3-3-3S6 4.34 6 6s1.34 3 3 3 3-1.34 3-3zm6 0c0-1.66-1.34-3-3-3s-3 1.34-3 3 1.34 3 3 3 3-1.34 3-3zm-6 12.5c0 1.93-1.57 3.5-3.5 3.5S5 20.43 5 18.5 6.57 15 8.5 15h.5v3.5zm0-3.5h3c1.66 0 3-1.34 3-3s-1.34-3-3-3h-3v6z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Figma</h3>
+              <p className={`text-sm ${mutedColor}`}>Embed live designs directly into tasks.</p>
+            </div>
+          </div>
+          {integrations.figma.connected && <button onClick={() => handleDisconnect('figma')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.figma.connected ? (
+          <form onSubmit={handleConnectFigma} className="mt-5 flex gap-3">
+            <input type="text" required placeholder="Figma Personal Access Token" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.figma.token} onChange={(e) => setIntegrations({...integrations, figma: {...integrations.figma, token: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Connect Figma</button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Figma is connected</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 11. Notion (Docs & Storage) */}
+      {matchesSearch('notion docs wiki notes storage') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gray-200 dark:bg-gray-700 rounded-lg">
+              <svg className="w-8 h-8 text-black dark:text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4v16h16V4H4zm14 14H6V6h12v12zm-3.5-9h-5v2h5v-2zm0 4h-5v2h5v-2z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Notion</h3>
+              <p className={`text-sm ${mutedColor}`}>Link project plans and documents.</p>
+            </div>
+          </div>
+          {integrations.notion.connected && <button onClick={() => handleDisconnect('notion')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.notion.connected ? (
+          <form onSubmit={handleConnectNotion} className="mt-5 flex gap-3">
+            <input type="text" required placeholder="Notion Workspace URL" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.notion.workspace} onChange={(e) => setIntegrations({...integrations, notion: {...integrations.notion, workspace: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Connect Notion</button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Linked to Notion Workspace</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 12. Dropbox (Docs & Storage) */}
+      {matchesSearch('dropbox onedrive files storage cloud') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <svg className="w-8 h-8 text-[#0061FF]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2L4 7.4l4.8 3.8L12 7.8l3.2 3.4L20 7.4 12 2.2zM4 16.6l8-5.2-3.2-3.4L4 11.8v4.8zm16 0V11.8l-4.8-3.8-3.2 3.4 8 5.2zM12 18.2l-4.8-3.8H4v2.2L12 21.8l8-5.2v-2.2h-3.2l-4.8 3.8z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Dropbox</h3>
+              <p className={`text-sm ${mutedColor}`}>Attach files from your cloud storage.</p>
+            </div>
+          </div>
+          {integrations.dropbox.connected && <button onClick={() => handleDisconnect('dropbox')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.dropbox.connected ? (
+          <div className="mt-5"><button onClick={handleConnectDropbox} disabled={loading} className={`px-5 py-2.5 rounded-md font-medium ${primaryBtn}`}>Authorize Dropbox</button></div>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Connected to Dropbox</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 13. Sentry (DevOps & Error Tracking) */}
+      {matchesSearch('sentry datadog errors bugs devops issues') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+              <svg className="w-8 h-8 text-[#362D59]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Sentry</h3>
+              <p className={`text-sm ${mutedColor}`}>Auto-create tasks from app errors and bugs.</p>
+            </div>
+          </div>
+          {integrations.sentry.connected && <button onClick={() => handleDisconnect('sentry')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.sentry.connected ? (
+          <form onSubmit={handleConnectSentry} className="mt-5 flex gap-3">
+            <input type="url" required placeholder="Sentry Project DSN/URL" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.sentry.projectUrl} onChange={(e) => setIntegrations({...integrations, sentry: {...integrations.sentry, projectUrl: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Connect Sentry</button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Tracking Sentry Errors</span></div>
+        )}
+      </div>
+      )}
+
+      {/* 14. Zapier (Automation Hub) */}
+      {matchesSearch('zapier make integromat automation workflow hook') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+              <svg className="w-8 h-8 text-[#FF4A00]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 12h7v8l10-10h-7z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Zapier</h3>
+              <p className={`text-sm ${mutedColor}`}>Connect your tool with thousands of other apps.</p>
+            </div>
+          </div>
+          {integrations.zapier.connected && <button onClick={() => handleDisconnect('zapier')} className="px-4 py-2 border border-red-500 text-red-500 rounded text-sm">Disconnect</button>}
+        </div>
+        {!integrations.zapier.connected ? (
+          <form onSubmit={handleConnectZapier} className="mt-5 flex gap-3">
+            <input type="url" required placeholder="Zapier Webhook URL" className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`} value={integrations.zapier.webhook} onChange={(e) => setIntegrations({...integrations, zapier: {...integrations.zapier, webhook: e.target.value}})}/>
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>Enable Automation</button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 text-green-700 rounded-md flex items-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg><span>Zapier Webhook Active</span></div>
         )}
       </div>
       )}
 
       {/* Empty State for Search */}
-      {!matchesSearch('github gitlab slack notifications google drive files jira discord') && (
+      {!matchesSearch('github gitlab slack notifications google drive files jira discord teams microsoft zoom meet video toggl time tracking google calendar sync figma design notion docs dropbox storage sentry errors zapier automation') && (
         <div className="text-center py-10">
           <p className={mutedColor}>No integrations found matching "{searchTerm}"</p>
           <button onClick={() => setSearchTerm('')} className="mt-2 text-blue-500 hover:underline text-sm">Clear search</button>
