@@ -90,9 +90,11 @@ const classifyError = (err) => {
     // error - so without the host the user cannot tell which server is down.
     return {
       title: "Can't reach the server",
-      // The "Try again" button sits directly below, so the body adds the cause
-      // and the reassurance without repeating the heading or restating the remedy.
-      message: `The API at ${apiBaseUrl()} is not responding. This is usually temporary — the backend may be down, restarting, or mid-deploy.`,
+      // Keep the URL out of the prose: a long host breaks awkwardly mid-sentence
+      // and is styled inconsistently with the monospace host line below. The
+      // "Try again" button sits directly underneath, so this adds the cause and
+      // the reassurance without repeating the heading or restating the remedy.
+      message: "The API isn't responding. This is usually temporary — the backend may be down, restarting, or between deployments.",
       showHost: true,
     };
   }
@@ -108,7 +110,9 @@ const describeActionError = (err) => {
     return detail.map(d => `${(d.loc || []).slice(1).join('.')}: ${d.msg}`).join('; ');
   }
   if (status) return `The server rejected this (HTTP ${status}).`;
-  if (err?.request) return `Couldn't reach the API at ${apiBaseUrl()}, so nothing was saved.`;
+  // Short, per-provider, and inline - the full host breakdown is already shown
+  // by the page-level error state, so do not repeat it here.
+  if (err?.request) return "Couldn't reach the server, so nothing was saved.";
   return 'That did not work. Please try again.';
 };
 
@@ -370,13 +374,14 @@ export default function IntegrationsPage({
           <h3 className={`text-lg font-bold ${textColor}`}>{loadError.title}</h3>
           <p className={`mt-2 text-sm max-w-md mx-auto ${mutedColor} break-words`}>{loadError.message}</p>
           {loadError.showHost && (
-            <p className="mt-3 text-xs max-w-md mx-auto">
-              <span className="text-gray-500 dark:text-gray-400">API host resolved from </span>
+            <p className="mt-3 text-xs max-w-md mx-auto flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+              <span className="text-gray-500 dark:text-gray-400">API host</span>
+              <code className="font-mono text-gray-700 dark:text-gray-300 break-all">{apiBaseUrl()}</code>
+              <span className="text-gray-300 dark:text-gray-600">·</span>
+              <span className="text-gray-500 dark:text-gray-400">source</span>
               <code className="font-mono text-gray-700 dark:text-gray-300">{apiSource}</code>
               {apiSource === 'fallback' && (
-                <span className="ml-1 text-amber-600 dark:text-amber-400">
-                  (VITE_API_URL is not set, so the built-in fallback is being used)
-                </span>
+                <span className="text-amber-600 dark:text-amber-400">— VITE_API_URL is not set</span>
               )}
             </p>
           )}
