@@ -963,11 +963,10 @@ def register(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
     db.add(u)
     db.commit()
     db.refresh(u)
-    
-    b = models.Board(name="My Workspace", owner_id=u.id)
-    db.add(b)
-    db.commit()
-    
+
+    # No board is created here on purpose: the workspace starts empty and the
+    # owner names the first project themselves. GET /api/boards no longer
+    # backfills a default board either, so nothing is auto-named.
     return {"ok": True}
 
 
@@ -1215,13 +1214,10 @@ async def upload_file(file: UploadFile = File(...), current_user=Depends(get_cur
 
 @app.get("/api/boards")
 def list_boards(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    # Read-only: an empty list is a valid workspace state. Do not create a
+    # placeholder board here, otherwise every first page load would invent a
+    # project name the user never chose.
     boards = get_user_boards(current_user, db)
-    if not boards:
-        b = models.Board(name="My Workspace", owner_id=current_user.id)
-        db.add(b)
-        db.commit()
-        db.refresh(b)
-        boards = [b]
     return [_board_response(board, current_user, db) for board in boards]
 
 

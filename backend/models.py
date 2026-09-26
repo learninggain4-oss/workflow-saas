@@ -30,7 +30,9 @@ class Board(Base):
     __tablename__ = "boards"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, default="My Workspace")
+    # No default name: a board must always be created with a name the user chose.
+    # A column default here silently named every nameless board "My Workspace".
+    name = Column(String, nullable=False)
     description = Column(Text, default="")
     owner_id = Column(Integer, ForeignKey("users.id"))
 

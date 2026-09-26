@@ -90,6 +90,9 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
             <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full text-slate-600 dark:text-slate-300">{t(roleLabels[normalizedRole] || 'Editor')}</span>
           </div>
           <div className="space-y-1.5 mb-4">
+            {boardsList.length === 0 && (
+              <p className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">{t('No projects yet')}</p>
+            )}
             {boardsList.map((b) => (
               <button
                 key={b.id}
@@ -102,8 +105,14 @@ export default function Sidebar({ darkMode, setDarkMode, userData, myRole, handl
             ))}
           </div>
           <div className="flex gap-2 px-1">
-            <input value={newBoardName} onChange={(e) => setNewBoardName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createBoard()} placeholder={t('New project...')} className={`border p-2.5 rounded-xl text-sm flex-1 min-w-0 ${inputCls}`} />
-            <button onClick={createBoard} aria-label={t('New project...')} className={`px-3 rounded-xl text-sm font-bold flex items-center justify-center ${primaryBtn}`}>+</button>
+            <input value={newBoardName} onChange={(e) => setNewBoardName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && createBoard()} placeholder={t('New project...')} aria-describedby="new-project-hint" className={`border p-2.5 rounded-xl text-sm flex-1 min-w-0 ${inputCls}`} />
+            <button
+              onClick={createBoard}
+              disabled={!newBoardName.trim()}
+              title={newBoardName.trim()? t('Create project') : t('Enter a project name to create it.')}
+              className={`px-3 rounded-xl text-sm font-bold flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${primaryBtn}`}
+            >+</button>
+            <p id="new-project-hint" className="sr-only">{t('Enter a project name to create it.')}</p>
           </div>
         </div>
 
