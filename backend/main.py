@@ -73,12 +73,25 @@ class BoardMessageCreate(BaseModel):
 
 
 # --- DATABASE INITIALIZATION ---
+# True on a hosted service. Render sets RENDER, Railway sets RAILWAY_ENVIRONMENT;
+# ENVIRONMENT=production is the manual override. Used to turn silently-broken
+# configuration into a loud startup failure.
+DEPLOY_ENV = (
+    os.getenv("RENDER", "").strip().lower() in ("1", "true", "yes")
+    or bool(os.getenv("RAILWAY_ENVIRONMENT", "").strip())
+    or os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod")
+)
+
+
 def ensure_database_migrations():
     try:
         with engine.connect() as conn:
             url_name = str(engine.url).lower()
             if "sqlite" in url_name:
                 migrations = [
+                    ("users", "email", "VARCHAR DEFAULT ''"),
+                    ("users", "name", "VARCHAR DEFAULT ''"),
+                    ("users", "password_hash", "VARCHAR DEFAULT ''"),
                     ("users", "role", "VARCHAR DEFAULT 'administrator'"),
                     ("users", "subscription_tier", "VARCHAR DEFAULT 'free'"),
                     ("users", "avatar_url", "VARCHAR DEFAULT ''"),
@@ -125,6 +138,17 @@ def ensure_database_migrations():
 
             required_columns = {
                 "users": [
+                    # These three are the model's original columns, so they were
+                    # assumed to exist and were never listed. `create_all()` only
+                    # creates *missing* tables - it never adds columns to one that
+                    # already exists - so a users table from an older schema (or a
+                    # hand-made one) stayed permanently missing them and every
+                    # query failed with:
+                    #   UndefinedColumn: column users.email does not exist
+                    # Listing them makes the migration self-healing.
+                    ("email", "VARCHAR DEFAULT ''"),
+                    ("name", "VARCHAR DEFAULT ''"),
+                    ("password_hash", "VARCHAR DEFAULT ''"),
                     ("role", "VARCHAR DEFAULT 'administrator'"),
                     ("subscription_tier", "VARCHAR DEFAULT 'free'"),
                     ("avatar_url", "VARCHAR DEFAULT ''"),
@@ -188,11 +212,56 @@ def ensure_database_migrations():
             conn.execute(text("CREATE TABLE IF NOT EXISTS board_messages (id SERIAL PRIMARY KEY, board_id INTEGER, user_id INTEGER, user_name VARCHAR DEFAULT '', text TEXT DEFAULT '', created_at VARCHAR DEFAULT '')"))
             conn.commit()
     except Exception:
+        # Swallowing this produced a service that reported "live" while every
+        # query 500ed. In a deployment, fail loudly instead.
+        if DEPLOY_ENV:
+            raise
         traceback.print_exc()
+
+
+def verify_schema_matches_models():
+    """Assert the live database has every column the models declare.
+
+    `create_all()` only creates missing tables; it never adds columns to an
+    existing one, and the hand-written migration list is easy to get out of sync
+    with the models. A mismatch here means the service boots but 500s on the
+    first query, so catch it at startup and name the exact columns."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    missing = {}
+
+    for model in models.Base.__subclasses__():
+        table = getattr(model, "__table__", None)
+        if table is None or table.name not in existing_tables:
+            continue
+        present = {c["name"] for c in inspector.get_columns(table.name)}
+        gaps = sorted(c.name for c in table.columns if c.name not in present)
+        if gaps:
+            missing[table.name] = gaps
+
+    if not missing:
+        print("[schema] verified: database matches model definitions")
+        return
+
+    detail = "\n".join(f"      {t}: missing {', '.join(cols)}" for t, cols in sorted(missing.items()))
+    message = (
+        "[schema] The database is missing columns the application requires. "
+        "The service would start and then fail on every request.\n"
+        f"   {detail}\n"
+        "   The hand-written migration list in ensure_database_migrations() has "
+        "drifted from models.py; add the columns above to it, or drop and recreate "
+        "the affected tables if they hold no data worth keeping."
+    )
+    if DEPLOY_ENV:
+        raise RuntimeError(message)
+    print(message)
 
 
 ensure_database_migrations()
 models.Base.metadata.create_all(bind=engine)
+verify_schema_matches_models()
 
 
 def ensure_task_timestamps():
