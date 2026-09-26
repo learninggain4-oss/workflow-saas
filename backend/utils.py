@@ -144,7 +144,7 @@ def log_activity_safe(board_id, user_name, action, task_id=None):
         db2.close()
     except: pass
 
-def build_professional_email_html(title: str, intro: str, rows: List[tuple], cta_text: str = "Open WorkFlow SaaS", cta_url: str = "https://workflow-saas-cof-z.onrender.com") -> str:
+def build_professional_email_html(title: str, intro: str, rows: List[tuple], cta_text: str = "Open WorkFlow SaaS", cta_url: str = "https://workflow-saas-production.up.railway.app/") -> str:
     details = "".join(
         f"<tr><td style='padding:14px 18px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:14px;'><strong>{label}:</strong> {value}</td></tr>"
         for label, value in rows
