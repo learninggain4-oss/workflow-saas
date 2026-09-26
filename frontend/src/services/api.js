@@ -123,6 +123,15 @@ export const boardChat = {
   sendMessage: (boardId, text) => api.post(`/api/boards/${boardId}/messages`, { text }),
 };
 
+export const integrations = {
+  // Returns { providers, integrations }. The response contains no credentials -
+  // only which fields are configured.
+  getAll: (boardId) => api.get(`/api/boards/${boardId}/integrations`),
+  connect: (boardId, provider, config) => api.post(`/api/boards/${boardId}/integrations`, { provider, config }),
+  disconnect: (boardId, provider) => api.delete(`/api/boards/${boardId}/integrations/${provider}`),
+  test: (boardId, provider) => api.post(`/api/boards/${boardId}/integrations/${provider}/test`),
+};
+
 export const subtasks = {
   getAll: (taskId) => api.get(`/api/tasks/${taskId}/subtasks`),
   create: (taskId, title) => api.post(`/api/tasks/${taskId}/subtasks`, { title }),

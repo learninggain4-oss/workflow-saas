@@ -1,6 +1,6 @@
 // frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language), Offline PWA Sync & Task Activity Log
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, WS_BASE } from './services/api';
+import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, integrations as integrationsApi, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
 
 // NEW: Offline Sync imports
@@ -774,7 +774,7 @@ export default function App() {
             <AdvancedAutomations {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn, boardId: selectedBoard, automationsApi, canManage: Boolean(myPermissions.manageAutomations || myPermissions.manageBoard), t, changeLanguage: i18n.changeLanguage }} />
           ) : viewMode === "integrations"? (
             <>
-              <IntegrationsPage {...{ bgCard, setViewMode, securitySettings, darkMode, inputCls, primaryBtn, t, changeLanguage: i18n.changeLanguage }} />
+              <IntegrationsPage {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn, boardId: selectedBoard, integrationsApi, canManage: Boolean(myPermissions.manageBoard), t, changeLanguage: i18n.changeLanguage }} />
             </>
           ) : viewMode === "audit"? (
             <AuditLogPage {...{ bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />

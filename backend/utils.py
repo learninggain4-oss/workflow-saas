@@ -1,4 +1,4 @@
-import os, json, traceback, smtplib, ssl, threading
+import os, json, traceback, smtplib, ssl, threading, ipaddress, socket
 from datetime import datetime, timedelta
 from typing import Dict, List
 from fastapi import WebSocket, Depends, HTTPException
@@ -18,6 +18,146 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def timestamp_iso():
+    return datetime.now().isoformat(timespec="seconds")
+
+# ==========================================
+#    INTEGRATION SECRET ENCRYPTION
+# ==========================================
+# Webhook URLs, API keys and personal access tokens are bearer credentials. They
+# are encrypted with Fernet before they touch the database and are never included
+# in an API response.
+INTEGRATION_KEY_ENV = "INTEGRATION_ENCRYPTION_KEY"
+
+def _get_fernet():
+    from cryptography.fernet import Fernet
+
+    raw = (os.getenv(INTEGRATION_KEY_ENV) or "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"{INTEGRATION_KEY_ENV} is not set, so integration credentials cannot be stored. "
+                "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            ),
+        )
+    try:
+        return Fernet(raw.encode() if isinstance(raw, str) else raw)
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{INTEGRATION_KEY_ENV} is not a valid Fernet key.",
+        )
+
+def encrypt_config(config: dict) -> str:
+    payload = json.dumps(config or {}, ensure_ascii=False).encode()
+    return _get_fernet().encrypt(payload).decode()
+
+def decrypt_config(blob: str) -> dict:
+    if not blob:
+        return {}
+    from cryptography.fernet import InvalidToken
+    try:
+        return json.loads(_get_fernet().decrypt(blob.encode()).decode())
+    except InvalidToken:
+        # Usually means the key was rotated or the row predates encryption.
+        raise HTTPException(status_code=500, detail="Stored integration credentials could not be decrypted; the encryption key may have changed.")
+    except HTTPException:
+        raise
+    except Exception:
+        return {}
+
+
+# ==========================================
+#           SSRF PROTECTION
+# ==========================================
+# Several providers are configured with a user-supplied URL that the server then
+# POSTs to. Without these checks that is a server-side request forgery vector:
+# a URL of http://169.254.169.254/... reaches cloud instance metadata, and
+# http://127.0.0.1:PORT reaches internal admin services.
+_BLOCKED_HOSTNAMES = {"localhost", "localhost.localdomain", "metadata.google.internal", "metadata"}
+
+# NAT64 translation prefixes (RFC 6052 / RFC 8215). A DNS64 resolver returns
+# these alongside real IPv4 addresses, and Python's ipaddress flags them as
+# "reserved" - but they are not a destination in themselves, they wrap an IPv4
+# address. Rejecting them outright would break every integration on an IPv6
+# network, so unwrap them and validate the embedded IPv4 instead.
+_NAT64_PREFIXES = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+)
+
+# Operator escape hatch, comma separated. A legitimate provider whose address
+# space trips the guard can be allowed explicitly rather than being stuck.
+_EXTRA_ALLOWED_HOSTS = {
+    h.strip().lower()
+    for h in (os.getenv("INTEGRATION_ALLOWED_HOSTS") or "").split(",")
+    if h.strip()
+}
+
+def _ip_is_private(ip) -> bool:
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return True  # not parseable as an IP -> treat as unsafe
+
+    for prefix in _NAT64_PREFIXES:
+        if addr.version == prefix.version and addr in prefix:
+            # RFC 6052 places the IPv4 address in the low 32 bits.
+            return _ip_is_private(ipaddress.IPv4Address(int(addr) & 0xFFFFFFFF))
+
+    if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_multicast or addr.is_unspecified:
+        return True
+
+    # IPv4-mapped IPv6 can smuggle a private v4 address.
+    mapped = getattr(addr, "ipv4_mapped", None)
+    if mapped is not None and _ip_is_private(str(mapped)):
+        return True
+
+    return False
+
+def assert_safe_outbound_url(url: str) -> str:
+    """Validate a user-supplied URL before the server calls it."""
+    from urllib.parse import urlparse
+
+    if not url or not isinstance(url, str):
+        raise HTTPException(status_code=400, detail="A URL is required.")
+
+    url = url.strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Only http and https URLs are allowed.")
+    if not parsed.hostname:
+        raise HTTPException(status_code=400, detail="URL is missing a hostname.")
+
+    host = parsed.hostname.lower().rstrip(".")
+    if host in _BLOCKED_HOSTNAMES:
+        raise HTTPException(status_code=400, detail="This host is not allowed.")
+
+    if host in _EXTRA_ALLOWED_HOSTS:
+        return url
+
+    try:
+        resolved = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail=f"Could not resolve hostname '{host}'.")
+
+    for info in resolved:
+        ip = info[4][0]
+        if _ip_is_private(ip):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This URL resolves to a private, loopback or link-local address, "
+                    "which is not allowed. An administrator can allowlist it with INTEGRATION_ALLOWED_HOSTS."
+                ),
+            )
+    return url
+
+# Outbound calls to third parties are short-lived by design; keep timeouts tight
+# so a slow provider cannot occupy a worker.
+OUTBOUND_TIMEOUT = 10
 
 def create_token(data: dict):
     to_encode = data.copy()

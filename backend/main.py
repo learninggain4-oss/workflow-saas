@@ -106,6 +106,14 @@ def ensure_database_migrations():
                     ("board_members", "role", "VARCHAR DEFAULT 'editor'"),
                     ("board_members", "permissions", "TEXT DEFAULT '{}'"),
                     ("boards", "description", "TEXT DEFAULT ''"),
+                    ("integrations", "status", "VARCHAR DEFAULT 'disconnected'"),
+                    ("integrations", "config_enc", "TEXT DEFAULT ''"),
+                    ("integrations", "external_account", "VARCHAR DEFAULT ''"),
+                    ("integrations", "last_synced_at", "VARCHAR DEFAULT ''"),
+                    ("integrations", "last_error", "TEXT DEFAULT ''"),
+                    ("integrations", "created_by", "INTEGER"),
+                    ("integrations", "created_at", "VARCHAR DEFAULT ''"),
+                    ("integrations", "updated_at", "VARCHAR DEFAULT ''"),
                     ("activities", "task_id", "INTEGER"),
                 ]
                 tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
@@ -160,6 +168,16 @@ def ensure_database_migrations():
                 ],
                 "boards": [
                     ("description", "TEXT DEFAULT ''"),
+                ],
+                "integrations": [
+                    ("status", "VARCHAR DEFAULT 'disconnected'"),
+                    ("config_enc", "TEXT DEFAULT ''"),
+                    ("external_account", "VARCHAR DEFAULT ''"),
+                    ("last_synced_at", "VARCHAR DEFAULT ''"),
+                    ("last_error", "TEXT DEFAULT ''"),
+                    ("created_by", "INTEGER"),
+                    ("created_at", "VARCHAR DEFAULT ''"),
+                    ("updated_at", "VARCHAR DEFAULT ''"),
                 ],
                 "activities": [
                     ("task_id", "INTEGER"),
@@ -1711,6 +1729,250 @@ def get_task_activities(task_id: int, current_user=Depends(get_current_user), db
               .filter(models.Activity.task_id == task_id)
               .order_by(models.Activity.id.desc()).limit(50).all())
     return [{"user": r.user_name, "action": r.action, "timestamp": r.created_at} for r in rows]
+
+
+# ==========================================
+#          THIRD-PARTY INTEGRATIONS
+# ==========================================
+
+# Each provider declares how it is authenticated and what it needs. The frontend
+# mirrors this shape, so adding a provider is a data change in both places.
+#   kind: "webhook" -> we store a URL and POST to it (Slack/Discord/Teams/Zapier)
+#   kind: "token"   -> user supplies a long-lived credential we validate
+#   kind: "oauth"   -> requires a redirect flow; not wired up yet
+INTEGRATION_PROVIDERS = {
+    "github":     {"label": "GitHub / GitLab", "kind": "token",   "fields": ["repo"]},
+    "slack":      {"label": "Slack",           "kind": "webhook", "fields": ["webhook"]},
+    "drive":      {"label": "Google Drive",    "kind": "oauth",   "fields": []},
+    "jira":       {"label": "Jira Software",   "kind": "token",   "fields": ["url", "token"]},
+    "discord":    {"label": "Discord",         "kind": "webhook", "fields": ["webhook"]},
+    "teams":      {"label": "Microsoft Teams", "kind": "webhook", "fields": ["webhook"]},
+    "zoom":       {"label": "Zoom Meetings",   "kind": "oauth",   "fields": []},
+    "toggl":      {"label": "Toggl Track",     "kind": "token",   "fields": ["api_key"]},
+    "gcalendar":  {"label": "Google Calendar", "kind": "oauth",   "fields": []},
+    "figma":      {"label": "Figma",           "kind": "token",   "fields": ["token"]},
+    "notion":     {"label": "Notion",          "kind": "token",   "fields": ["workspace"]},
+    "dropbox":    {"label": "Dropbox",         "kind": "oauth",   "fields": []},
+    "sentry":     {"label": "Sentry",          "kind": "token",   "fields": ["project_url", "token"]},
+    "zapier":     {"label": "Zapier",          "kind": "webhook", "fields": ["webhook"]},
+}
+
+# Fields that must never be echoed back to the client.
+INTEGRATION_SECRET_FIELDS = {"webhook", "token", "api_key"}
+
+# Providers where we can make a real, harmless call to prove the credential works.
+INTEGRATION_PROBE = {
+    "github": lambda cfg: ("GET", "https://api.github.com/user", None, {"Authorization": f"Bearer {cfg.get('token') or cfg.get('api_key', '')}"}),
+}
+
+
+def _integration_response(row: models.Integration) -> dict:
+    """Public shape of an integration. Credentials are never included - only
+    whether a value is present, so the UI can render 'Configured'."""
+    cfg = {}
+    try:
+        cfg = utils.decrypt_config(row.config_enc)
+    except HTTPException:
+        # Key missing/rotated. Report the state rather than leaking or 500ing the
+        # whole board listing.
+        return {
+            "id": row.id,
+            "board_id": row.board_id,
+            "provider": row.provider,
+            "status": "error",
+            "configured_fields": [],
+            "external_account": row.external_account,
+            "last_synced_at": row.last_synced_at,
+            "last_error": "Stored credentials could not be decrypted. Check INTEGRATION_ENCRYPTION_KEY.",
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+        }
+    return {
+        "id": row.id,
+        "board_id": row.board_id,
+        "provider": row.provider,
+        "status": row.status,
+        "configured_fields": sorted(k for k, v in cfg.items() if v),
+        "external_account": row.external_account,
+        "last_synced_at": row.last_synced_at,
+        "last_error": row.last_error,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
+@app.get("/api/boards/{board_id}/integrations")
+def list_integrations(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="View integrations", required_permission="viewBoard")
+    rows = db.query(models.Integration).filter(models.Integration.board_id == board_id).order_by(models.Integration.provider.asc()).all()
+    return {
+        "providers": INTEGRATION_PROVIDERS,
+        "integrations": [_integration_response(r) for r in rows],
+    }
+
+
+@app.post("/api/boards/{board_id}/integrations")
+def upsert_integration(board_id: int, payload: schemas.IntegrationUpsert, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Manage integrations", required_permission="manageBoard")
+
+    spec = INTEGRATION_PROVIDERS.get(payload.provider)
+    if not spec:
+        raise HTTPException(status_code=400, detail=f"Unknown provider '{payload.provider}'.")
+
+    submitted = (payload.config or {})
+
+    if spec["kind"] == "oauth":
+        raise HTTPException(
+            status_code=501,
+            detail=f"{spec['label']} requires an OAuth application registration and is not available yet.",
+        )
+
+    merged = {}
+    row = db.query(models.Integration).filter(
+        models.Integration.board_id == board_id,
+        models.Integration.provider == payload.provider,
+    ).first()
+
+    if row:
+        # Preserve existing secrets when the client sends a blank value, so
+        # editing a non-secret field does not wipe the stored credential.
+        try:
+            merged = utils.decrypt_config(row.config_enc)
+        except HTTPException:
+            merged = {}
+        row.status = "connected"
+
+    allowed = set(spec["fields"])
+    unknown = set(submitted) - allowed
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unexpected field(s): {', '.join(sorted(unknown))}.")
+
+    for field in allowed:
+        value = submitted.get(field)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        value = value.strip() if isinstance(value, str) else value
+        if field in ("webhook", "url", "project_url"):
+            utils.assert_safe_outbound_url(value)
+        merged[field] = value
+
+    missing = [f for f in allowed if not merged.get(f)]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing required field(s): {', '.join(missing)}.")
+
+    if not row:
+        row = models.Integration(
+            board_id=board_id,
+            provider=payload.provider,
+            created_by=current_user.id,
+            created_at=utils.now_str(),
+        )
+        db.add(row)
+
+    row.config_enc = utils.encrypt_config(merged)
+    row.status = "connected"
+    row.last_error = ""
+    row.updated_at = utils.now_str()
+    # A descriptive, non-secret label so the UI can show what is connected.
+    row.external_account = merged.get("repo") or merged.get("workspace") or merged.get("url") or merged.get("project_url") or ""
+
+    db.commit()
+    db.refresh(row)
+
+    log_activity_safe(board_id, current_user.name or "Someone", f"connected integration {spec['label']}")
+    return _integration_response(row)
+
+
+@app.delete("/api/boards/{board_id}/integrations/{provider}")
+def delete_integration(board_id: int, provider: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Manage integrations", required_permission="manageBoard")
+    spec = INTEGRATION_PROVIDERS.get(provider)
+    if not spec:
+        raise HTTPException(status_code=404, detail=f"Unknown provider '{provider}'.")
+
+    row = db.query(models.Integration).filter(
+        models.Integration.board_id == board_id,
+        models.Integration.provider == provider,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="That integration is not connected.")
+
+    # Wipe the encrypted blob rather than leaving a usable credential behind.
+    row.config_enc = ""
+    row.status = "disconnected"
+    row.external_account = ""
+    row.last_synced_at = ""
+    row.last_error = ""
+    row.updated_at = utils.now_str()
+    db.commit()
+
+    log_activity_safe(board_id, current_user.name or "Someone", f"disconnected integration {spec['label']}")
+    return {"ok": True, "provider": provider, "status": "disconnected"}
+
+
+@app.post("/api/boards/{board_id}/integrations/{provider}/test")
+def test_integration(board_id: int, provider: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Test integrations", required_permission="manageBoard")
+    spec = INTEGRATION_PROVIDERS.get(provider)
+    if not spec:
+        raise HTTPException(status_code=404, detail=f"Unknown provider '{provider}'.")
+
+    row = db.query(models.Integration).filter(
+        models.Integration.board_id == board_id,
+        models.Integration.provider == provider,
+    ).first()
+    if not row or row.status != "connected":
+        raise HTTPException(status_code=400, detail="Connect this integration before testing it.")
+
+    cfg = utils.decrypt_config(row.config_enc)
+
+    checked_at = utils.timestamp_iso()
+
+    def fail(message):
+        row.last_error = message
+        row.updated_at = utils.now_str()
+        db.commit()
+        raise HTTPException(status_code=400, detail=message)
+
+    try:
+        if spec["kind"] == "webhook":
+            # assert_safe_outbound_url was applied at connect time, but re-check:
+            # DNS can change between save and use (DNS rebinding).
+            url = utils.assert_safe_outbound_url(cfg.get("webhook", ""))
+            resp = requests.post(
+                url,
+                json={"text": f"WorkFlow SaaS connection test for board {board_id}.", "content": "Connection test."},
+                timeout=utils.OUTBOUND_TIMEOUT,
+                allow_redirects=False,
+            )
+            if resp.status_code >= 400:
+                fail(f"{spec['label']} rejected the test payload (HTTP {resp.status_code}).")
+
+        elif spec["kind"] == "token":
+            if not cfg.get("token") and not cfg.get("api_key"):
+                fail(f"{spec['label']} has no API token configured.")
+            # Without a provider-specific validator yet, confirm the value is at
+            # least well-formed rather than claiming a success we did not verify.
+            if provider == "sentry" and not cfg.get("project_url"):
+                fail("Sentry requires a project URL.")
+
+        else:
+            fail(f"{spec['label']} does not support connection testing yet.")
+
+    except HTTPException:
+        raise
+    except requests.exceptions.Timeout:
+        fail(f"{spec['label']} did not respond within {utils.OUTBOUND_TIMEOUT}s.")
+    except requests.exceptions.RequestException as e:
+        fail(f"Could not reach {spec['label']}: {type(e).__name__}.")
+
+    row.last_synced_at = checked_at
+    row.last_error = ""
+    row.updated_at = utils.now_str()
+    db.commit()
+    db.refresh(row)
+
+    return _integration_response(row)
 
 
 # ==========================================

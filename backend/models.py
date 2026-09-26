@@ -123,6 +123,28 @@ class Notification(Base):
     created_at = Column(String, default="")
 
 
+class Integration(Base):
+    """A third-party integration bound to a single board.
+
+    `config_enc` holds a Fernet-encrypted JSON blob. Webhook URLs, API keys and
+    personal access tokens are bearer credentials: anyone who can read this table
+    can impersonate the connected account, so they are never stored in the clear
+    and never returned over the API."""
+    __tablename__ = "integrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, ForeignKey("boards.id"), index=True)
+    provider = Column(String, index=True)
+    status = Column(String, default="disconnected")
+    config_enc = Column(Text, default="")
+    external_account = Column(String, default="")
+    last_synced_at = Column(String, default="")
+    last_error = Column(Text, default="")
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(String, default="")
+    updated_at = Column(String, default="")
+
+
 # ==========================================
 #          AUTOMATIONS & BOARD CHAT
 # ==========================================
