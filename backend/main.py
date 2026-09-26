@@ -88,11 +88,27 @@ def validate_startup_config():
     # 1. SECRET_KEY must not be missing or a known-compromised value. With one of
     #    those, anyone can forge a JWT for any user and become owner.
     if utils.SECRET_KEY_IS_DEFAULT:
-        problems.append(
-            "SECRET_KEY is unset or still set to a known-compromised default. "
-            "Generate a strong random key: python -c \"import secrets; print(secrets.token_urlsafe(48))\". "
-            "Until then anyone can forge a login token for any account."
-        )
+        allow_ephemeral = os.getenv("ALLOW_EPHEMERAL_SECRET_KEY", "").strip().lower() in ("1", "true", "yes")
+        if allow_ephemeral and DEPLOY_ENV:
+            # Explicit opt-in escape hatch: boot with a random per-process key.
+            # Tokens do not become forgeable, but every restart/deploy signs
+            # sessions out, so this is only appropriate as a stopgap.
+            print(
+                "[config] WARNING: ALLOW_EPHEMERAL_SECRET_KEY is enabled, so a random "
+                "per-process signing key is in use. This is NOT forgeable, but every "
+                "restart or deploy will sign all users out. Set a real SECRET_KEY and "
+                "remove this variable as soon as you can."
+            )
+        else:
+            problems.append(
+                "SECRET_KEY is unset or still set to a known-compromised default, so anyone "
+                "could forge a login token for any account.\n"
+                "      On Render: Dashboard > your service > Environment > add SECRET_KEY.\n"
+                "      Generate one with:  python -c \"import secrets; print(secrets.token_urlsafe(48))\"\n"
+                "      (Same value must be kept across deploys, or all sessions reset.)\n"
+                "      To deploy now and accept a session reset on every restart, set "
+                "ALLOW_EPHEMERAL_SECRET_KEY=true instead."
+            )
 
     # 2. SQLite on a deployed service. The filesystem is ephemeral and the file
     #    is wiped on every deploy, so all data is lost each time.
@@ -111,6 +127,16 @@ def validate_startup_config():
 
     for w in warnings:
         print(f"[config] WARNING: {w}")
+
+    # One-line summary of what this process actually resolved, so a deploy log
+    # answers "is it configured?" without cross-referencing the env dashboard.
+    print(
+        f"[config] env={'production' if DEPLOY_ENV else 'development'} "
+        f"db={'postgres' if not str(engine.url).startswith('sqlite') else 'sqlite'} "
+        f"secret={'ephemeral' if utils.SECRET_KEY_IS_DEFAULT else 'configured'} "
+        f"integrations={'ready' if (os.getenv('INTEGRATION_ENCRYPTION_KEY') or '').strip() else 'no-key'} "
+        f"billing={'ready' if utils.paddle_checkout_enabled() else 'no-key'}"
+    )
 
     if not problems:
         return
