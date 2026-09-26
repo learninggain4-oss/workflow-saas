@@ -808,7 +808,7 @@ export default function App() {
           ) : viewMode === "audit"? (
             <AuditLogPage {...{ bgCard, setViewMode, t, changeLanguage }} />
           ) : viewMode === "templates"? (
-            <TemplatesPage {...{ bgCard, setViewMode, t, changeLanguage }} />
+            <TemplatesPage {...{ bgCard, setViewMode, setSelectedBoard, refreshBoards: fetchInitialData, t, changeLanguage }} />
           ) : viewMode === "onboarding"? (
             <OnboardingPage {...{ bgCard, setViewMode, t, changeLanguage }} />
           ) : viewMode === "resources"? (

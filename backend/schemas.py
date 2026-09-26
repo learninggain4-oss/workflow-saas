@@ -34,6 +34,14 @@ class BoardCreate(BaseModel):
     description: str = ""
 
 
+class BoardFromTemplate(BaseModel):
+    # Ids come from templates_catalog and are part of the public API contract.
+    template_id: str
+    # Optional user-supplied override. A template must never name a project for
+    # the user, so this wins whenever it is provided.
+    name: Optional[str] = None
+
+
 class InviteRequest(BaseModel):
     email: str
     role: str = "admin"

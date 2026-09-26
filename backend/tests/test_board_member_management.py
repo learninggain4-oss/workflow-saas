@@ -121,7 +121,11 @@ def test_owner_can_invite_new_user_with_password_without_separate_registration()
     db.refresh(board)
 
     captured = {}
-    original_send = main.send_email_safe
+    # The invite route now lives in routers/boards.py, so the symbol has to be
+    # patched where it is used, not on the app module.
+    from routers import boards as boards_router
+
+    original_send = boards_router.send_email_safe
 
     def fake_send(to_email, subject, html_body):
         captured["to"] = to_email
@@ -129,7 +133,7 @@ def test_owner_can_invite_new_user_with_password_without_separate_registration()
         captured["body"] = html_body
         return True
 
-    main.send_email_safe = fake_send
+    boards_router.send_email_safe = fake_send
     try:
         client = TestClient(main.app)
         token = create_token({"sub": owner_email})
@@ -153,7 +157,7 @@ def test_owner_can_invite_new_user_with_password_without_separate_registration()
         assert login_resp.status_code == 200, login_resp.text
         assert login_resp.json().get("access_token")
     finally:
-        main.send_email_safe = original_send
+        boards_router.send_email_safe = original_send
 
     db.delete(board)
     db.delete(created_user)

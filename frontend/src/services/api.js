@@ -86,7 +86,20 @@ export const admin = {
 
 export const boards = {
   getAll: () => api.get('/api/boards'),
-  create: (name) => api.post('/api/boards', { name }),
+  // Accepts a bare name (sidebar) or a { name, description } payload (templates).
+  // The request body must always match schemas.BoardCreate: `name` is a string,
+  // never a nested object, otherwise the API answers 422.
+  create: (nameOrPayload) => {
+    const payload = typeof nameOrPayload === 'string'
+      ? { name: nameOrPayload }
+      : { name: nameOrPayload?.name, description: nameOrPayload?.description ?? '' };
+    return api.post('/api/boards', payload);
+  },
+  // Atomic: board + all template tasks in one server transaction (§4.2).
+  createFromTemplate: (templateId, name) => api.post('/api/boards/from-template', {
+    template_id: templateId,
+    name: (name || '').trim() || undefined,
+  }),
   rename: (id, name) => api.put(`/api/boards/${id}`, { name }),
   delete: (id) => api.delete(`/api/boards/${id}`),
   // email lowercased + role normalized + password included for invite email
@@ -144,6 +157,10 @@ export const subtasks = {
 export const comments = {
   getAll: (taskId) => api.get(`/api/tasks/${taskId}/comments`),
   create: (taskId, text) => api.post(`/api/tasks/${taskId}/comments`, { text }),
+};
+
+export const templates = {
+  getAll: () => api.get('/api/templates'),
 };
 
 export const notifs = {
