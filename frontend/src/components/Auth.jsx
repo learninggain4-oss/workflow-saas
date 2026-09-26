@@ -25,7 +25,8 @@ const ROLES = [
   { value: 'subscriber', label: 'Subscriber', desc: 'View only access' },
 ];
 
-export default function AuthPage({ setViewMode, onAuthSuccess }) {
+export default function AuthPage({ setViewMode, onAuthSuccess, t }) {
+  const translate = t || ((key) => key);
   const [mode, setMode] = useState('signin');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -39,11 +40,11 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
     setError('');
 
     if (!email ||!password) {
-      setError('Email and password are required');
+      setError(translate('Email and password are required'));
       return;
     }
     if (mode === 'signup' &&!role) {
-      setError('Please select a role');
+      setError(translate('Please select a role'));
       return;
     }
 
@@ -104,13 +105,13 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
       <div className="w-full max-w-md rounded-2xl border bg-white dark:bg-[#09090b] dark:border-gray-800 shadow-sm p-6 sm:p-8">
         <div className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-500">
-            {mode === 'signin'? 'Welcome back' : 'Create account'}
+            {mode === 'signin'? translate('Welcome back') : translate('Create account')}
           </p>
           <h1 className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
-            {mode === 'signin'? 'Sign in to your workspace' : 'Create your workspace account'}
+            {mode === 'signin'? translate('Sign in to your workspace') : translate('Create your workspace account')}
           </h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            {mode === 'signin'? 'Select your role to continue' : 'Choose a role to get started'}
+            {mode === 'signin'? translate('Select your role to continue') : translate('Choose a role to get started')}
           </p>
         </div>
 
@@ -120,21 +121,21 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
             onClick={() => setMode('signin')}
             className={`rounded-lg py-2 text-sm font-semibold transition ${mode === 'signin'? 'bg-white dark:bg-[#18181b] shadow-sm text-indigo-600 dark:text-white' : 'text-gray-500'}`}
           >
-            Sign In
+            {translate('Sign In')}
           </button>
           <button
             type="button"
             onClick={() => setMode('signup')}
             className={`rounded-lg py-2 text-sm font-semibold transition ${mode === 'signup'? 'bg-white dark:bg-[#18181b] shadow-sm text-indigo-600 dark:text-white' : 'text-gray-500'}`}
           >
-            Sign Up
+            {translate('Sign Up')}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'signup' && (
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">Full Name</label>
+              <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">{translate('Full Name')}</label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -145,7 +146,7 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
           )}
 
           <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">Email</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">{translate('Email')}</label>
             <input
               type="email"
               value={email}
@@ -157,7 +158,7 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">Password</label>
+            <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">{translate('Password')}</label>
             <input
               type="password"
               value={password}
@@ -170,7 +171,7 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
 
           <div>
             <label className="text-xs font-semibold uppercase tracking-[0.15em] text-gray-600 dark:text-gray-400">
-              Select Role <span className="text-red-500">*</span>
+              {translate('Select Role')} <span className="text-red-500">*</span>
             </label>
             <select
               value={role}
@@ -180,13 +181,13 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
             >
               {ROLES.map((r) => (
                 <option key={r.value} value={r.value}>
-                  {r.label}
+                  {translate(r.label)}
                 </option>
               ))}
             </select>
             {/* FIXED: text- -> text-xs */}
             <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-              {ROLES.find((r) => r.value === role)?.desc}
+              {translate(ROLES.find((r) => r.value === role)?.desc)}
             </p>
           </div>
 
@@ -201,12 +202,12 @@ export default function AuthPage({ setViewMode, onAuthSuccess }) {
             disabled={loading}
             className="w-full rounded-xl bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading? 'Please wait...' : mode === 'signin'? `Sign In as ${ROLES.find(r=>r.value===role)?.label}` : `Create account as ${ROLES.find(r=>r.value===role)?.label}`}
+            {loading? translate('Please wait...') : mode === 'signin'? `${translate('Sign In')} — ${translate(ROLES.find(r=>r.value===role)?.label)}` : `${translate('Create account')} — ${translate(ROLES.find(r=>r.value===role)?.label)}`}
           </button>
         </form>
 
         <p className="mt-6 text-center text-xs text-gray-500">
-          Role can be changed later by Owner/Admin in Team settings
+          {translate('Role can be changed later by Owner/Admin in Team settings')}
         </p>
       </div>
     </div>

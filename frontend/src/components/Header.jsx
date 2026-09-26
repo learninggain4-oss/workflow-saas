@@ -1,7 +1,23 @@
 import React from 'react';
 import { notifs } from '../services/api';
 
-export default function Header({ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, sidebarOpen, toggleSidebar }) {
+export default function Header({ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, sidebarOpen, toggleSidebar, t }) {
+  const viewLabels = {
+    dashboard: 'Dashboard',
+    board: 'Board',
+    gantt: 'Gantt',
+    timeline: 'Timeline',
+    calendar: 'Calendar',
+    reports: 'Reports',
+    team: 'Team',
+    automations: 'Automations',
+    templates: 'Templates',
+    onboarding: 'Onboarding',
+    resources: 'Resources',
+    feedback: 'Feedback',
+    audit: 'Audit Log',
+    settings: 'Settings',
+  };
   const navGroups = [
     {
       title: 'Workspace',
@@ -26,10 +42,10 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
             onClick={toggleSidebar}
             aria-controls="app-sidebar"
             aria-expanded={sidebarOpen}
-            title={sidebarOpen ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
+            title={`${t(sidebarOpen ? 'Hide sidebar' : 'Show sidebar')} (Ctrl+B)`}
             className={`shrink-0 border p-2.5 rounded-xl shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 ${bgCard}`}
           >
-            <span className="sr-only">{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</span>
+            <span className="sr-only">{t(sidebarOpen ? 'Hide sidebar' : 'Show sidebar')}</span>
             <svg
               className={`sidebar-toggle-icon w-5 h-5 text-slate-500 dark:text-slate-300 transition-transform duration-300 ${sidebarOpen ? '' : 'rotate-180'}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -39,22 +55,22 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
             </svg>
           </button>
           <div className="hidden md:flex items-center gap-2 rounded-full border border-indigo-200/80 bg-indigo-50/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
-            Workspace
+            {t('Workspace')}
           </div>
           <div className="min-w-0">
             <h2 className="text-2xl font-extrabold tracking-tight truncate text-slate-900 dark:text-white">
-              {boardsList.find((b) => b.id === selectedBoard)?.name || 'Select a project'}
+              {boardsList.find((b) => b.id === selectedBoard)?.name || t('Select a project')}
             </h2>
           </div>
           {selectedBoard && (
             <button onClick={exportCSV} className={`px-3 py-1.5 border rounded-xl text-xs font-semibold shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 ${bgCard}`}>
-              Export CSV
+              {t('Export CSV')}
             </button>
           )}
         </div>
 
         <div className="relative">
-          <button onClick={() => setShowNotif(!showNotif)} className={`relative border p-2.5 rounded-xl text-sm shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 ${bgCard}`}>
+          <button onClick={() => setShowNotif(!showNotif)} aria-label={t('Notifications')} className={`relative border p-2.5 rounded-xl text-sm shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 ${bgCard}`}>
             <svg className="w-5 h-5 text-slate-500 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
@@ -68,11 +84,11 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
           {showNotif && (
             <div className={`absolute right-0 top-12 w-80 border rounded-2xl shadow-2xl z-50 max-h-96 overflow-auto ${bgCard}`}>
               <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-inherit z-10">
-                <span className="font-bold text-sm text-slate-900 dark:text-white">Notifications</span>
-                <button onClick={() => { notifs.markAllRead(); notifs.getAll().then((r) => setNotifications(r.data)); }} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">Mark all read</button>
+                <span className="font-bold text-sm text-slate-900 dark:text-white">{t('Notifications')}</span>
+                <button onClick={() => { notifs.markAllRead(); notifs.getAll().then((r) => setNotifications(r.data)); }} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">{t('Mark all read')}</button>
               </div>
               <div className="py-2">
-                {notifications.length === 0 && <div className="p-4 text-center text-sm text-slate-500">No new notifications</div>}
+                {notifications.length === 0 && <div className="p-4 text-center text-sm text-slate-500">{t('No new notifications')}</div>}
                 {notifications.map((n) => (
                   <div key={n.id} className="px-4 py-3 border-b border-slate-100 dark:border-slate-800/60 text-sm flex justify-between group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                     <span className={`pr-4 ${!n.is_read ? 'font-semibold text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>{n.message}</span>
@@ -93,9 +109,10 @@ export default function Header({ boardsList, selectedBoard, exportCSV, viewMode,
               <button
                 key={m}
                 onClick={() => setViewMode(m)}
-                className={`rounded-xl px-3 py-1.5 text-sm font-semibold capitalize transition-all duration-200 ${viewMode === m ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                aria-current={viewMode === m ? 'page' : undefined}
+                className={`rounded-xl px-3 py-1.5 text-sm font-semibold transition-all duration-200 ${viewMode === m ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'}`}
               >
-                {m}
+                {t(viewLabels[m] || m)}
               </button>
             ))}
           </div>

@@ -7,7 +7,8 @@ import { formatDate } from './utils/helpers';
 import { saveTasksLocally, getLocalTasks, saveOfflineAction, syncOfflineActions } from './services/offlineSync';
 
 // NEW: i18n import for Multi-Language Support
-import './i18n'; 
+import './i18n';
+import { SUPPORTED_LANGUAGES } from './i18n';
 import { useTranslation } from 'react-i18next';
 
 // Components import
@@ -47,9 +48,17 @@ import TaskActivityLog from './components/TaskActivityLog';
 export default function App() {
   // i18n hooks Setup
   const { t, i18n } = useTranslation();
-  
+  const [language, setLanguage] = useState(() => i18n.resolvedLanguage || i18n.language || "en");
+
+  // ഭാഷ മാറ്റുമ്പോൾ i18n ഇന്സ്റ്റൻസിലേക്ക് വിനം അയയ്ക്കുക; React state വഴി എല്ലാ കമ്പൊനന്റുകളും വീണ്ടും റീരെന്റർ ആകും
+  const changeLanguage = (lng) => {
+    if (!lng || lng === i18n.resolvedLanguage) return;
+    setLanguage(lng);
+    i18n.changeLanguage(lng);
+  };
+
   const handleLanguageChange = (e) => {
-    i18n.changeLanguage(e.target.value);
+    changeLanguage(e.target.value);
   };
 
   const [token, setToken] = useState(localStorage.getItem("token") || "");
@@ -129,7 +138,7 @@ export default function App() {
     }
   });
   const defaultProfilePreferences = {
-    emailNotifications: true, boardUpdates: true, taskReminders: true, weeklyDigest: false, compactMode: false, rememberMe: true, showSessions: false,
+    emailNotifications: true, boardUpdates: true, taskReminders: true, weeklyDigest: false, compactMode: false, rememberMe: true, showSessions: false, language: i18n.resolvedLanguage || i18n.language || "en",
   };
   const defaultWorkspaceDefaults = {
     openLastBoard: true, showCompletedTasks: true, autoSaveEdits: true, previewFiles: true, hideArchived: false,
@@ -198,6 +207,17 @@ export default function App() {
   useEffect(() => { localStorage.setItem("securitySettings", JSON.stringify(securitySettings)); }, [securitySettings]);
   useEffect(() => { localStorage.setItem("profileAvatar", profileAvatar || ""); }, [profileAvatar]);
   useEffect(() => { localStorage.setItem("accountActivity", JSON.stringify(accountActivity)); }, [accountActivity]);
+
+  // profilePreferences.language ആണ് ഭാഷയുടെ ഒരൊറ്റ സ്രോതസം: സ്വയം സേവ് ചെയ്തതും ബാക്കെൻഡിൽ നിന്ന് വരുന്നതും ഇവിടെയാണ് പ്രാബക്കുന്നത്
+  useEffect(() => {
+    const preferred = profilePreferences.language;
+    if (preferred && preferred !== i18n.resolvedLanguage) changeLanguage(preferred);
+  }, [profilePreferences.language]);
+
+  // യൂസർ തിരഞ്ഞെടുത്ത ഭാഷ profile_preferences-ലേക്ക് എഴുതുക, അതേ ബാക്കെൻഡിലേക്കും പോകും
+  useEffect(() => {
+    setProfilePreferences((prev) => (prev.language === language ? prev : { ...prev, language }));
+  }, [language]);
 
   useEffect(() => {
     localStorage.setItem("sidebarOpen", String(sidebarOpen));
@@ -756,13 +776,13 @@ export default function App() {
   const primaryBtn = "bg-indigo-600 hover:bg-indigo-700 text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-[#18181b]";
 
   if (!token) {
-    return <Auth {...{email, setEmail, password, setPassword, name, setName, isRegister, setIsRegister, handleLogin, handleRegister, bgMain, bgCard, inputCls, primaryBtn, t, changeLanguage: i18n.changeLanguage }} />;
+    return <Auth {...{email, setEmail, password, setPassword, name, setName, isRegister, setIsRegister, handleLogin, handleRegister, bgMain, bgCard, inputCls, primaryBtn, t, changeLanguage }} />;
   }
 
   return (
     <div className={`h-screen w-full p-3 md:p-5 transition-colors duration-200 ${bgMain}`}>
       <div className="app-shell h-full w-full overflow-hidden rounded- border border-white/10 flex relative">
-        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage, open: sidebarOpen }} />
+        <Sidebar {...{ darkMode, setDarkMode, userData, myRole, handleUpgrade, boardsList, selectedBoard, setSelectedBoard, newBoardName, setNewBoardName, createBoard, renameValue, setRenameValue, renameBoard, deleteBoard, setToken, bgSide, subCard, inputCls, primaryBtn, bgCard, setViewMode, t, changeLanguage, open: sidebarOpen }} />
         <main className="flex-1 flex flex-col h-full overflow-hidden relative">
           
           {/* OFFLINE INDICATOR BANNER */}
@@ -773,33 +793,33 @@ export default function App() {
             </div>
           )}
 
-          <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, sidebarOpen, toggleSidebar: () => setSidebarOpen((prev) => !prev), t, changeLanguage: i18n.changeLanguage }} />
+          <Header {...{ boardsList, selectedBoard, exportCSV, viewMode, setViewMode, showNotif, setShowNotif, notifications, setNotifications, bgCard, sidebarOpen, toggleSidebar: () => setSidebarOpen((prev) => !prev), t, changeLanguage }} />
           <div className="flex-1 overflow-auto p-6 md:p-8 custom-scrollbar">
           {viewMode === "settings"? (
-            <AccountSettingsPage {...{ userData, profileForm, setProfileForm, handleProfileUpdate, savingProfile, profilePreferences, setProfilePreferences, workspaceDefaults, setWorkspaceDefaults, resetProfilePreferences, darkMode, setDarkMode, profileAvatar, setProfileAvatar, handleAvatarUpload, handleDeleteAccount, accountActivity, handleUpgrade, securitySettings, handleVerifyEmail, toggleTwoFactor, toggleConnectedApp, bgCard, inputCls, primaryBtn, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+            <AccountSettingsPage {...{ userData, profileForm, setProfileForm, handleProfileUpdate, savingProfile, profilePreferences, setProfilePreferences, workspaceDefaults, setWorkspaceDefaults, resetProfilePreferences, darkMode, setDarkMode, profileAvatar, setProfileAvatar, handleAvatarUpload, handleDeleteAccount, accountActivity, handleUpgrade, securitySettings, handleVerifyEmail, toggleTwoFactor, toggleConnectedApp, bgCard, inputCls, primaryBtn, setViewMode, t, changeLanguage }} />
           ) : viewMode === "reports"? (
-            <ReportsPage {...{ analytics, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+            <ReportsPage {...{ analytics, bgCard, setViewMode, t, changeLanguage }} />
           ) : viewMode === "team"? (
-            <TeamPage {...{ bgCard, setViewMode, boardMembers, registeredUsers, setRegisteredUsers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember, t, changeLanguage: i18n.changeLanguage }} />
+            <TeamPage {...{ bgCard, setViewMode, boardMembers, registeredUsers, setRegisteredUsers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember, t, changeLanguage }} />
           ) : viewMode === "automations"? (
-            <AdvancedAutomations {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn, boardId: selectedBoard, automationsApi, canManage: Boolean(myPermissions.manageAutomations || myPermissions.manageBoard), t, changeLanguage: i18n.changeLanguage }} />
+            <AdvancedAutomations {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn, boardId: selectedBoard, automationsApi, canManage: Boolean(myPermissions.manageAutomations || myPermissions.manageBoard), t, changeLanguage }} />
           ) : viewMode === "audit"? (
-            <AuditLogPage {...{ bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+            <AuditLogPage {...{ bgCard, setViewMode, t, changeLanguage }} />
           ) : viewMode === "templates"? (
-            <TemplatesPage {...{ bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+            <TemplatesPage {...{ bgCard, setViewMode, t, changeLanguage }} />
           ) : viewMode === "onboarding"? (
-            <OnboardingPage {...{ bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+            <OnboardingPage {...{ bgCard, setViewMode, t, changeLanguage }} />
           ) : viewMode === "resources"? (
-            <ResourcesPage {...{ bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+            <ResourcesPage {...{ bgCard, setViewMode, t, changeLanguage }} />
           ) : viewMode === "feedback"? (
-            <FeedbackPage {...{ bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
+            <FeedbackPage {...{ bgCard, setViewMode, t, changeLanguage }} />
           ) : (
             <>
-              {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard, t, changeLanguage: i18n.changeLanguage }} />}
-              {viewMode === "board" && <BoardView {...{ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask, t, changeLanguage: i18n.changeLanguage }} />}
-              {viewMode === "timeline" && <Timeline {...{ tasksList, setEditing, timelineDays, bgCard, t, changeLanguage: i18n.changeLanguage }} />}
-              {viewMode === "calendar" && <CalendarView {...{ calDate, tasksList, setEditing, firstDay, daysInMonth, m, y, bgCard, subCard, t, changeLanguage: i18n.changeLanguage }} />}
-              {viewMode === "gantt" && <GanttChartView {...{ tasksList, setEditing, bgCard, darkMode, t, changeLanguage: i18n.changeLanguage }} />}
+              {viewMode === "dashboard" && <Dashboard {...{ analytics, activities, bgCard, userData, setViewMode, boardsList, selectedBoard, t, changeLanguage }} />}
+              {viewMode === "board" && <BoardView {...{ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask, t, changeLanguage }} />}
+              {viewMode === "timeline" && <Timeline {...{ tasksList, setEditing, timelineDays, bgCard, t, changeLanguage }} />}
+              {viewMode === "calendar" && <CalendarView {...{ calDate, tasksList, setEditing, firstDay, daysInMonth, m, y, bgCard, subCard, t, changeLanguage }} />}
+              {viewMode === "gantt" && <GanttChartView {...{ tasksList, setEditing, bgCard, darkMode, t, changeLanguage }} />}
             </>
           )}
         </div>
@@ -808,7 +828,7 @@ export default function App() {
       {/* 
         NEW: Passed RichTextEditor and TaskActivityLog into TaskModal 
       */}
-      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList, openRecurringModalForTask, RichTextEditor, TaskActivityLog, t, changeLanguage: i18n.changeLanguage }} />}
+      {editing && <TaskModal {...{ editing, setEditing, canEdit, saveEdit, delTask, subtasksList, toggleSubtask, delSubtask, newSubtask, setNewSubtask, addSubtask, taskComments, newComment, setNewComment, addComment, boardMembers, toggleLabel, handleFileUpload, uploading, userData, bgCard, inputCls, subCard, primaryBtn, activeTimer, setActiveTimer, startTimer, tasksList, openRecurringModalForTask, RichTextEditor, TaskActivityLog, t, changeLanguage }} />}
       
       {/* Recurring Task Modal Rendering */}
       <RecurringTaskModal 
@@ -873,14 +893,16 @@ export default function App() {
       {/* NEW: Floating Language Switcher UI (Bottom-Left) */}
       <div className="fixed bottom-6 left-6 z-40 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg p-2 flex items-center gap-2">
         <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path></svg>
-        <select 
-          onChange={handleLanguageChange} 
-          value={i18n.language} 
+        <label htmlFor="language-switcher" className="sr-only">{t("Language")}</label>
+        <select
+          id="language-switcher"
+          onChange={handleLanguageChange}
+          value={language}
           className="bg-transparent text-sm font-medium outline-none text-gray-700 dark:text-gray-300 cursor-pointer"
         >
-          <option value="en" className="dark:bg-[#18181b]">English</option>
-          <option value="ml" className="dark:bg-[#18181b]">മലയാളം</option>
-          <option value="hi" className="dark:bg-[#18181b]">हिन्दी</option>
+          {SUPPORTED_LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code} className="dark:bg-[#18181b]">{l.native}</option>
+          ))}
         </select>
       </div>
 
