@@ -157,28 +157,27 @@ npm run dev -- --host 0.0.0.0
 
 ## Environment Variables
 
-### Backend example
+`.env.example` is a keys-only template listing every variable the code reads.
+See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for what each key does and how to
+generate the random ones.
 
-```env
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-SECRET_KEY=your_secret_key
-SMTP_HOST=smtp-relay.brevo.com
-SMTP_PORT=2525
-SMTP_USER=your_smtp_user
-SMTP_PASS=your_smtp_password
-FROM_EMAIL=alerts@yourdomain.com
-BREVO_API_KEY=xkeysib-your-brevo-key
+Two are required in production, and the app refuses to boot without them:
+
+```bash
+# SECRET_KEY - signs login tokens
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+
+# INTEGRATION_ENCRYPTION_KEY - encrypts third-party credentials at rest
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-> Invite emails require either a valid `BREVO_API_KEY` or configured `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS`.
+`SECRET_KEY` must stay the same across deploys, or every user is signed out.
+`DATABASE_URL` must point at Postgres on a deployed service — sqlite lives on an
+ephemeral filesystem and is destroyed on every deploy.
 
-### Frontend example
-
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-If your deployment uses a hosted backend, replace the value with your production API URL.
+Invite emails need either a valid `BREVO_API_KEY` or configured `SMTP_HOST`,
+`SMTP_USER` and `SMTP_PASS`. The frontend reads `VITE_API_URL`, which Vite
+inlines at **build** time — set it in the hosting UI and rebuild.
 
 ## Deployment Notes
 
