@@ -66,6 +66,12 @@ class Task(Base):
     assigned_to_name = Column(String, default="")
     attachment_url = Column(Text, default="")
     labels = Column(String, default="")
+    
+    # New columns added as requested
+    dependencies = Column(Text, default="[]")   # JSON array of task ids
+    recurring = Column(Text, default="")        # JSON {frequency, interval, endDate}
+    created_at = Column(String, default="")
+    updated_at = Column(String, default="")
 
 
 class Subtask(Base):
@@ -97,6 +103,7 @@ class Activity(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     board_id = Column(Integer, ForeignKey("boards.id"))
+    task_id = Column(Integer, nullable=True, index=True)  # Added task_id for filtering per task with index
     user_name = Column(String, default="")
     action = Column(String, default="")
     created_at = Column(String, default="")
@@ -113,3 +120,38 @@ class Notification(Base):
     notif_type = Column(String, default="info")
     is_read = Column(Boolean, default=False)
     created_at = Column(String, default="")
+
+
+# ==========================================
+#               AUTOMATIONS
+# ==========================================
+
+class Automation(Base):
+    __tablename__ = "automations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, ForeignKey("boards.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
+    trigger = Column(String, default="")
+    condition = Column(String, default="")
+    action = Column(String, default="")
+    target = Column(String, default="")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(String, default="")
+
+
+# ==========================================
+#               BOARD MESSAGES (CHAT)
+# ==========================================
+
+class BoardMessage(Base):
+    __tablename__ = "board_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, ForeignKey("boards.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    user_name = Column(String, default="")
+    text = Column(Text, nullable=False)
+    created_at = Column(String, default="")
+
+# 116 - 157

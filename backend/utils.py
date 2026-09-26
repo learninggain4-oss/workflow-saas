@@ -201,6 +201,9 @@ PERMISSION_KEYS = [
     "deleteTasks",
     "manageMembers",
     "manageBoard",
+    "viewRoleDistribution",
+    "viewAutomations",
+    "manageAutomations",
 ]
 
 # FIXED: Added admin, member, viewer, super_admin aliases
@@ -250,6 +253,9 @@ def default_permissions_for_role(role):
             "deleteTasks": True,
             "manageMembers": False,
             "manageBoard": False,
+            "viewRoleDistribution": True,
+            "viewAutomations": True,
+            "manageAutomations": False,
         }
     if role_name == "guest":
         return {
@@ -259,6 +265,9 @@ def default_permissions_for_role(role):
             "deleteTasks": False,
             "manageMembers": False,
             "manageBoard": False,
+            "viewRoleDistribution": False,
+            "viewAutomations": False,
+            "manageAutomations": False,
         }
     # subscriber / viewer
     return {
@@ -268,6 +277,9 @@ def default_permissions_for_role(role):
         "deleteTasks": False,
         "manageMembers": False,
         "manageBoard": False,
+        "viewRoleDistribution": False,
+        "viewAutomations": False,
+        "manageAutomations": False,
     }
 
 def normalize_permissions(role, custom_permissions=None):
@@ -372,3 +384,5 @@ def ensure_board_access(board_id: int, user, db: Session, required_role: str = "
         raise HTTPException(status_code=403, detail=f"{action} requires {resolved_permission} permission")
 
     return board
+
+# 375 - 388

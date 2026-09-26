@@ -9,6 +9,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     name: str
+    role: Optional[str] = None
 
 
 class UserProfileUpdate(BaseModel):
@@ -30,6 +31,7 @@ class UserProfileUpdate(BaseModel):
 
 class BoardCreate(BaseModel):
     name: str
+    description: str = ""
 
 
 class InviteRequest(BaseModel):
@@ -57,6 +59,25 @@ class TaskCreate(BaseModel):
     assigned_to_name: str = ""
     attachment_url: str = ""
     labels: str = ""
+    dependencies: List[str] = []
+    recurring: Optional[dict] = None
+
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[str] = None
+    due_date: Optional[str] = None
+    time_estimated: Optional[int] = None
+    time_spent: Optional[int] = None
+    assigned_to: Optional[str] = None
+    assigned_to_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    labels: Optional[str] = None
+    dependencies: Optional[List[str]] = None
+    recurring: Optional[dict] = None
 
 
 class SubtaskCreate(BaseModel):
@@ -65,3 +86,41 @@ class SubtaskCreate(BaseModel):
 
 class CommentCreate(BaseModel):
     text: str
+
+
+class RecurringConfig(BaseModel):
+    frequency: str
+    interval: int
+    endDate: Optional[str] = None
+
+
+# ==========================================
+#            AUTOMATION SCHEMAS
+# ==========================================
+
+class AutomationCreate(BaseModel):
+    board_id: int
+    trigger: str
+    condition: str = ""
+    action: str
+    target: str = ""
+    is_active: bool = True
+
+
+class AutomationUpdate(BaseModel):
+    trigger: Optional[str] = None
+    condition: Optional[str] = None
+    action: Optional[str] = None
+    target: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+# ==========================================
+#           BOARD MESSAGE SCHEMAS
+# ==========================================
+
+class BoardMessageCreate(BaseModel):
+    board_id: int
+    text: str
+
+# 67 - 126

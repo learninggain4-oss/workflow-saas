@@ -14,7 +14,9 @@ from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redi
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, Column, Integer, String, Boolean, Text
+from pydantic import BaseModel
+from jose import jwt, JWTError
 
 import models
 import schemas
@@ -36,6 +38,38 @@ try:
     CLOUDINARY_ENABLED = bool(os.getenv("CLOUDINARY_CLOUD_NAME"))
 except Exception:
     CLOUDINARY_ENABLED = False
+
+
+# --- AUTOMATION MODEL & SCHEMA ---
+class Automation(models.Base):
+    __tablename__ = "automations"
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, index=True)
+    trigger_type = Column(String, default="")
+    trigger_condition = Column(String, default="")
+    action_type = Column(String, default="")
+    action_payload = Column(Text, default="{}")
+    is_active = Column(Boolean, default=True)
+
+class AutomationCreatePayload(BaseModel):
+    trigger_type: str
+    trigger_condition: str
+    action_type: str
+    action_payload: str
+    is_active: bool = True
+
+# --- BOARD CHAT MODEL & SCHEMA ---
+class BoardMessage(models.Base):
+    __tablename__ = "board_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    board_id = Column(Integer, index=True)
+    user_id = Column(Integer)
+    user_name = Column(String, default="")
+    text = Column(Text, default="")
+    created_at = Column(String, default="")
+
+class BoardMessageCreate(BaseModel):
+    text: str
 
 
 # --- DATABASE INITIALIZATION ---
@@ -63,10 +97,15 @@ def ensure_database_migrations():
                     ("tasks", "assigned_to_name", "VARCHAR DEFAULT ''"),
                     ("tasks", "attachment_url", "TEXT DEFAULT ''"),
                     ("tasks", "labels", "VARCHAR DEFAULT ''"),
+                    ("tasks", "dependencies", "TEXT DEFAULT '[]'"),
+                    ("tasks", "recurring", "TEXT DEFAULT '{}'"),
+                    ("tasks", "created_at", "VARCHAR DEFAULT ''"),
+                    ("tasks", "updated_at", "VARCHAR DEFAULT ''"),
                     ("comments", "user_name", "VARCHAR DEFAULT ''"),
                     ("comments", "created_at", "VARCHAR DEFAULT ''"),
                     ("board_members", "role", "VARCHAR DEFAULT 'editor'"),
                     ("board_members", "permissions", "TEXT DEFAULT '{}'"),
+                    ("activities", "task_id", "INTEGER"),
                 ]
                 tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
                 for table_name, column_name, column_def in migrations:
@@ -78,6 +117,8 @@ def ensure_database_migrations():
                         conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
                 conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
                 conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
+                conn.execute(text("CREATE TABLE IF NOT EXISTS automations (id INTEGER PRIMARY KEY AUTOINCREMENT, board_id INTEGER, trigger_type VARCHAR DEFAULT '', trigger_condition VARCHAR DEFAULT '', action_type VARCHAR DEFAULT '', action_payload TEXT DEFAULT '{}', is_active BOOLEAN DEFAULT 1)"))
+                conn.execute(text("CREATE TABLE IF NOT EXISTS board_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, board_id INTEGER, user_id INTEGER, user_name VARCHAR DEFAULT '', text TEXT DEFAULT '', created_at VARCHAR DEFAULT '')"))
                 conn.commit()
                 return
 
@@ -103,6 +144,10 @@ def ensure_database_migrations():
                     ("assigned_to_name", "VARCHAR DEFAULT ''"),
                     ("attachment_url", "TEXT DEFAULT ''"),
                     ("labels", "VARCHAR DEFAULT ''"),
+                    ("dependencies", "TEXT DEFAULT '[]'"),
+                    ("recurring", "TEXT DEFAULT '{}'"),
+                    ("created_at", "VARCHAR DEFAULT ''"),
+                    ("updated_at", "VARCHAR DEFAULT ''"),
                 ],
                 "comments": [
                     ("user_name", "VARCHAR DEFAULT ''"),
@@ -112,6 +157,9 @@ def ensure_database_migrations():
                     ("role", "VARCHAR DEFAULT 'editor'"),
                     ("permissions", "TEXT DEFAULT '{}'"),
                 ],
+                "activities": [
+                    ("task_id", "INTEGER"),
+                ]
             }
 
             tables = {
@@ -132,6 +180,8 @@ def ensure_database_migrations():
 
             conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id SERIAL PRIMARY KEY, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
             conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS automations (id SERIAL PRIMARY KEY, board_id INTEGER, trigger_type VARCHAR DEFAULT '', trigger_condition VARCHAR DEFAULT '', action_type VARCHAR DEFAULT '', action_payload TEXT DEFAULT '{}', is_active BOOLEAN DEFAULT TRUE)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS board_messages (id SERIAL PRIMARY KEY, board_id INTEGER, user_id INTEGER, user_name VARCHAR DEFAULT '', text TEXT DEFAULT '', created_at VARCHAR DEFAULT '')"))
             conn.commit()
     except Exception:
         traceback.print_exc()
@@ -139,6 +189,25 @@ def ensure_database_migrations():
 
 ensure_database_migrations()
 models.Base.metadata.create_all(bind=engine)
+
+
+def ensure_task_timestamps():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE tasks 
+                SET created_at = COALESCE((
+                    SELECT created_at FROM activities 
+                    WHERE activities.task_id = tasks.id 
+                    ORDER BY id ASC LIMIT 1
+                ), '')
+                WHERE created_at IS NULL OR created_at = ''
+            """))
+            conn.commit()
+    except Exception:
+        traceback.print_exc()
+
+ensure_task_timestamps()
 
 
 def normalize_existing_users_to_owner():
@@ -185,7 +254,17 @@ def _board_response(board, current_user, db: Session):
     if role is None and utils.normalize_role(getattr(current_user, "role", "")) == "owner":
         role = "owner"
     role = role or "editor"
-    permissions = utils.default_permissions_for_role("owner") if role == "owner" else utils.get_board_member_permissions(board.id, current_user.id, db)
+    
+    # Retrieve the raw permissions
+    raw_perms = utils.default_permissions_for_role("owner") if role == "owner" else utils.get_board_member_permissions(board.id, current_user.id, db)
+    
+    # Normalize permissions so the key set matches get_board_members
+    permissions = utils.normalize_permissions(role, raw_perms)
+    
+    # Retain viewRoleDistribution if it exists in raw_perms
+    if isinstance(raw_perms, dict) and "viewRoleDistribution" in raw_perms:
+        permissions["viewRoleDistribution"] = bool(raw_perms["viewRoleDistribution"])
+
     return {
         "id": board.id,
         "name": board.name,
@@ -193,6 +272,62 @@ def _board_response(board, current_user, db: Session):
         "role": role,
         "permissions": permissions,
     }
+
+
+def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db: Session, from_automation: bool = False):
+    """Executes board automation rules. Guards against infinite recursion via from_automation flag."""
+    if from_automation:
+        return False
+        
+    automations = db.query(Automation).filter(Automation.board_id == board_id, Automation.is_active == True).all()
+    modified = False
+    
+    for rule in automations:
+        trigger = False
+        
+        # Evaluate triggers
+        if rule.trigger_type == "status_change":
+            if event == "update" and old_status != task.status and task.status == rule.trigger_condition:
+                trigger = True
+        elif rule.trigger_type == "task_created" and event == "create":
+            trigger = True
+            
+        if trigger:
+            payload = _parse_json(rule.action_payload, {})
+            
+            # Execute Actions
+            if rule.action_type == "send_email":
+                to_email = payload.get("to")
+                subject = payload.get("subject", "Task Automation Update")
+                body = payload.get("body", f"Automation triggered for task '{task.title}'.")
+                if to_email:
+                    html_body = utils.build_professional_email_html(
+                        title="Automation Notification",
+                        intro=f"An automation rule was triggered for task <strong>{task.title}</strong>.",
+                        rows=[("Task", task.title), ("Status", task.status), ("Condition", rule.trigger_condition)]
+                    )
+                    threading.Thread(
+                        target=send_email_safe,
+                        args=(to_email, subject, html_body)
+                    ).start()
+                    
+            elif rule.action_type == "assign_to":
+                assignee = payload.get("email") or payload.get("assigned_to")
+                if assignee and task.assigned_to != assignee:
+                    task.assigned_to = assignee
+                    modified = True
+                    
+            elif rule.action_type == "add_label":
+                new_label = payload.get("label")
+                if new_label:
+                    current_labels = task.labels or ""
+                    labels_list = [l.strip() for l in current_labels.split(",") if l.strip()]
+                    if new_label not in labels_list:
+                        labels_list.append(new_label)
+                        task.labels = ",".join(labels_list)
+                        modified = True
+                        
+    return modified
 
 
 # --- FASTAPI APP SETUP ---
@@ -1270,17 +1405,99 @@ def delete_notif(notif_id: int, current_user=Depends(get_current_user), db: Sess
 
 
 # ==========================================
+#               AUTOMATIONS
+# ==========================================
+
+@app.get("/api/boards/{board_id}/automations")
+def get_automations(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="View automations", required_permission="manageBoard")
+    return db.query(Automation).filter(Automation.board_id == board_id).all()
+
+
+@app.post("/api/boards/{board_id}/automations")
+def create_automation(board_id: int, payload: AutomationCreatePayload, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Create automation", required_permission="manageBoard")
+    rule = Automation(
+        board_id=board_id,
+        trigger_type=payload.trigger_type,
+        trigger_condition=payload.trigger_condition,
+        action_type=payload.action_type,
+        action_payload=payload.action_payload,
+        is_active=payload.is_active
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@app.put("/api/boards/{board_id}/automations/{rule_id}")
+def update_automation(board_id: int, rule_id: int, payload: AutomationCreatePayload, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Update automation", required_permission="manageBoard")
+    rule = db.query(Automation).filter(Automation.id == rule_id, Automation.board_id == board_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Automation not found")
+    
+    rule.trigger_type = payload.trigger_type
+    rule.trigger_condition = payload.trigger_condition
+    rule.action_type = payload.action_type
+    rule.action_payload = payload.action_payload
+    rule.is_active = payload.is_active
+    
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@app.delete("/api/boards/{board_id}/automations/{rule_id}")
+def delete_automation(board_id: int, rule_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Delete automation", required_permission="manageBoard")
+    rule = db.query(Automation).filter(Automation.id == rule_id, Automation.board_id == board_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Automation not found")
+    
+    db.delete(rule)
+    db.commit()
+    return {"ok": True}
+
+
+# ==========================================
 #                   TASKS
 # ==========================================
 
 @app.get("/api/tasks")
 def list_tasks(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Task list")
-    return db.query(models.Task).filter(models.Task.board_id == board_id).all()
+    tasks = db.query(models.Task).filter(models.Task.board_id == board_id).all()
+    
+    # Recommendation: Activities are kept in their separate endpoint 
+    # /api/boards/{board_id}/activities to avoid bloating this payload.
+    
+    return [{
+        "id": t.id,
+        "title": t.title,
+        "description": t.description,
+        "status": t.status,
+        "priority": t.priority,
+        "start_date": t.start_date,
+        "due_date": t.due_date,
+        "time_estimated": t.time_estimated,
+        "time_spent": t.time_spent,
+        "assigned_to": t.assigned_to,
+        "assigned_to_name": getattr(t, "assigned_to_name", ""),
+        "attachment_url": getattr(t, "attachment_url", ""),
+        "labels": getattr(t, "labels", ""),
+        "user_id": t.user_id,
+        "board_id": t.board_id,
+        "dependencies": _parse_json(getattr(t, "dependencies", "[]"), []),
+        "recurring": _parse_json(getattr(t, "recurring", "{}"), None)
+    } for t in tasks]
 
 
 @app.post("/api/tasks")
 async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    from_automation = payload.dict().get("_from_automation", False) if hasattr(payload, "dict") else False
+    
     if payload.board_id:
         utils.ensure_board_access(payload.board_id, current_user, db, required_role="editor", action="Task creation", required_permission="createTasks")
         board_owner = db.query(models.Board).filter(models.Board.id == payload.board_id).first()
@@ -1297,6 +1514,13 @@ async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_curr
     
     if payload.board_id:
         log_activity_safe(payload.board_id, current_user.name, f"created task '{payload.title}'")
+        
+        # Apply Automations hook
+        modified = apply_automations(t, payload.board_id, "create", "", db, from_automation)
+        if modified:
+            db.commit()
+            db.refresh(t)
+            
         await manager.broadcast(payload.board_id, {"type": "update"})
         
     return t
@@ -1304,30 +1528,91 @@ async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_curr
 
 @app.put("/api/tasks/{task_id}")
 async def update_task(task_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    from_automation = payload.get("_from_automation", False)
+    
+    # 1) Reject id, user_id, board_id explicitly
+    restricted_keys = {"id", "user_id", "board_id"}
+    if any(k in payload for k in restricted_keys):
+        raise HTTPException(status_code=400, detail="Cannot update id, user_id, or board_id")
+
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404)
+        
     utils.ensure_board_access(t.board_id, current_user, db, required_role="editor", action="Task update", required_permission="editTasks")
 
+    # 2) Blocker validation: Prevent changing status to 'doing' or 'done' if dependencies aren't done
+    new_status = payload.get("status", t.status)
+    if new_status in ["doing", "done"]:
+        deps_data = payload.get("dependencies", getattr(t, "dependencies", "[]"))
+        deps_list = _parse_json(deps_data, [])
+        if deps_list:
+            dep_tasks = db.query(models.Task).filter(models.Task.id.in_(deps_list)).all()
+            for dt in dep_tasks:
+                if dt.status != "done":
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Cannot change status to '{new_status}' because dependency task '{dt.title}' is not done."
+                    )
+
     old_status, old_assign = t.status, t.assigned_to
+    
+    # 3) Whitelist fields
+    allowed_fields = {
+        "title", "description", "status", "priority", "start_date", 
+        "due_date", "time_estimated", "time_spent", "assigned_to", 
+        "assigned_to_name", "attachment_url", "labels", "dependencies", "recurring"
+    }
+
+    # 4) Safely update and serialize JSON fields
     for k, v in payload.items():
-        if hasattr(t, k): 
-            setattr(t, k, v)
-            
+        if k in allowed_fields:
+            if k == "dependencies":
+                setattr(t, k, _dump_json(v, []))
+            elif k == "recurring":
+                setattr(t, k, _dump_json(v, {}))
+            elif hasattr(t, k):
+                setattr(t, k, v)
+                
+    # Apply Automations hook inline (prevents infinite recursion inherently, and explicit guard passed)
+    if t.board_id:
+        apply_automations(t, t.board_id, "update", old_status, db, from_automation)
+                
     db.commit()
     db.refresh(t)
     
     if t.board_id:
         if old_status != t.status:
-            log_activity_safe(t.board_id, "Someone", f"moved '{t.title}' {old_status}->{t.status}")
+            user_name = current_user.name if current_user.name else "Someone"
+            log_activity_safe(t.board_id, user_name, f"moved '{t.title}' {old_status}->{t.status}")
         if old_assign != t.assigned_to and t.assigned_to:
             au = db.query(models.User).filter(models.User.email == t.assigned_to).first()
             if au: 
                 create_notification_safe(au.id, t.board_id, t.id, f"You were assigned to '{t.title}'", "assign", f"Assigned: {t.title}")
         
+        # 5) Broadcast Websocket
         await manager.broadcast(t.board_id, {"type": "update"})
         
-    return t
+    # 6) Return dictionary instead of ORM Object
+    return {
+        "id": t.id,
+        "title": t.title,
+        "description": t.description,
+        "status": t.status,
+        "priority": t.priority,
+        "start_date": t.start_date,
+        "due_date": t.due_date,
+        "time_estimated": t.time_estimated,
+        "time_spent": t.time_spent,
+        "assigned_to": t.assigned_to,
+        "assigned_to_name": getattr(t, "assigned_to_name", ""),
+        "attachment_url": getattr(t, "attachment_url", ""),
+        "labels": getattr(t, "labels", ""),
+        "user_id": t.user_id,
+        "board_id": t.board_id,
+        "dependencies": _parse_json(getattr(t, "dependencies", "[]"), []),
+        "recurring": _parse_json(getattr(t, "recurring", "{}"), {})
+    }
 
 
 @app.delete("/api/tasks/{task_id}")
@@ -1348,6 +1633,29 @@ async def delete_task(task_id: int, current_user=Depends(get_current_user), db: 
         await manager.broadcast(bid, {"type": "update"})
         
     return {"ok": True}
+
+
+@app.get("/api/tasks/{task_id}/activities")
+def get_task_activities(task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.board_id:
+        utils.ensure_board_access(task.board_id, current_user, db, required_role="subscriber", action="Task activity view")
+        
+    try:
+        activities = db.query(models.Activity).filter(models.Activity.task_id == task_id).order_by(models.Activity.id.desc()).limit(50).all()
+        return [
+            {
+                "user": r.user_name,
+                "action": r.action,
+                "timestamp": getattr(r, "created_at", "")
+            }
+            for r in activities
+        ]
+    except Exception:
+        # Fallback for legacy database configurations before task_id migration
+        return []
 
 
 # ==========================================
@@ -1460,14 +1768,120 @@ async def add_comment(task_id: int, payload: schemas.CommentCreate, current_user
 
 
 # ==========================================
+#               BOARD CHAT
+# ==========================================
+
+@app.get("/api/boards/{board_id}/messages")
+def get_board_messages(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="View messages")
+    messages = db.query(BoardMessage).filter(BoardMessage.board_id == board_id).order_by(BoardMessage.id.asc()).all()
+    return [
+        {
+            "id": m.id,
+            "board_id": m.board_id,
+            "user_id": m.user_id,
+            "user_name": m.user_name,
+            "text": m.text,
+            "created_at": m.created_at
+        } for m in messages
+    ]
+
+@app.post("/api/boards/{board_id}/messages")
+async def create_board_message(board_id: int, payload: BoardMessageCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Post message")
+    
+    new_msg = BoardMessage(
+        board_id=board_id,
+        user_id=current_user.id,
+        user_name=current_user.name,
+        text=payload.text,
+        created_at=now_str()
+    )
+    db.add(new_msg)
+    db.commit()
+    db.refresh(new_msg)
+    
+    msg_data = {
+        "id": new_msg.id,
+        "board_id": new_msg.board_id,
+        "user_id": new_msg.user_id,
+        "user_name": new_msg.user_name,
+        "text": new_msg.text,
+        "created_at": new_msg.created_at
+    }
+    
+    # Broadcast the chat message to existing WebSocket clients
+    await manager.broadcast(board_id, {"type": "chat", "message": msg_data})
+    
+    return msg_data
+
+
+# ==========================================
 #               WEBSOCKETS
 # ==========================================
 
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: int):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=1008)
+        return
+        
+    db = SessionLocal()
+    user = None
+    try:
+        try:
+            from utils import SECRET_KEY, ALGORITHM
+        except ImportError:
+            SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+            ALGORITHM = os.getenv("ALGORITHM", "HS256")
+            
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise ValueError("Invalid token")
+            
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            raise ValueError("User not found")
+    except Exception:
+        db.close()
+        await websocket.close(code=1008)
+        return
+
     await manager.connect(websocket, board_id)
     try:
         while True: 
-            await websocket.receive_text()
+            data = await websocket.receive_text()
+            try:
+                parsed_data = json.loads(data)
+                if parsed_data.get("type") == "chat":
+                    text_content = parsed_data.get("text", "").strip()
+                    if text_content:
+                        new_msg = BoardMessage(
+                            board_id=board_id,
+                            user_id=user.id,
+                            user_name=user.name,
+                            text=text_content,
+                            created_at=now_str()
+                        )
+                        db.add(new_msg)
+                        db.commit()
+                        db.refresh(new_msg)
+                        
+                        msg_data = {
+                            "id": new_msg.id,
+                            "board_id": new_msg.board_id,
+                            "user_id": new_msg.user_id,
+                            "user_name": new_msg.user_name,
+                            "text": new_msg.text,
+                            "created_at": new_msg.created_at
+                        }
+                        await manager.broadcast(board_id, {"type": "chat", "message": msg_data})
+            except json.JSONDecodeError:
+                pass
     except WebSocketDisconnect:
         manager.disconnect(websocket, board_id)
+    finally:
+        db.close()
+# 1475 - 1887
