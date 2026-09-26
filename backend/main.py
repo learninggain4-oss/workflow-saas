@@ -406,7 +406,8 @@ default_allowed_origins = [
     "http://127.0.0.1:3000",
     "https://workflow-saas.netlify.app",
     "https://workflow-saas-cof-z.onrender.com",
-    "https://workflow-saas-production.up.railway.app"
+    "https://workflow-saas-production.up.railway.app",
+    "https://workflow-saas-sjrk.onrender.com"
 ]
 
 cors_origins = [
