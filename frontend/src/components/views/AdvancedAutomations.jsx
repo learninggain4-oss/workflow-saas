@@ -8,6 +8,27 @@ const EMPTY_RULE = {
   is_active: true,
 };
 
+// What each action's Value actually is, so nobody has to guess from a generic
+// "Enter value..." placeholder. `assign_to` is an email because Task.assigned_to
+// is matched against users.email - not a username.
+const ACTION_FIELDS = {
+  send_email: {
+    placeholder: 'client@gmail.com',
+    hint: 'The address that receives the notification.',
+    type: 'email',
+  },
+  assign_to: {
+    placeholder: 'teammate@company.com',
+    hint: 'Email of someone who already has an account. Unknown addresses are skipped.',
+    type: 'email',
+  },
+  add_label: {
+    placeholder: 'needs-review',
+    hint: 'Any label to add to the task when this rule fires.',
+    type: 'text',
+  },
+};
+
 // action_payload is a JSON *string* column on the server. Convert to/from the
 // flat `target` string the builder form uses.
 const targetToPayload = (actionType, target) => {
@@ -40,6 +61,7 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
   // so they need a lead time. Everything else ignores this field.
   const isDueDate = newRule.trigger_type === 'due_date';
   const leadDays = Number.parseInt(newRule.trigger_value, 10);
+  const actionField = ACTION_FIELDS[newRule.action_type];
   const leadDaysValid = Number.isInteger(leadDays) && leadDays >= 0 && leadDays <= 90;
 
   const loadRules = useCallback(async () => {
@@ -59,7 +81,9 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
 
   const saveRule = async () => {
     if (!newRule.target.trim()) {
-      alert(t('Please provide a target value (e.g. Email address or Username)'));
+      // The hint under the field already says what this action expects, so the
+      // message stays format-agnostic instead of guessing.
+      alert(t('Please provide a target value'));
       return;
     }
     if (isDueDate && !leadDaysValid) {
@@ -203,19 +227,28 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
                   <option value="send_email">{t('Send Email To')}</option>
                   <option value="assign_to">{t('Assign To')}</option>
                   <option value="add_label">{t('Add Label')}</option>
-                  <option value="move_board">{t('Move to Board')}</option>
+                  {/* "Move to Board" was here and removed on purpose: no
+                      automation path implements it, so it only produced rules
+                      that saved successfully and never did anything. Relocating
+                      a task also needs the destination board's membership
+                      checked, which is not something a rule should bypass. */}
                 </select>
               </div>
 
               <div className="flex-1 w-full">
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">{t('Value')}</label>
+                <label htmlFor="automation-target" className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">{t('Value')}</label>
                 <input
-                  type="text"
+                  id="automation-target"
+                  type={actionField?.type || 'text'}
+                  aria-describedby="automation-target-hint"
                   className={`w-full p-2 border rounded-md ${inputCls}`}
-                  placeholder={newRule.action_type === 'send_email' ? 'client@email.com' : t('Enter value...')}
+                  placeholder={actionField?.placeholder || ''}
                   value={newRule.target}
                   onChange={(e) => setNewRule({...newRule, target: e.target.value})}
                 />
+                <p id="automation-target-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {actionField ? t(actionField.hint) : t('Enter value...')}
+                </p>
               </div>
             </div>
 

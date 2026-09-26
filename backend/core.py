@@ -14,7 +14,7 @@ import models
 import schemas
 import utils
 import templates_catalog
-from sqlalchemy import Boolean, Column, Integer, String, Text
+from sqlalchemy import Boolean, Column, Integer, String, Text, func
 from pydantic import BaseModel
 from database import SessionLocal, get_db
 from utils import create_notification_safe, create_token, get_current_user, get_user_boards, log_activity_safe, manager, now_str, pwd_context, send_email_safe
@@ -161,6 +161,28 @@ TASK_WRITABLE_FIELDS = {
 }
 
 
+def _resolve_assignee(db, payload):
+    """Resolve an assign_to target to the email of a user who actually exists.
+
+    Task.assigned_to holds an email address - update_task matches it against
+    users.email before notifying anyone. The automation used to write whatever
+    string it was handed, so a typo silently set a field that no user could ever
+    satisfy and no notification could ever fire. Returns None when the target
+    does not resolve, so the caller skips instead of storing a dead value.
+    """
+    raw = str(payload.get("email") or payload.get("assigned_to") or "").strip()
+    if not raw or "@" not in raw:
+        if raw:
+            print(f"[automations] assign_to target {raw!r} is not an email address; skipping", flush=True)
+        return None
+
+    user = db.query(models.User).filter(func.lower(models.User.email) == raw.lower()).first()
+    if user is None:
+        print(f"[automations] assign_to target {raw!r} matches no user; skipping", flush=True)
+        return None
+    return user.email
+
+
 def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db: Session):
     """Executes board automation rules against the in-session task object.
 
@@ -199,7 +221,7 @@ def apply_automations(task: models.Task, board_id: int, event: str, old_status: 
                     ).start()
                     
             elif rule.action_type == "assign_to":
-                assignee = payload.get("email") or payload.get("assigned_to")
+                assignee = _resolve_assignee(db, payload)
                 if assignee and task.assigned_to != assignee:
                     task.assigned_to = assignee
                     modified = True
@@ -333,7 +355,7 @@ def run_due_date_automations(db, today=None):
                         task.labels = ",".join(labels)
 
             elif action_type == "assign_to":
-                assignee = payload.get("email") or payload.get("assigned_to")
+                assignee = _resolve_assignee(db, payload)
                 if assignee and task.assigned_to != assignee:
                     task.assigned_to = assignee
 
