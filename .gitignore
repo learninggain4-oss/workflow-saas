@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+
+# Secrets - never commit. Only .env.example is tracked.
+.env
+.env.*
+!.env.example
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local databases (SQLite is per-developer state)
+*.db
+*.sqlite3
+
+# Tooling
+.vscode/
+.idea/
+.DS_Store
+npm-debug.log*
+yarn-error.log*
