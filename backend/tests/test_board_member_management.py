@@ -23,6 +23,8 @@ def clean_database():
         db = SessionLocal()
         try:
             for model in (
+                main.BoardMessage,
+                main.Automation,
                 models.Notification,
                 models.Activity,
                 models.Comment,
@@ -51,7 +53,29 @@ def test_member_alias_uses_editor_permissions():
         "deleteTasks": True,
         "manageMembers": False,
         "manageBoard": False,
+        # Added with the automations work; the frontend gates the Role
+        # Distribution panel on viewRoleDistribution.
+        "viewRoleDistribution": True,
+        "viewAutomations": True,
+        "manageAutomations": False,
     }
+
+
+def test_permission_keys_match_the_declared_contract():
+    assert set(main.utils.PERMISSION_KEYS) == {
+        "viewBoard",
+        "createTasks",
+        "editTasks",
+        "deleteTasks",
+        "manageMembers",
+        "manageBoard",
+        "viewRoleDistribution",
+        "viewAutomations",
+        "manageAutomations",
+    }
+    for role in ("owner", "administrator", "editor", "guest", "subscriber"):
+        defaults = main.utils.default_permissions_for_role(role)
+        assert set(defaults) == set(main.utils.PERMISSION_KEYS), role
 
 
 def test_role_aliases_are_normalized_to_canonical_roles():

@@ -136,10 +136,10 @@ def send_email_safe(to_email: str, subject: str, html_body: str) -> bool:
     print(f"[EMAIL] Failed to send message to {to_email} via configured SMTP relay")
     return False
 
-def log_activity_safe(board_id, user_name, action):
+def log_activity_safe(board_id, user_name, action, task_id=None):
     try:
         db2 = SessionLocal()
-        db2.add(models.Activity(board_id=board_id, user_name=user_name, action=action, created_at=now_str()))
+        db2.add(models.Activity(board_id=board_id, user_name=user_name, action=action, created_at=now_str(), task_id=task_id))
         db2.commit()
         db2.close()
     except: pass
@@ -384,5 +384,3 @@ def ensure_board_access(board_id: int, user, db: Session, required_role: str = "
         raise HTTPException(status_code=403, detail=f"{action} requires {resolved_permission} permission")
 
     return board
-
-# 375 - 388

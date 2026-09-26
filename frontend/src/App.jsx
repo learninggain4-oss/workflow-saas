@@ -1,6 +1,6 @@
 // frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language), Offline PWA Sync & Task Activity Log
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, WS_BASE } from './services/api';
+import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
 
 // NEW: Offline Sync imports
@@ -99,6 +99,7 @@ export default function App() {
   
   // NEW STATE FOR CHAT
   const [isChatOpen, setIsChatOpen] = useState(false); 
+  const [chatMessages, setChatMessages] = useState([]);
 
   // NEW STATE FOR RECURRING TASKS
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
@@ -328,6 +329,10 @@ export default function App() {
     try {
       const cRes = await comments.getAll(id); setTaskComments(cRes.data);
       const sRes = await subtasks.getAll(id); setSubtasks(sRes.data);
+      // The task payload deliberately omits activities, so the Activity Log
+      // needs its own fetch.
+      const aRes = await tasks.getActivities(id).catch(() => ({ data: [] }));
+      setEditing(prev => (prev && String(prev.id) === String(id) ? { ...prev, activities: aRes.data || [] } : prev));
     } catch {}
   };
 
@@ -338,12 +343,19 @@ export default function App() {
     fetchBoardData(selectedBoard);
     // Close chat if switching board
     setIsChatOpen(false);
+    setChatMessages([]);
+    if (!selectedBoard || isOffline) return;
+    boardChat.getMessages(selectedBoard)
+      .then(res => setChatMessages(res.data || []))
+      .catch(() => setChatMessages([]));
   }, [selectedBoard]);
   useEffect(() => { if (editing) fetchTaskDetails(editing.id); }, [editing]);
 
   useEffect(() => {
     if (!selectedBoard ||!token || isOffline) return;
-    const ws = new WebSocket(`${WS_BASE}/ws/${selectedBoard}`);
+    // The server validates ?token= and closes with 1008 when it is missing, and
+    // also checks board access before accepting the socket.
+    const ws = new WebSocket(`${WS_BASE}/ws/${selectedBoard}?token=${encodeURIComponent(token)}`);
     ws.onmessage = (e) => {
       try {
         const d = JSON.parse(e.data);
@@ -351,11 +363,13 @@ export default function App() {
           fetchBoardData();
           notifs.getAll().then(res => setNotifications(res.data));
           if (editing) fetchTaskDetails(editing.id);
+        } else if (d.type === "chat") {
+          setChatMessages(prev => prev.some(m => String(m.id) === String(d.message?.id)) ? prev : [...prev, d.message]);
         }
       } catch {}
     };
     return () => { try { ws.close(); } catch {} };
-  }, [selectedBoard, isOffline]);
+  }, [selectedBoard, isOffline, token]);
 
   const handleLogin = async () => {
     const f = new URLSearchParams(); f.append("username", email); f.append("password", password);
@@ -679,6 +693,17 @@ export default function App() {
     setIsRecurringModalOpen(true);
   };
 
+  const sendChatMessage = async (text) => {
+    if (!selectedBoard || !text?.trim()) return;
+    try {
+      // The server broadcasts to every socket on the board, so do not also
+      // append locally or the message renders twice.
+      await boardChat.sendMessage(selectedBoard, text.trim());
+    } catch (e) {
+      alert(e.response?.data?.detail || "Failed to send message");
+    }
+  };
+
   const analytics = useMemo(() => {
     const total = tasksList.length;
     const done = tasksList.filter(t => t.status === "done").length;
@@ -746,7 +771,7 @@ export default function App() {
           ) : viewMode === "team"? (
             <TeamPage {...{ bgCard, setViewMode, boardMembers, registeredUsers, setRegisteredUsers, myRole, myPermissions, tasksList, selectedBoard, inviteEmail, setInviteEmail, invitePassword, setInvitePassword, inviteRole, setInviteRole, inviteUser, currentEmail, updateMemberRole, removeMember, t, changeLanguage: i18n.changeLanguage }} />
           ) : viewMode === "automations"? (
-            <AdvancedAutomations {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn, t, changeLanguage: i18n.changeLanguage }} />
+            <AdvancedAutomations {...{ bgCard, setViewMode, darkMode, inputCls, primaryBtn, boardId: selectedBoard, automationsApi, canManage: Boolean(myPermissions.manageAutomations || myPermissions.manageBoard), t, changeLanguage: i18n.changeLanguage }} />
           ) : viewMode === "integrations"? (
             <>
               <IntegrationsPage {...{ bgCard, setViewMode, securitySettings, darkMode, inputCls, primaryBtn, t, changeLanguage: i18n.changeLanguage }} />
@@ -800,6 +825,11 @@ export default function App() {
         selectedBoard={selectedBoard} 
         boardMembers={boardMembers} 
         userData={userData} 
+        messages={chatMessages}
+        setMessages={setChatMessages}
+        sendMessage={sendChatMessage}
+        chatApi={boardChat}
+        canPost={canEdit}
         bgCard={bgCard} 
         inputCls={inputCls} 
         primaryBtn={primaryBtn} 

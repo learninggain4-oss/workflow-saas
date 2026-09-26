@@ -108,6 +108,19 @@ export const tasks = {
   create: (data) => api.post('/api/tasks', data),
   update: (id, data) => api.put(`/api/tasks/${id}`, data),
   delete: (id) => api.delete(`/api/tasks/${id}`),
+  getActivities: (id) => api.get(`/api/tasks/${id}/activities`),
+};
+
+export const automations = {
+  getAll: (boardId) => api.get(`/api/boards/${boardId}/automations`),
+  create: (boardId, data) => api.post(`/api/boards/${boardId}/automations`, data),
+  update: (boardId, ruleId, data) => api.put(`/api/boards/${boardId}/automations/${ruleId}`, data),
+  delete: (boardId, ruleId) => api.delete(`/api/boards/${boardId}/automations/${ruleId}`),
+};
+
+export const boardChat = {
+  getMessages: (boardId) => api.get(`/api/boards/${boardId}/messages`),
+  sendMessage: (boardId, text) => api.post(`/api/boards/${boardId}/messages`, { text }),
 };
 
 export const subtasks = {

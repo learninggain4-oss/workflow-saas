@@ -276,7 +276,9 @@ export default function TemplatesPage({ bgCard, setViewMode }) {
       const bRes = await boardsApi.create({ name: t.name, description: t.description });
       const bId = bRes.data.id;
       for (const tile of t.tiles) {
-        await tasksApi.create({ boardId: bId, title: tile, status: 'To Do', priority: 'Medium' });
+        // board_id (not boardId) and lowercase status/priority, otherwise the
+        // task is created with board_id=NULL and never appears on the board.
+        await tasksApi.create({ board_id: bId, title: tile, status: 'todo', priority: 'medium' });
       }
       setViewMode('boards');
     } catch (error) {

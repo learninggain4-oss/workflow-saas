@@ -1,21 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatMentions } from '../../utils/helpers';
 
-export default function BoardChat({ isOpen, onClose, selectedBoard, boardMembers, userData, bgCard, inputCls, primaryBtn, subCard, darkMode }) {
-  const [messages, setMessages] = useState([]);
+export default function BoardChat({ isOpen, onClose, selectedBoard, boardMembers, userData, messages, setMessages, sendMessage, canPost, bgCard, inputCls, primaryBtn, subCard, darkMode }) {
   const [input, setInput] = useState("");
   const [mentionQuery, setMentionQuery] = useState(null);
   const inputRef = useRef(null);
   const chatEndRef = useRef(null);
-
-  // Load chats (Here simulating with localStorage for the specific board)
-  useEffect(() => {
-    if (selectedBoard) {
-      const savedChats = localStorage.getItem(`board_chat_${selectedBoard}`);
-      if (savedChats) setMessages(JSON.parse(savedChats));
-      else setMessages([]);
-    }
-  }, [selectedBoard]);
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -25,11 +15,11 @@ export default function BoardChat({ isOpen, onClose, selectedBoard, boardMembers
   const handleTextChange = (e) => {
     const val = e.target.value;
     setInput(val);
-    
+
     // Check for @mention typing
     const words = val.split(" ");
     const lastWord = words[words.length - 1];
-    
+
     if (lastWord.startsWith("@")) {
       setMentionQuery(lastWord.slice(1).toLowerCase());
     } else {
@@ -46,26 +36,22 @@ export default function BoardChat({ isOpen, onClose, selectedBoard, boardMembers
     inputRef.current?.focus();
   };
 
-  const sendMessage = () => {
-    if (!input.trim() || !selectedBoard) return;
-    const newMsg = {
-      id: Date.now(),
-      text: input,
-      sender: userData?.name || 'User',
-      senderInitial: (userData?.name || 'U').charAt(0).toUpperCase(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    
-    const updatedMessages = [...messages, newMsg];
-    setMessages(updatedMessages);
-    localStorage.setItem(`board_chat_${selectedBoard}`, JSON.stringify(updatedMessages));
+  const handleSend = async () => {
+    if (!input.trim() || !selectedBoard || !canPost) return;
+    const text = input;
     setInput("");
     setMentionQuery(null);
+    // The message is appended by the WebSocket broadcast, not locally.
+    await sendMessage(text);
   };
 
   if (!isOpen) return null;
 
   const filteredMembers = boardMembers.filter(m => m.name.toLowerCase().includes(mentionQuery || ""));
+  const myId = String(userData?.id ?? userData?.email ?? "");
+  const mine = (msg) =>
+    (msg.user_id != null && myId && String(msg.user_id) === myId) ||
+    (!msg.user_id && msg.sender === userData?.name);
 
   return (
     <div className={`fixed bottom-24 right-6 w-80 md:w-96 h-[500px] flex flex-col shadow-2xl rounded-2xl border z-50 overflow-hidden ${bgCard} transition-all`}>
@@ -88,22 +74,30 @@ export default function BoardChat({ isOpen, onClose, selectedBoard, boardMembers
             <p className="text-xs mt-1">Start chatting with your team!</p>
           </div>
         )}
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-2 ${msg.sender === userData?.name ? 'flex-row-reverse' : ''}`}>
+        {messages.map(msg => {
+          const own = mine(msg);
+          const senderName = msg.user_name || msg.sender || 'User';
+          const initial = (senderName || 'U').charAt(0).toUpperCase();
+          const stamp = msg.created_at
+            ? new Date(msg.created_at.replace(' ', 'T')).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : msg.time;
+          return (
+          <div key={msg.id} className={`flex gap-2 ${own ? 'flex-row-reverse' : ''}`}>
             <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-700 dark:text-indigo-400 font-bold text-xs shrink-0">
-              {msg.senderInitial}
+              {msg.senderInitial || initial}
             </div>
-            <div className={`flex flex-col ${msg.sender === userData?.name ? 'items-end' : 'items-start'} max-w-[75%]`}>
+            <div className={`flex flex-col ${own ? 'items-end' : 'items-start'} max-w-[75%]`}>
               <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{msg.sender}</span>
-                <span className="text-[10px] text-gray-400">{msg.time}</span>
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{senderName}</span>
+                <span className="text-[10px] text-gray-400">{stamp}</span>
               </div>
-              <div className={`p-2.5 rounded-xl text-sm shadow-sm ${msg.sender === userData?.name ? 'bg-indigo-600 text-white rounded-tr-none' : `${subCard} rounded-tl-none`}`}>
+              <div className={`p-2.5 rounded-xl text-sm shadow-sm ${own ? 'bg-indigo-600 text-white rounded-tr-none' : `${subCard} rounded-tl-none`}`}>
                 <span className="whitespace-pre-wrap break-words">{formatMentions(msg.text)}</span>
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
         <div ref={chatEndRef} />
       </div>
 
@@ -128,15 +122,16 @@ export default function BoardChat({ isOpen, onClose, selectedBoard, boardMembers
         )}
 
         <div className="flex gap-2">
-          <input 
+          <input
             ref={inputRef}
-            value={input} 
-            onChange={handleTextChange} 
-            onKeyDown={e => e.key === 'Enter' && sendMessage()} 
-            placeholder="Type a message... (@ to mention)" 
-            className={`border flex-1 p-2 rounded-xl text-sm shadow-sm ${inputCls}`} 
+            value={input}
+            onChange={handleTextChange}
+            onKeyDown={e => e.key === 'Enter' && handleSend()}
+            disabled={!canPost}
+            placeholder={canPost ? "Type a message... (@ to mention)" : "You do not have permission to post in this board"}
+            className={`border flex-1 p-2 rounded-xl text-sm shadow-sm ${inputCls} ${!canPost ? 'opacity-60 cursor-not-allowed' : ''}`}
           />
-          <button onClick={sendMessage} className={`px-4 py-2 rounded-xl text-sm font-semibold shadow-sm flex items-center justify-center ${primaryBtn}`}>
+          <button onClick={handleSend} disabled={!canPost} className={`px-4 py-2 rounded-xl text-sm font-semibold shadow-sm flex items-center justify-center ${primaryBtn} ${!canPost ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
           </button>
         </div>

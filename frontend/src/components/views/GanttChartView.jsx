@@ -22,11 +22,24 @@ export default function GanttChartView({ tasksList, setEditing, bgCard, darkMode
 
   const calculateTaskStyle = (task) => {
     const today = new Date();
-    // Use created date or today minus 2 days as default start
-    const startDate = task.created_at ? new Date(task.created_at) : new Date(today.setDate(today.getDate() - 2));
-    
+    // Prefer the task's own start date, then created_at. Both are YYYY-MM-DD
+    // (or "YYYY-MM-DD HH:MM:SS") strings, so parse them as local dates rather
+    // than letting the Date constructor treat them as UTC.
+    const parseLocal = (value) => {
+      if (!value) return null;
+      const d = new Date(String(value).replace(' ', 'T'));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    let startDate = parseLocal(task.start_date) || parseLocal(task.created_at);
+    if (!startDate) {
+      startDate = new Date(today.getTime());
+      startDate.setDate(startDate.getDate() - 2);
+    }
+
     // Use due date or start plus 3 days as default end
-    const endDate = task.due_date ? new Date(task.due_date) : new Date(new Date(startDate).setDate(startDate.getDate() + 3));
+    const endDate = parseLocal(task.due_date)
+      || new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000);
 
     const monthStart = timelineDates[0];
     const monthEnd = timelineDates[timelineDates.length - 1];

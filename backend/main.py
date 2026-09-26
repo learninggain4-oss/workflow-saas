@@ -105,6 +105,7 @@ def ensure_database_migrations():
                     ("comments", "created_at", "VARCHAR DEFAULT ''"),
                     ("board_members", "role", "VARCHAR DEFAULT 'editor'"),
                     ("board_members", "permissions", "TEXT DEFAULT '{}'"),
+                    ("boards", "description", "TEXT DEFAULT ''"),
                     ("activities", "task_id", "INTEGER"),
                 ]
                 tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
@@ -157,6 +158,9 @@ def ensure_database_migrations():
                     ("role", "VARCHAR DEFAULT 'editor'"),
                     ("permissions", "TEXT DEFAULT '{}'"),
                 ],
+                "boards": [
+                    ("description", "TEXT DEFAULT ''"),
+                ],
                 "activities": [
                     ("task_id", "INTEGER"),
                 ]
@@ -192,15 +196,21 @@ models.Base.metadata.create_all(bind=engine)
 
 
 def ensure_task_timestamps():
+    """Backfill tasks.created_at for rows written before the column existed.
+
+    Task-scoped activity rows do not exist yet, so correlating on
+    activities.task_id resolves to NULL for every task. Fall back to the
+    earliest activity on the same board, which at least places the task on the
+    timeline near real activity instead of "now"."""
     try:
         with engine.connect() as conn:
             conn.execute(text("""
-                UPDATE tasks 
+                UPDATE tasks
                 SET created_at = COALESCE((
-                    SELECT created_at FROM activities 
-                    WHERE activities.task_id = tasks.id 
-                    ORDER BY id ASC LIMIT 1
-                ), '')
+                    SELECT a.created_at FROM activities a
+                    WHERE a.board_id = tasks.board_id AND a.created_at <> ''
+                    ORDER BY a.id ASC LIMIT 1
+                ), created_at, '')
                 WHERE created_at IS NULL OR created_at = ''
             """))
             conn.commit()
@@ -249,6 +259,53 @@ def _dump_json(value, default):
     return json.dumps(value, ensure_ascii=False)
 
 
+def _to_int(value):
+    """Dependency ids travel through JSON as strings. Postgres compares
+    integer = text and raises OperatorError, so normalise before .in_()."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+# Columns that may be written through the task endpoints. `id`, `user_id` and
+# `board_id` are deliberately excluded: `board_id` would let a caller move a task
+# onto a board they have no access to, since ensure_board_access only validates
+# the task's original board.
+TASK_WRITABLE_FIELDS = {
+    "title", "description", "status", "priority", "start_date", "due_date",
+    "time_estimated", "time_spent", "assigned_to", "assigned_to_name",
+    "attachment_url", "labels", "dependencies", "recurring",
+}
+
+
+def _task_response(t: models.Task) -> dict:
+    """Single serialisation point for tasks. `dependencies`/`recurring` are stored
+    as TEXT but must be returned as real JSON types or the frontend's
+    `currentDeps.includes(String(t.id))` check breaks on the second edit."""
+    return {
+        "id": t.id,
+        "title": t.title,
+        "description": t.description,
+        "status": t.status,
+        "priority": t.priority,
+        "start_date": t.start_date,
+        "due_date": t.due_date,
+        "time_estimated": t.time_estimated,
+        "time_spent": t.time_spent,
+        "assigned_to": t.assigned_to,
+        "assigned_to_name": getattr(t, "assigned_to_name", ""),
+        "attachment_url": getattr(t, "attachment_url", ""),
+        "labels": getattr(t, "labels", ""),
+        "user_id": t.user_id,
+        "board_id": t.board_id,
+        "dependencies": _parse_json(getattr(t, "dependencies", "[]"), []),
+        "recurring": _parse_json(getattr(t, "recurring", ""), None),
+        "created_at": getattr(t, "created_at", "") or "",
+        "updated_at": getattr(t, "updated_at", "") or "",
+    }
+
+
 def _board_response(board, current_user, db: Session):
     role = utils.get_board_member_role(board.id, current_user.id, db)
     if role is None and utils.normalize_role(getattr(current_user, "role", "")) == "owner":
@@ -268,17 +325,18 @@ def _board_response(board, current_user, db: Session):
     return {
         "id": board.id,
         "name": board.name,
+        "description": getattr(board, "description", "") or "",
         "owner_id": board.owner_id,
         "role": role,
         "permissions": permissions,
     }
 
 
-def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db: Session, from_automation: bool = False):
-    """Executes board automation rules. Guards against infinite recursion via from_automation flag."""
-    if from_automation:
-        return False
-        
+def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db: Session):
+    """Executes board automation rules against the in-session task object.
+
+    Callers commit once afterwards, so a rule that changes the task cannot
+    re-enter update_task and recurse. The changes ride the caller's commit."""
     automations = db.query(Automation).filter(Automation.board_id == board_id, Automation.is_active == True).all()
     modified = False
     
@@ -886,15 +944,31 @@ def root():
 
 @app.post("/api/register")
 def register(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(models.User).filter(models.User.email == req.email).first():
+    email = (req.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if db.query(models.User).filter(models.User.email == email).first():
         raise HTTPException(status_code=400, detail="User exists")
 
+    # The frontend sends a role on signup, but honouring it verbatim would let a
+    # crafted request self-assign "owner". Only non-privileged roles are
+    # self-serviceable; owner/administrator are granted by an existing owner via
+    # PUT /api/admin/users/{user_id}.
+    self_service_roles = {"editor", "guest", "subscriber"}
+    requested = utils.normalize_role(req.role)
     is_first_user = db.query(models.User).count() == 0
+    if is_first_user:
+        assigned_role = "owner"
+    elif requested in self_service_roles:
+        assigned_role = requested
+    else:
+        assigned_role = "administrator"
+
     u = models.User(
-        email=req.email,
+        email=email,
         name=req.name,
         password_hash=pwd_context.hash(req.password),
-        role="owner" if is_first_user else "administrator",
+        role=assigned_role,
     )
     db.add(u)
     db.commit()
@@ -909,9 +983,11 @@ def register(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
 
 @app.post("/api/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    # register normalises to lowercase, so match the same way. The frontend
+    # lowercases the username too, but older rows may predate that.
+    user = db.query(models.User).filter(models.User.email == (form_data.username or "").strip().lower()).first()
     if not user or not pwd_context.verify(form_data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Wrong password")
+        raise HTTPException(status_code=401, detail="Wrong email or password")
     
     return {
         "access_token": create_token({"sub": user.email}), 
@@ -1124,16 +1200,23 @@ def test_email(current_user=Depends(get_current_user)):
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), current_user=Depends(get_current_user)):
-    contents = await file.read()
+    # The 5MB / 2MB limits are enforced only in the browser, so an untrusted
+    # client can otherwise push an arbitrary body that gets base64'd and stored
+    # on the task. Cap it here too.
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds the 5MB limit")
+
     if CLOUDINARY_ENABLED:
         try:
             result = cloudinary.uploader.upload(contents, folder="workflow-saas", resource_type="auto")
             return {"url": result.get("secure_url")}
         except Exception:
             pass
-            
+
     base64_encoded = base64.b64encode(contents).decode('utf-8')
-    return {"url": f"data:{file.content_type};base64,{base64_encoded}"}
+    return {"url": f"data:{file.content_type or 'application/octet-stream'};base64,{base64_encoded}"}
 
 
 # ==========================================
@@ -1159,7 +1242,7 @@ def create_board(payload: schemas.BoardCreate, current_user=Depends(get_current_
         if board_count >= 3:
             raise HTTPException(status_code=402, detail="Free plan limit reached (Max 3 boards).")
             
-    b = models.Board(name=payload.name, owner_id=current_user.id)
+    b = models.Board(name=payload.name, description=payload.description or "", owner_id=current_user.id)
     db.add(b)
     db.commit()
     db.refresh(b)
@@ -1410,13 +1493,13 @@ def delete_notif(notif_id: int, current_user=Depends(get_current_user), db: Sess
 
 @app.get("/api/boards/{board_id}/automations")
 def get_automations(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="View automations", required_permission="manageBoard")
+    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="View automations", required_permission="viewAutomations")
     return db.query(Automation).filter(Automation.board_id == board_id).all()
 
 
 @app.post("/api/boards/{board_id}/automations")
 def create_automation(board_id: int, payload: AutomationCreatePayload, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Create automation", required_permission="manageBoard")
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Create automation", required_permission="manageAutomations")
     rule = Automation(
         board_id=board_id,
         trigger_type=payload.trigger_type,
@@ -1433,7 +1516,7 @@ def create_automation(board_id: int, payload: AutomationCreatePayload, current_u
 
 @app.put("/api/boards/{board_id}/automations/{rule_id}")
 def update_automation(board_id: int, rule_id: int, payload: AutomationCreatePayload, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Update automation", required_permission="manageBoard")
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Update automation", required_permission="manageAutomations")
     rule = db.query(Automation).filter(Automation.id == rule_id, Automation.board_id == board_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Automation not found")
@@ -1451,7 +1534,7 @@ def update_automation(board_id: int, rule_id: int, payload: AutomationCreatePayl
 
 @app.delete("/api/boards/{board_id}/automations/{rule_id}")
 def delete_automation(board_id: int, rule_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Delete automation", required_permission="manageBoard")
+    utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Delete automation", required_permission="manageAutomations")
     rule = db.query(Automation).filter(Automation.id == rule_id, Automation.board_id == board_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Automation not found")
@@ -1469,35 +1552,14 @@ def delete_automation(board_id: int, rule_id: int, current_user=Depends(get_curr
 def list_tasks(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Task list")
     tasks = db.query(models.Task).filter(models.Task.board_id == board_id).all()
-    
-    # Recommendation: Activities are kept in their separate endpoint 
-    # /api/boards/{board_id}/activities to avoid bloating this payload.
-    
-    return [{
-        "id": t.id,
-        "title": t.title,
-        "description": t.description,
-        "status": t.status,
-        "priority": t.priority,
-        "start_date": t.start_date,
-        "due_date": t.due_date,
-        "time_estimated": t.time_estimated,
-        "time_spent": t.time_spent,
-        "assigned_to": t.assigned_to,
-        "assigned_to_name": getattr(t, "assigned_to_name", ""),
-        "attachment_url": getattr(t, "attachment_url", ""),
-        "labels": getattr(t, "labels", ""),
-        "user_id": t.user_id,
-        "board_id": t.board_id,
-        "dependencies": _parse_json(getattr(t, "dependencies", "[]"), []),
-        "recurring": _parse_json(getattr(t, "recurring", "{}"), None)
-    } for t in tasks]
+
+    # Activities are exposed separately via /api/tasks/{task_id}/activities to
+    # keep this payload small.
+    return [_task_response(t) for t in tasks]
 
 
 @app.post("/api/tasks")
 async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    from_automation = payload.dict().get("_from_automation", False) if hasattr(payload, "dict") else False
-    
     if payload.board_id:
         utils.ensure_board_access(payload.board_id, current_user, db, required_role="editor", action="Task creation", required_permission="createTasks")
         board_owner = db.query(models.Board).filter(models.Board.id == payload.board_id).first()
@@ -1506,113 +1568,101 @@ async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_curr
             task_count = db.query(models.Task).filter(models.Task.board_id == payload.board_id).count()
             if owner_u and owner_u.subscription_tier == "free" and task_count >= 20:
                 raise HTTPException(status_code=402, detail="Board limit reached (20 tasks for Free plan).")
-    
-    t = models.Task(**payload.dict(), user_id=current_user.id)
+
+    # dependencies/recurring are TEXT columns; binding the parsed Python objects
+    # directly makes the driver reject them ("can't adapt type 'list'" on psycopg2).
+    # board_id is set explicitly below: it is excluded from TASK_WRITABLE_FIELDS
+    # so that updates can never relocate a task to another board.
+    task_kwargs = {
+        k: v for k, v in payload.model_dump().items()
+        if k in TASK_WRITABLE_FIELDS or k == "board_id"
+    }
+    task_kwargs["board_id"] = payload.board_id
+    task_kwargs["dependencies"] = _dump_json(task_kwargs.get("dependencies") or [], [])
+    task_kwargs["recurring"] = _dump_json(task_kwargs.get("recurring"), {}) if task_kwargs.get("recurring") else ""
+    stamp = now_str()
+    task_kwargs["created_at"] = stamp
+    task_kwargs["updated_at"] = stamp
+
+    t = models.Task(**task_kwargs, user_id=current_user.id)
     db.add(t)
     db.commit()
     db.refresh(t)
-    
+
     if payload.board_id:
-        log_activity_safe(payload.board_id, current_user.name, f"created task '{payload.title}'")
-        
-        # Apply Automations hook
-        modified = apply_automations(t, payload.board_id, "create", "", db, from_automation)
-        if modified:
+        log_activity_safe(payload.board_id, current_user.name, f"created task '{payload.title}'", task_id=t.id)
+
+        if apply_automations(t, payload.board_id, "create", "", db):
+            t.updated_at = now_str()
             db.commit()
             db.refresh(t)
-            
+
         await manager.broadcast(payload.board_id, {"type": "update"})
-        
-    return t
+
+    return _task_response(t)
 
 
 @app.put("/api/tasks/{task_id}")
-async def update_task(task_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    from_automation = payload.get("_from_automation", False)
-    
-    # 1) Reject id, user_id, board_id explicitly
-    restricted_keys = {"id", "user_id", "board_id"}
-    if any(k in payload for k in restricted_keys):
-        raise HTTPException(status_code=400, detail="Cannot update id, user_id, or board_id")
-
+async def update_task(task_id: int, payload: schemas.TaskUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
-        raise HTTPException(status_code=404)
-        
+        raise HTTPException(status_code=404, detail="Task not found")
+
     utils.ensure_board_access(t.board_id, current_user, db, required_role="editor", action="Task update", required_permission="editTasks")
 
-    # 2) Blocker validation: Prevent changing status to 'doing' or 'done' if dependencies aren't done
-    new_status = payload.get("status", t.status)
-    if new_status in ["doing", "done"]:
-        deps_data = payload.get("dependencies", getattr(t, "dependencies", "[]"))
-        deps_list = _parse_json(deps_data, [])
-        if deps_list:
-            dep_tasks = db.query(models.Task).filter(models.Task.id.in_(deps_list)).all()
-            for dt in dep_tasks:
+    # TaskUpdate declares no id/user_id/board_id field, so Pydantic drops them.
+    # This blocks primary-key and cross-board writes while still accepting the full
+    # task object the offline queue replays (App.jsx saveEdit -> saveOfflineAction).
+    changes = payload.model_dump(exclude_unset=True)
+
+    old_status, old_assign, old_title = t.status, t.assigned_to, t.title
+
+    # Blocker validation: doing/done requires every dependency to be done.
+    new_status = changes.get("status", t.status)
+    if new_status in ("doing", "done"):
+        raw_deps = changes.get("dependencies", getattr(t, "dependencies", "[]"))
+        dep_ids = [d for d in (_to_int(x) for x in (_parse_json(raw_deps, []) or [])) if d is not None]
+        if dep_ids:
+            for dt in db.query(models.Task).filter(models.Task.id.in_(dep_ids)).all():
                 if dt.status != "done":
                     raise HTTPException(
-                        status_code=400, 
+                        status_code=400,
                         detail=f"Cannot change status to '{new_status}' because dependency task '{dt.title}' is not done."
                     )
 
-    old_status, old_assign = t.status, t.assigned_to
-    
-    # 3) Whitelist fields
-    allowed_fields = {
-        "title", "description", "status", "priority", "start_date", 
-        "due_date", "time_estimated", "time_spent", "assigned_to", 
-        "assigned_to_name", "attachment_url", "labels", "dependencies", "recurring"
-    }
+    for k, v in changes.items():
+        if k not in TASK_WRITABLE_FIELDS:
+            continue
+        if k == "dependencies":
+            setattr(t, k, _dump_json([str(d) for d in (_to_int(x) for x in (v or [])) if d is not None], []))
+        elif k == "recurring":
+            setattr(t, k, _dump_json(v, {}) if v else "")
+        else:
+            setattr(t, k, v)
 
-    # 4) Safely update and serialize JSON fields
-    for k, v in payload.items():
-        if k in allowed_fields:
-            if k == "dependencies":
-                setattr(t, k, _dump_json(v, []))
-            elif k == "recurring":
-                setattr(t, k, _dump_json(v, {}))
-            elif hasattr(t, k):
-                setattr(t, k, v)
-                
-    # Apply Automations hook inline (prevents infinite recursion inherently, and explicit guard passed)
-    if t.board_id:
-        apply_automations(t, t.board_id, "update", old_status, db, from_automation)
-                
+    # Rules run against the in-session object and ride the same commit, so they
+    # cannot recurse back through this endpoint.
+    if t.board_id and "status" in changes and new_status != old_status:
+        apply_automations(t, t.board_id, "update", old_status, db)
+
+    t.updated_at = now_str()
     db.commit()
     db.refresh(t)
-    
+
     if t.board_id:
+        actor = current_user.name if current_user.name else "Someone"
         if old_status != t.status:
-            user_name = current_user.name if current_user.name else "Someone"
-            log_activity_safe(t.board_id, user_name, f"moved '{t.title}' {old_status}->{t.status}")
+            log_activity_safe(t.board_id, actor, f"moved '{t.title}' {old_status}->{t.status}", task_id=t.id)
+        if old_title != t.title:
+            log_activity_safe(t.board_id, actor, f"renamed task to '{t.title}'", task_id=t.id)
         if old_assign != t.assigned_to and t.assigned_to:
             au = db.query(models.User).filter(models.User.email == t.assigned_to).first()
-            if au: 
+            if au:
                 create_notification_safe(au.id, t.board_id, t.id, f"You were assigned to '{t.title}'", "assign", f"Assigned: {t.title}")
-        
-        # 5) Broadcast Websocket
+
         await manager.broadcast(t.board_id, {"type": "update"})
-        
-    # 6) Return dictionary instead of ORM Object
-    return {
-        "id": t.id,
-        "title": t.title,
-        "description": t.description,
-        "status": t.status,
-        "priority": t.priority,
-        "start_date": t.start_date,
-        "due_date": t.due_date,
-        "time_estimated": t.time_estimated,
-        "time_spent": t.time_spent,
-        "assigned_to": t.assigned_to,
-        "assigned_to_name": getattr(t, "assigned_to_name", ""),
-        "attachment_url": getattr(t, "attachment_url", ""),
-        "labels": getattr(t, "labels", ""),
-        "user_id": t.user_id,
-        "board_id": t.board_id,
-        "dependencies": _parse_json(getattr(t, "dependencies", "[]"), []),
-        "recurring": _parse_json(getattr(t, "recurring", "{}"), {})
-    }
+
+    return _task_response(t)
 
 
 @app.delete("/api/tasks/{task_id}")
@@ -1625,7 +1675,19 @@ async def delete_task(task_id: int, current_user=Depends(get_current_user), db: 
     bid = t.board_id
     db.query(models.Comment).filter(models.Comment.task_id == task_id).delete(synchronize_session=False)
     db.query(models.Subtask).filter(models.Subtask.task_id == task_id).delete(synchronize_session=False)
-    
+    db.query(models.Activity).filter(models.Activity.task_id == task_id).delete(synchronize_session=False)
+    db.query(models.Notification).filter(models.Notification.task_id == task_id).delete(synchronize_session=False)
+
+    # Drop this task from any blocker list that still references it, otherwise
+    # the ids accumulate forever and the blocker check keeps querying dead rows.
+    if bid:
+        for other in db.query(models.Task).filter(models.Task.board_id == bid).all():
+            deps = _parse_json(getattr(other, "dependencies", "[]"), []) or []
+            if str(task_id) in [str(d) for d in deps]:
+                remaining = [str(d) for d in deps if str(d) != str(task_id)]
+                other.dependencies = _dump_json(remaining, [])
+                other.updated_at = now_str()
+
     db.delete(t)
     db.commit()
     
@@ -1642,20 +1704,13 @@ def get_task_activities(task_id: int, current_user=Depends(get_current_user), db
         raise HTTPException(status_code=404, detail="Task not found")
     if task.board_id:
         utils.ensure_board_access(task.board_id, current_user, db, required_role="subscriber", action="Task activity view")
-        
-    try:
-        activities = db.query(models.Activity).filter(models.Activity.task_id == task_id).order_by(models.Activity.id.desc()).limit(50).all()
-        return [
-            {
-                "user": r.user_name,
-                "action": r.action,
-                "timestamp": getattr(r, "created_at", "")
-            }
-            for r in activities
-        ]
-    except Exception:
-        # Fallback for legacy database configurations before task_id migration
-        return []
+
+    # No blanket except: silently returning [] here would hide a missing
+    # activities.task_id column as a permanently empty log.
+    rows = (db.query(models.Activity)
+              .filter(models.Activity.task_id == task_id)
+              .order_by(models.Activity.id.desc()).limit(50).all())
+    return [{"user": r.user_name, "action": r.action, "timestamp": r.created_at} for r in rows]
 
 
 # ==========================================
@@ -1771,10 +1826,40 @@ async def add_comment(task_id: int, payload: schemas.CommentCreate, current_user
 #               BOARD CHAT
 # ==========================================
 
+async def _publish_board_message(board_id: int, user_id: int, user_name: str, text: str):
+    """Single write path for board chat so the HTTP route and the WebSocket route
+    cannot drift apart in authorization or shape. Caller has already authorized."""
+    db = SessionLocal()
+    try:
+        msg = BoardMessage(
+            board_id=board_id,
+            user_id=user_id,
+            user_name=user_name,
+            text=text,
+            created_at=now_str(),
+        )
+        db.add(msg)
+        db.commit()
+        db.refresh(msg)
+        msg_data = {
+            "id": msg.id,
+            "board_id": msg.board_id,
+            "user_id": msg.user_id,
+            "user_name": msg.user_name,
+            "text": msg.text,
+            "created_at": msg.created_at,
+        }
+    finally:
+        db.close()
+
+    await manager.broadcast(board_id, {"type": "chat", "message": msg_data})
+    return msg_data
+
+
 @app.get("/api/boards/{board_id}/messages")
 def get_board_messages(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="View messages")
-    messages = db.query(BoardMessage).filter(BoardMessage.board_id == board_id).order_by(BoardMessage.id.asc()).all()
+    messages = db.query(BoardMessage).filter(BoardMessage.board_id == board_id).order_by(BoardMessage.id.asc()).limit(200).all()
     return [
         {
             "id": m.id,
@@ -1788,32 +1873,13 @@ def get_board_messages(board_id: int, current_user=Depends(get_current_user), db
 
 @app.post("/api/boards/{board_id}/messages")
 async def create_board_message(board_id: int, payload: BoardMessageCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    utils.ensure_board_access(board_id, current_user, db, required_role="viewer", action="Post message")
-    
-    new_msg = BoardMessage(
-        board_id=board_id,
-        user_id=current_user.id,
-        user_name=current_user.name,
-        text=payload.text,
-        created_at=now_str()
-    )
-    db.add(new_msg)
-    db.commit()
-    db.refresh(new_msg)
-    
-    msg_data = {
-        "id": new_msg.id,
-        "board_id": new_msg.board_id,
-        "user_id": new_msg.user_id,
-        "user_name": new_msg.user_name,
-        "text": new_msg.text,
-        "created_at": new_msg.created_at
-    }
-    
-    # Broadcast the chat message to existing WebSocket clients
-    await manager.broadcast(board_id, {"type": "chat", "message": msg_data})
-    
-    return msg_data
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message text is required")
+    # Posting is a write, so it needs createTasks rather than the read-only
+    # viewBoard permission the WebSocket path authorises against.
+    utils.ensure_board_access(board_id, current_user, db, required_permission="createTasks", action="Post message")
+    return await _publish_board_message(board_id, current_user.id, current_user.name, text)
 
 
 # ==========================================
@@ -1826,62 +1892,51 @@ async def websocket_endpoint(websocket: WebSocket, board_id: int):
     if not token:
         await websocket.close(code=1008)
         return
-        
+
     db = SessionLocal()
-    user = None
     try:
         try:
-            from utils import SECRET_KEY, ALGORITHM
-        except ImportError:
-            SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
-            ALGORITHM = os.getenv("ALGORITHM", "HS256")
-            
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise ValueError("Invalid token")
-            
-        user = db.query(models.User).filter(models.User.email == email).first()
+            payload = jwt.decode(token, utils.SECRET_KEY, algorithms=[utils.ALGORITHM])
+        except Exception:
+            await websocket.close(code=1008)
+            return
+
+        email = payload.get("sub")
+        user = db.query(models.User).filter(models.User.email == email).first() if email else None
         if not user:
-            raise ValueError("User not found")
-    except Exception:
+            await websocket.close(code=1008)
+            return
+
+        # Without this, any authenticated user could subscribe to any board_id
+        # and receive every update and chat broadcast for a board they cannot see.
+        try:
+            utils.ensure_board_access(board_id, user, db, required_role="viewer", action="Board realtime")
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
+
+        # Copy onto primitives before closing: the session is released per frame
+        # so a long-lived socket cannot pin a pooled connection.
+        user_id, user_name = user.id, user.name
+    finally:
         db.close()
-        await websocket.close(code=1008)
-        return
 
     await manager.connect(websocket, board_id)
     try:
-        while True: 
+        while True:
             data = await websocket.receive_text()
             try:
                 parsed_data = json.loads(data)
-                if parsed_data.get("type") == "chat":
-                    text_content = parsed_data.get("text", "").strip()
-                    if text_content:
-                        new_msg = BoardMessage(
-                            board_id=board_id,
-                            user_id=user.id,
-                            user_name=user.name,
-                            text=text_content,
-                            created_at=now_str()
-                        )
-                        db.add(new_msg)
-                        db.commit()
-                        db.refresh(new_msg)
-                        
-                        msg_data = {
-                            "id": new_msg.id,
-                            "board_id": new_msg.board_id,
-                            "user_id": new_msg.user_id,
-                            "user_name": new_msg.user_name,
-                            "text": new_msg.text,
-                            "created_at": new_msg.created_at
-                        }
-                        await manager.broadcast(board_id, {"type": "chat", "message": msg_data})
             except json.JSONDecodeError:
-                pass
+                continue
+            if parsed_data.get("type") != "chat":
+                continue
+            text_content = (parsed_data.get("text") or "").strip()
+            if not text_content:
+                continue
+            await _publish_board_message(board_id, user_id, user_name, text_content)
     except WebSocketDisconnect:
         manager.disconnect(websocket, board_id)
-    finally:
-        db.close()
-# 1475 - 1887
+    except Exception:
+        manager.disconnect(websocket, board_id)
+        raise

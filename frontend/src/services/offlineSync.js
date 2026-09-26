@@ -36,6 +36,8 @@ export const syncOfflineActions = async (tasksApi) => {
         const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
         if (!queue.length) return;
 
+        // പരാജയപ്പെട്ട ആക്ഷനുകൾ വീണ്ടും ക്യൂവിൽ നിൽക്കണം
+        const failed = [];
         for (const action of queue) {
             try {
                 if (action.type === 'CREATE_TASK') {
@@ -52,10 +54,16 @@ export const syncOfflineActions = async (tasksApi) => {
                 }
             } catch (err) {
                 console.error('Sync failed for action:', action, err);
+                // വീണ്ടും പരാജയപ്പെട്ടവ ക്യൂവിൽ നിൽക്കണം, അല്ലെങ്കിൽ മാറ്റം നഷ്ടപ്പെടും
+                failed.push(action);
             }
         }
-        // സിങ്ക് പൂർത്തിയായാൽ ക്യൂ ക്ലിയർ ചെയ്യുക 
-        localStorage.removeItem(QUEUE_KEY);
+
+        if (failed.length) {
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
+        } else {
+            localStorage.removeItem(QUEUE_KEY);
+        }
     } catch (e) {
         console.error('Failed to process offline sync queue', e);
     }

@@ -31,6 +31,7 @@ class Board(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, default="My Workspace")
+    description = Column(Text, default="")
     owner_id = Column(Integer, ForeignKey("users.id"))
 
 
@@ -123,35 +124,9 @@ class Notification(Base):
 
 
 # ==========================================
-#               AUTOMATIONS
+#          AUTOMATIONS & BOARD CHAT
 # ==========================================
-
-class Automation(Base):
-    __tablename__ = "automations"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    board_id = Column(Integer, ForeignKey("boards.id"))
-    created_by = Column(Integer, ForeignKey("users.id"))
-    trigger = Column(String, default="")
-    condition = Column(String, default="")
-    action = Column(String, default="")
-    target = Column(String, default="")
-    is_active = Column(Boolean, default=True)
-    created_at = Column(String, default="")
-
-
-# ==========================================
-#               BOARD MESSAGES (CHAT)
-# ==========================================
-
-class BoardMessage(Base):
-    __tablename__ = "board_messages"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    board_id = Column(Integer, ForeignKey("boards.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user_name = Column(String, default="")
-    text = Column(Text, nullable=False)
-    created_at = Column(String, default="")
-
-# 116 - 157
+# NOTE: The `automations` and `board_messages` models are declared in
+# main.py (Automation, BoardMessage). Declaring them here as well mapped
+# two different column sets onto the same MetaData, which raised
+# InvalidRequestError at import time. Keep a single definition.

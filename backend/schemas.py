@@ -88,39 +88,9 @@ class CommentCreate(BaseModel):
     text: str
 
 
-class RecurringConfig(BaseModel):
-    frequency: str
-    interval: int
-    endDate: Optional[str] = None
-
-
-# ==========================================
-#            AUTOMATION SCHEMAS
-# ==========================================
-
-class AutomationCreate(BaseModel):
-    board_id: int
-    trigger: str
-    condition: str = ""
-    action: str
-    target: str = ""
-    is_active: bool = True
-
-
-class AutomationUpdate(BaseModel):
-    trigger: Optional[str] = None
-    condition: Optional[str] = None
-    action: Optional[str] = None
-    target: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-# ==========================================
-#           BOARD MESSAGE SCHEMAS
-# ==========================================
-
-class BoardMessageCreate(BaseModel):
-    board_id: int
-    text: str
-
-# 67 - 126
+# NOTE: RecurringConfig, AutomationCreate/Update and BoardMessageCreate used to
+# live here, but the routes in main.py bind to AutomationCreatePayload and the
+# main.py BoardMessageCreate. Two BoardMessageCreate shapes existed with
+# different fields, and the schemas.py one required a board_id that the path
+# already carries. The live shapes are the ones in main.py; `recurring` is a
+# free-form dict on TaskUpdate because the modal owns its own validation.
