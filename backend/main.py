@@ -84,139 +84,60 @@ DEPLOY_ENV = (
 
 
 def ensure_database_migrations():
-    try:
-        with engine.connect() as conn:
-            url_name = str(engine.url).lower()
-            if "sqlite" in url_name:
-                migrations = [
-                    ("users", "email", "VARCHAR DEFAULT ''"),
-                    ("users", "name", "VARCHAR DEFAULT ''"),
-                    ("users", "password_hash", "VARCHAR DEFAULT ''"),
-                    ("users", "role", "VARCHAR DEFAULT 'administrator'"),
-                    ("users", "subscription_tier", "VARCHAR DEFAULT 'free'"),
-                    ("users", "avatar_url", "VARCHAR DEFAULT ''"),
-                    ("users", "email_verified", "BOOLEAN DEFAULT TRUE"),
-                    ("users", "two_factor_enabled", "BOOLEAN DEFAULT FALSE"),
-                    ("users", "profile_preferences", "TEXT DEFAULT '{}'"),
-                    ("users", "workspace_defaults", "TEXT DEFAULT '{}'"),
-                    ("users", "connected_apps", "TEXT DEFAULT '[]'"),
-                    ("tasks", "description", "TEXT DEFAULT ''"),
-                    ("tasks", "due_date", "VARCHAR DEFAULT ''"),
-                    ("tasks", "start_date", "VARCHAR DEFAULT ''"),
-                    ("tasks", "time_estimated", "INTEGER DEFAULT 0"),
-                    ("tasks", "time_spent", "INTEGER DEFAULT 0"),
-                    ("tasks", "board_id", "INTEGER"),
-                    ("tasks", "assigned_to", "VARCHAR DEFAULT ''"),
-                    ("tasks", "assigned_to_name", "VARCHAR DEFAULT ''"),
-                    ("tasks", "attachment_url", "TEXT DEFAULT ''"),
-                    ("tasks", "labels", "VARCHAR DEFAULT ''"),
-                    ("tasks", "dependencies", "TEXT DEFAULT '[]'"),
-                    ("tasks", "recurring", "TEXT DEFAULT '{}'"),
-                    ("tasks", "created_at", "VARCHAR DEFAULT ''"),
-                    ("tasks", "updated_at", "VARCHAR DEFAULT ''"),
-                    ("comments", "user_name", "VARCHAR DEFAULT ''"),
-                    ("comments", "created_at", "VARCHAR DEFAULT ''"),
-                    ("board_members", "role", "VARCHAR DEFAULT 'editor'"),
-                    ("board_members", "permissions", "TEXT DEFAULT '{}'"),
-                    ("boards", "description", "TEXT DEFAULT ''"),
-                    ("activities", "task_id", "INTEGER"),
-                ]
-                tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
-                for table_name, column_name, column_def in migrations:
-                    if table_name not in tables:
-                        continue
-                    columns = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
-                    existing_columns = {row[1] for row in columns}
-                    if column_name not in existing_columns:
-                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS automations (id INTEGER PRIMARY KEY AUTOINCREMENT, board_id INTEGER, trigger_type VARCHAR DEFAULT '', trigger_condition VARCHAR DEFAULT '', action_type VARCHAR DEFAULT '', action_payload TEXT DEFAULT '{}', is_active BOOLEAN DEFAULT 1)"))
-                conn.execute(text("CREATE TABLE IF NOT EXISTS board_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, board_id INTEGER, user_id INTEGER, user_name VARCHAR DEFAULT '', text TEXT DEFAULT '', created_at VARCHAR DEFAULT '')"))
-                conn.commit()
-                return
+    """Bring an existing database up to the current model schema.
 
-            required_columns = {
-                "users": [
-                    # These three are the model's original columns, so they were
-                    # assumed to exist and were never listed. `create_all()` only
-                    # creates *missing* tables - it never adds columns to one that
-                    # already exists - so a users table from an older schema (or a
-                    # hand-made one) stayed permanently missing them and every
-                    # query failed with:
-                    #   UndefinedColumn: column users.email does not exist
-                    # Listing them makes the migration self-healing.
-                    ("email", "VARCHAR DEFAULT ''"),
-                    ("name", "VARCHAR DEFAULT ''"),
-                    ("password_hash", "VARCHAR DEFAULT ''"),
-                    ("role", "VARCHAR DEFAULT 'administrator'"),
-                    ("subscription_tier", "VARCHAR DEFAULT 'free'"),
-                    ("avatar_url", "VARCHAR DEFAULT ''"),
-                    ("email_verified", "BOOLEAN DEFAULT TRUE"),
-                    ("two_factor_enabled", "BOOLEAN DEFAULT FALSE"),
-                    ("profile_preferences", "TEXT DEFAULT '{}'"),
-                    ("workspace_defaults", "TEXT DEFAULT '{}'"),
-                    ("connected_apps", "TEXT DEFAULT '[]'"),
-                ],
-                "tasks": [
-                    ("description", "TEXT DEFAULT ''"),
-                    ("due_date", "VARCHAR DEFAULT ''"),
-                    ("start_date", "VARCHAR DEFAULT ''"),
-                    ("time_estimated", "INTEGER DEFAULT 0"),
-                    ("time_spent", "INTEGER DEFAULT 0"),
-                    ("board_id", "INTEGER"),
-                    ("assigned_to", "VARCHAR DEFAULT ''"),
-                    ("assigned_to_name", "VARCHAR DEFAULT ''"),
-                    ("attachment_url", "TEXT DEFAULT ''"),
-                    ("labels", "VARCHAR DEFAULT ''"),
-                    ("dependencies", "TEXT DEFAULT '[]'"),
-                    ("recurring", "TEXT DEFAULT '{}'"),
-                    ("created_at", "VARCHAR DEFAULT ''"),
-                    ("updated_at", "VARCHAR DEFAULT ''"),
-                ],
-                "comments": [
-                    ("user_name", "VARCHAR DEFAULT ''"),
-                    ("created_at", "VARCHAR DEFAULT ''"),
-                ],
-                "board_members": [
-                    ("role", "VARCHAR DEFAULT 'editor'"),
-                    ("permissions", "TEXT DEFAULT '{}'"),
-                ],
-                "boards": [
-                    ("description", "TEXT DEFAULT ''"),
-                ],
-                "activities": [
-                    ("task_id", "INTEGER"),
-                ]
-            }
+    This replaces two behaviours that had silently corrupted the database:
 
-            tables = {
-                row[0]
-                for row in conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()"))
-            }
-            for table_name, columns in required_columns.items():
-                if table_name not in tables:
-                    conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table_name} (id SERIAL PRIMARY KEY)"))
-                    conn.commit()
-                existing = {
-                    row[0]
-                    for row in conn.execute(text(f"SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = '{table_name}'"))
-                }
-                for column_name, column_def in columns:
-                    if column_name not in existing:
-                        conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS "{column_name}" {column_def}'))
+    1. It used to create stub tables as "(id SERIAL PRIMARY KEY)" *before*
+       calling create_all(). create_all() only creates *missing* tables, so a
+       stub made it skip the real table - and the app then ran against tables
+       with no title, status, priority or foreign keys.
+    2. It used to keep a hand-written list of columns. That list drifted from
+       models.py and missed original columns (users.email, tasks.title, ...).
+       It is now derived from the models, so it cannot drift again.
+    """
+    from sqlalchemy import inspect
+    from sqlalchemy.schema import CreateColumn
 
-            conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id SERIAL PRIMARY KEY, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
-            conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
-            conn.execute(text("CREATE TABLE IF NOT EXISTS automations (id SERIAL PRIMARY KEY, board_id INTEGER, trigger_type VARCHAR DEFAULT '', trigger_condition VARCHAR DEFAULT '', action_type VARCHAR DEFAULT '', action_payload TEXT DEFAULT '{}', is_active BOOLEAN DEFAULT TRUE)"))
-            conn.execute(text("CREATE TABLE IF NOT EXISTS board_messages (id SERIAL PRIMARY KEY, board_id INTEGER, user_id INTEGER, user_name VARCHAR DEFAULT '', text TEXT DEFAULT '', created_at VARCHAR DEFAULT '')"))
-            conn.commit()
-    except Exception:
-        # Swallowing this produced a service that reported "live" while every
-        # query 500ed. In a deployment, fail loudly instead.
-        if DEPLOY_ENV:
-            raise
-        traceback.print_exc()
+    # 1. Create any missing tables with their full model schema.
+    models.Base.metadata.create_all(bind=engine)
+
+    # 2. Tables that are not part of Base.metadata.
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS subtasks (id SERIAL PRIMARY KEY, task_id INTEGER, title VARCHAR NOT NULL, is_completed BOOLEAN DEFAULT FALSE)"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS notifications (id SERIAL PRIMARY KEY, user_id INTEGER, board_id INTEGER, task_id INTEGER, message VARCHAR DEFAULT '', notif_type VARCHAR DEFAULT 'info', type VARCHAR DEFAULT 'info', is_read BOOLEAN DEFAULT FALSE, created_at VARCHAR DEFAULT '')"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS automations (id SERIAL PRIMARY KEY, board_id INTEGER, trigger_type VARCHAR DEFAULT '', trigger_condition VARCHAR DEFAULT '', action_type VARCHAR DEFAULT '', action_payload TEXT DEFAULT '{}', is_active BOOLEAN DEFAULT TRUE)"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS board_messages (id SERIAL PRIMARY KEY, board_id INTEGER, user_id INTEGER, user_name VARCHAR DEFAULT '', text TEXT DEFAULT '', created_at VARCHAR DEFAULT '')"))
+
+    # 3. Add any column the models declare that the live table lacks.
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    # "ADD COLUMN IF NOT EXISTS" is Postgres-only; SQLite has no such clause, so
+    # rely on the explicit presence check below instead of emitting it.
+    if_not_exists = "" if str(engine.url).lower().startswith("sqlite") else "IF NOT EXISTS "
+    added = []
+    with engine.begin() as conn:
+        for model in models.Base.__subclasses__():
+            table = getattr(model, "__table__", None)
+            if table is None or table.name not in existing_tables:
+                continue
+            present = {c["name"] for c in inspector.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in present:
+                    continue
+                # Strip NOT NULL / UNIQUE: these tables already have rows, and
+                # Postgres will not add a NOT NULL column that has no default.
+                ddl = str(CreateColumn(col).compile(dialect=engine.dialect))
+                ddl = ddl.replace(" NOT NULL", "").replace(" UNIQUE", "")
+                conn.execute(text('ALTER TABLE "%s" ADD COLUMN %s%s' % (table.name, if_not_exists, ddl)))
+                added.append("%s.%s" % (table.name, col.name))
+
+    if added:
+        print("[schema] added %d missing column(s): %s" % (len(added), ", ".join(added)))
+    else:
+        print("[schema] no missing columns to add")
+
+
 
 
 def verify_schema_matches_models():
@@ -250,8 +171,8 @@ def verify_schema_matches_models():
         "[schema] The database is missing columns the application requires. "
         "The service would start and then fail on every request.\n"
         f"   {detail}\n"
-        "   The hand-written migration list in ensure_database_migrations() has "
-        "drifted from models.py; add the columns above to it, or drop and recreate "
+        "   Columns are derived from models.py, so a gap here means a table was "
+        "created outside this process. Re-run the deploy, or drop and recreate "
         "the affected tables if they hold no data worth keeping."
     )
     if DEPLOY_ENV:
@@ -260,7 +181,6 @@ def verify_schema_matches_models():
 
 
 ensure_database_migrations()
-models.Base.metadata.create_all(bind=engine)
 verify_schema_matches_models()
 
 
