@@ -73,6 +73,62 @@ class BoardMessageCreate(BaseModel):
 
 
 # --- DATABASE INITIALIZATION ---
+def validate_startup_config():
+    """Refuse to start a production deploy that is silently misconfigured.
+
+    Every check here corresponds to a failure mode that looks healthy from the
+    outside: the process starts, the health check passes, and the app then
+    misbehaves or is insecure. Failing at boot turns an hours-long mystery into
+    an immediate, readable error in the deploy log.
+
+    Dev is lenient (warn only) so a fresh clone still runs with no setup."""
+    problems = []
+    warnings = []
+
+    # 1. SECRET_KEY must not be the shipped default. With the default, anyone can
+    #    forge a JWT for any user and become owner.
+    if (utils.SECRET_KEY or "").strip() == utils.DEFAULT_DEV_SECRET_KEY:
+        problems.append(
+            "SECRET_KEY is still the built-in development default. "
+            "Set a strong random SECRET_KEY - otherwise anyone can forge a login token."
+        )
+
+    # 2. SQLite on a deployed service. The filesystem is ephemeral and the file
+    #    is wiped on every deploy, so all data is lost each time.
+    if DEPLOY_ENV and str(engine.url).startswith("sqlite"):
+        problems.append(
+            "DATABASE_URL is sqlite on a deployed service. The database file lives on "
+            "an ephemeral filesystem and is destroyed on every deploy. Point it at Postgres."
+        )
+
+    # 3. Billing / integration secrets. These do not stop startup, but they make
+    #    specific features fail with a 503 much later, which is hard to trace.
+    if not (os.getenv("INTEGRATION_ENCRYPTION_KEY") or "").strip():
+        warnings.append("INTEGRATION_ENCRYPTION_KEY is not set - connecting an integration will return 503.")
+    if not utils.paddle_checkout_enabled():
+        warnings.append("PADDLE_API_KEY / PADDLE_PRICE_ID are not set - 'Upgrade plan' will return 503.")
+
+    for w in warnings:
+        print(f"[config] WARNING: {w}")
+
+    if not problems:
+        return
+
+    message = "[config] Refusing to start:\n" + "\n".join(f"  - {p}" for p in problems)
+    if DEPLOY_ENV:
+        raise RuntimeError(message)
+    print(message)
+    print("[config] Continuing because ENVIRONMENT does not look like a deployment. "
+          "Set ENVIRONMENT=production to make these fatal.")
+
+
+DEPLOY_ENV = (
+    os.getenv("RENDER", "").strip().lower() in ("1", "true", "yes")
+    or bool(os.getenv("RAILWAY_ENVIRONMENT", "").strip())
+    or os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod")
+)
+
+
 def ensure_database_migrations():
     try:
         with engine.connect() as conn:
@@ -242,11 +298,17 @@ def ensure_database_migrations():
             conn.execute(text("CREATE TABLE IF NOT EXISTS board_messages (id SERIAL PRIMARY KEY, board_id INTEGER, user_id INTEGER, user_name VARCHAR DEFAULT '', text TEXT DEFAULT '', created_at VARCHAR DEFAULT '')"))
             conn.commit()
     except Exception:
+        # A failed migration used to be printed and swallowed, so the process
+        # started, passed the health check, and then 500'd on the first query
+        # that needed a missing column. In a deploy, fail loudly instead.
+        if DEPLOY_ENV:
+            raise
         traceback.print_exc()
 
 
 ensure_database_migrations()
 models.Base.metadata.create_all(bind=engine)
+validate_startup_config()
 
 
 def ensure_task_timestamps():
@@ -480,10 +542,27 @@ cors_origins = [
     if origin.strip()
 ]
 
+# Local development patterns only. The previous regex also contained
+#   ^https://.*\.(netlify\.app|onrender\.com)$
+# which matched *any* host on those platforms, not just ours. With
+# allow_credentials=True that let any other app hosted there send credentialed
+# cross-origin requests to this API. Real deployments are covered by the
+# explicit ALLOWED_ORIGINS list above; the platform wildcard is now opt-in.
+DEV_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$"
+
+_cors_regex = DEV_ORIGIN_REGEX
+if os.getenv("CORS_ALLOW_PLATFORM_WILDCARDS", "").strip().lower() in ("1", "true", "yes"):
+    _cors_regex = (
+        DEV_ORIGIN_REGEX
+        + r"|^https://.*\.(netlify\.app|onrender\.com)$"
+    )
+    print("[cors] CORS_ALLOW_PLATFORM_WILDCARDS is enabled - any *.netlify.app or "
+          "*.onrender.com origin will be accepted. Disable unless you understand the risk.")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$|^https://.*\.(netlify\.app|onrender\.com)$",
+    allow_origin_regex=_cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

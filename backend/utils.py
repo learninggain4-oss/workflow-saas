@@ -13,6 +13,13 @@ import requests
 
 SECRET_KEY = os.getenv("SECRET_KEY", "workflow-saas-secret-2024")
 ALGORITHM = "HS256"
+
+# The value SECRET_KEY falls back to when it is unset. main.py refuses to start a
+# production deploy while the key is still this, because it is a published
+# constant: anyone can mint a valid JWT for any user id with it.
+DEFAULT_DEV_SECRET_KEY = "workflow-saas-secret-2024"
+assert SECRET_KEY is not None
+
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
