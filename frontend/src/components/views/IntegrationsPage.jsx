@@ -48,15 +48,61 @@ const FIELD_UI = {
 const ALL_KEYWORDS = Object.values(PROVIDER_UI).map(p => p.keywords).join(' ');
 
 // Turn an axios/fetch failure into something worth showing a user.
-const describeError = (err, fallback) => {
+// A single flat string loses the distinction that matters most here: a network
+// failure and a server crash both arrive as "no response", but the user can act
+// on only one of them.
+const classifyError = (err) => {
+  const status = err?.response?.status;
+  const detail = err?.response?.data?.detail;
+
+  // The server sent a message; prefer it over anything we would invent.
+  let serverText = null;
+  if (typeof detail === 'string') serverText = detail;
+  else if (Array.isArray(detail) && detail.length) {
+    serverText = detail.map(d => `${(d.loc || []).slice(1).join('.')}: ${d.msg}`).join('; ');
+  }
+  if (serverText) {
+    return {
+      title: status === 403 ? "You don't have access to this board" : 'Could not load integrations',
+      message: serverText,
+    };
+  }
+
+  if (status === 401) {
+    return { title: 'Your session has expired', message: 'Sign in again to continue managing integrations.' };
+  }
+  if (status === 403) {
+    return { title: "You don't have access to this board", message: 'Ask a board owner to grant you access.' };
+  }
+  if (status >= 500) {
+    return {
+      title: 'The server hit an error',
+      message: `The API returned HTTP ${status}. This is a problem on the server, not with your connection. Try again in a moment.`,
+    };
+  }
+  if (status) {
+    return { title: 'Could not load integrations', message: `The API returned HTTP ${status}.` };
+  }
+  if (err?.request) {
+    return {
+      title: "Can't reach the server",
+      message: 'The API is not responding. This is usually temporary - the backend may be down, restarting, or still deploying. Retrying in a few minutes usually works.',
+    };
+  }
+  return { title: 'Could not load integrations', message: 'Something went wrong before the request was sent.' };
+};
+
+// Actions fail inline per provider, so they need a short one-liner.
+const describeActionError = (err) => {
+  const status = err?.response?.status;
   const detail = err?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail) && detail.length) {
     return detail.map(d => `${(d.loc || []).slice(1).join('.')}: ${d.msg}`).join('; ');
   }
-  if (err?.response) return `Request failed (HTTP ${err.response.status}).`;
-  if (err?.request) return 'Could not reach the server. Check your connection.';
-  return fallback;
+  if (status) return `The server rejected this (HTTP ${status}).`;
+  if (err?.request) return "Couldn't reach the server, so nothing was saved.";
+  return 'That did not work. Please try again.';
 };
 
 const formatSyncedAt = (value) => {
@@ -80,7 +126,7 @@ export default function IntegrationsPage({
   const [providers, setProviders] = useState(null);   // from the backend
   const [rows, setRows] = useState({});               // provider -> integration row
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
+  const [loadError, setLoadError] = useState(null);   // { title, message }
   const [drafts, setDrafts] = useState({});           // provider -> { field: value }
   const [pending, setPending] = useState({});         // provider -> 'connect' | 'test' | 'disconnect'
   const [actionError, setActionError] = useState({}); // provider -> message
@@ -104,7 +150,7 @@ export default function IntegrationsPage({
       setProviders(res.data?.providers || {});
       setRows(byProvider);
     } catch (err) {
-      setLoadError(describeError(err, 'Could not load integrations.'));
+      setLoadError(classifyError(err));
     } finally {
       setLoading(false);
     }
@@ -137,7 +183,7 @@ export default function IntegrationsPage({
       await action();
       return true;
     } catch (err) {
-      setActionError(prev => ({ ...prev, [provider]: describeError(err, 'Something went wrong.') }));
+      setActionError(prev => ({ ...prev, [provider]: describeActionError(err) }));
       return false;
     } finally {
       setPending(prev => ({ ...prev, [provider]: null }));
@@ -269,7 +315,7 @@ export default function IntegrationsPage({
         <div>
           <h2 className={`text-2xl font-bold ${textColor}`}>Third-Party Integrations</h2>
           <p className={`text-sm mt-1 ${mutedColor}`}>
-            Connect your favorite tools to streamline your workflow.
+            Connect your tools to streamline your workflow.
             {connectedCount > 0 && <span className="ml-1">({connectedCount} connected)</span>}
           </p>
         </div>
@@ -314,11 +360,19 @@ export default function IntegrationsPage({
         skeleton()
       ) : loadError ? (
         <div role="alert" className={`p-6 rounded-lg shadow-sm border ${bgCard} text-center`}>
-          <h3 className={`text-lg font-bold ${textColor}`}>Could not load integrations</h3>
-          <p className={`mt-2 text-sm ${mutedColor} break-words`}>{loadError}</p>
-          <button onClick={load} className={`mt-5 px-4 py-2 rounded-md text-sm font-medium ${primaryBtn}`}>
-            Try again
-          </button>
+          <h3 className={`text-lg font-bold ${textColor}`}>{loadError.title}</h3>
+          <p className={`mt-2 text-sm max-w-md mx-auto ${mutedColor} break-words`}>{loadError.message}</p>
+          <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button onClick={load} className={`px-4 py-2 rounded-md text-sm font-medium ${primaryBtn}`}>
+              Try again
+            </button>
+            <button
+              onClick={() => setViewMode('board')}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            >
+              Back to Board
+            </button>
+          </div>
         </div>
       ) : (
         <>
