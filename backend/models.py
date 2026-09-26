@@ -73,6 +73,11 @@ class Task(Base):
     # New columns added as requested
     dependencies = Column(Text, default="[]")   # JSON array of task ids
     recurring = Column(Text, default="")        # JSON {frequency, interval, endDate}
+    # Which due-date reminders have already fired for this task, as
+    # {"<automation_id>": "<due_date it fired for>"}. The due date is stored
+    # rather than a boolean so that rescheduling a task re-arms its reminder
+    # instead of silently never firing again.
+    automation_notifications = Column(Text, default="{}")
     created_at = Column(String, default="")
     updated_at = Column(String, default="")
 

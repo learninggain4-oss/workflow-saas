@@ -8,6 +8,8 @@ app factory that includes the routers.
 import os
 import json
 import threading
+from datetime import date, datetime, timedelta
+
 import models
 import schemas
 import utils
@@ -39,6 +41,9 @@ class Automation(models.Base):
     trigger_condition = Column(String, default="")
     action_type = Column(String, default="")
     action_payload = Column(Text, default="{}")
+    # due_date rules only: how many days before the due date to fire. Empty
+    # means DEFAULT_DUE_REMINDER_DAYS. Ignored by the event-driven triggers.
+    trigger_value = Column(String, default="")
     is_active = Column(Boolean, default=True)
 
 
@@ -47,6 +52,7 @@ class AutomationCreatePayload(BaseModel):
     trigger_condition: str
     action_type: str
     action_payload: str
+    trigger_value: str = ""
     is_active: bool = True
 
 
@@ -209,3 +215,136 @@ def apply_automations(task: models.Task, board_id: int, event: str, old_status: 
                         modified = True
                         
     return modified
+
+
+# ---------------------------------------------------------------------------
+# Time-based automations ("Due Date is Approaching")
+# ---------------------------------------------------------------------------
+# apply_automations() above is event-driven: it only runs when a task is created
+# or edited. A due-date reminder is neither - it has to fire at a moment nobody
+# touched the task - so it cannot be implemented as another branch there. It needs
+# a scan, which the scheduler in main.py calls on an interval.
+
+DEFAULT_DUE_REMINDER_DAYS = 3
+# Conditions that make sense for a time-based rule. "high_priority" is a
+# priority, not a status, so it is rejected here rather than silently matching
+# nothing; the event-driven path still accepts it for status_change rules.
+DUE_DATE_STATUS_CONDITIONS = ("todo", "doing", "in_progress", "blocked", "done", "")
+
+
+def _parse_due_date(raw):
+    """Parse a stored due_date into a date.
+
+    The UI stores <input type="date"> values verbatim, so this is normally
+    YYYY-MM-DD. Returns None for anything unparseable so one malformed row
+    cannot break the whole scan.
+    """
+    value = (raw or "").strip()
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value[:10], fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _reminder_days(rule):
+    """Lead time in days for a due_date rule, clamped to a sane range."""
+    try:
+        days = int(str(rule.trigger_value or "").strip())
+    except (TypeError, ValueError):
+        return DEFAULT_DUE_REMINDER_DAYS
+    if days < 0:
+        return 0
+    return min(days, 90)
+
+
+def run_due_date_automations(db, today=None):
+    """Fire every active due_date rule whose window is open.
+
+    Returns the number of reminders sent. Safe to call repeatedly: a task is
+    recorded as notified per (rule, due date), so the same reminder never fires
+    twice, and moving a due date re-arms it.
+    """
+    today = today or date.today()
+    rules = (
+        db.query(Automation)
+        .filter(Automation.trigger_type == "due_date", Automation.is_active == True)
+        .all()
+    )
+    sent = 0
+
+    for rule in rules:
+        condition = (rule.trigger_condition or "").strip().lower()
+        if condition not in DUE_DATE_STATUS_CONDITIONS:
+            # A status-shaped condition this rule cannot honour. Skipping keeps
+            # the scan honest instead of emailing for tasks that never match.
+            continue
+
+        lead = _reminder_days(rule)
+        # Window: [today, today + lead]. Overdue tasks are not "approaching",
+        # and a rule with a 0-day lead fires only on the due date itself.
+        tasks = db.query(models.Task).filter(models.Task.board_id == rule.board_id).all()
+
+        for task in tasks:
+            due = _parse_due_date(task.due_date)
+            if due is None:
+                continue
+            if due < today or due > today + timedelta(days=lead):
+                continue
+            if condition and (task.status or "").strip().lower() != condition:
+                continue
+
+            already = _parse_json(getattr(task, "automation_notifications", "{}"), {}) or {}
+            if str(already.get(str(rule.id))) == task.due_date:
+                continue  # already reminded for this exact due date
+
+            payload = _parse_json(rule.action_payload, {}) or {}
+            action_type = (rule.action_type or "").strip()
+
+            if action_type == "send_email":
+                to_email = payload.get("to")
+                if not to_email:
+                    continue
+                subject = payload.get("subject") or f"Due soon: {task.title}"
+                html_body = utils.build_professional_email_html(
+                    title="Upcoming Deadline",
+                    intro=(
+                        f"<strong>{task.title}</strong> is due on "
+                        f"<strong>{task.due_date}</strong>."
+                    ),
+                    rows=[
+                        ("Task", task.title),
+                        ("Due date", task.due_date),
+                        ("Status", task.status),
+                        ("Days left", (due - today).days),
+                    ],
+                )
+                send_email_safe(to_email, subject, html_body)
+
+            elif action_type == "add_label":
+                label = payload.get("label")
+                if label:
+                    labels = [l.strip() for l in (task.labels or "").split(",") if l.strip()]
+                    if label not in labels:
+                        labels.append(label)
+                        task.labels = ",".join(labels)
+
+            elif action_type == "assign_to":
+                assignee = payload.get("email") or payload.get("assigned_to")
+                if assignee and task.assigned_to != assignee:
+                    task.assigned_to = assignee
+
+            # move_board is deliberately not supported here: relocating a task
+            # needs the destination board's membership to be validated, which
+            # the event path does and this scan must not fake.
+
+            already[str(rule.id)] = task.due_date
+            task.automation_notifications = json.dumps(already)
+            sent += 1
+
+    if sent:
+        db.commit()
+    return sent

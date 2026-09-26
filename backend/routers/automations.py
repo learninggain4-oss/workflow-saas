@@ -21,6 +21,7 @@ def create_automation(board_id: int, payload: AutomationCreatePayload, current_u
         trigger_condition=payload.trigger_condition,
         action_type=payload.action_type,
         action_payload=payload.action_payload,
+        trigger_value=payload.trigger_value or "",
         is_active=payload.is_active
     )
     db.add(rule)
@@ -40,6 +41,7 @@ def update_automation(board_id: int, rule_id: int, payload: AutomationCreatePayl
     rule.trigger_condition = payload.trigger_condition
     rule.action_type = payload.action_type
     rule.action_payload = payload.action_payload
+    rule.trigger_value = payload.trigger_value or ""
     rule.is_active = payload.is_active
     
     db.commit()

@@ -33,8 +33,14 @@ const payloadToTarget = (actionType, raw) => {
 export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inputCls, primaryBtn, boardId, automationsApi, canManage, t }) {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [newRule, setNewRule] = useState({ ...EMPTY_RULE, target: '' });
+  const [newRule, setNewRule] = useState({ ...EMPTY_RULE, target: '', trigger_value: '3' });
   const [isAdding, setIsAdding] = useState(false);
+
+  // due_date rules are scanned by the backend scheduler, not fired by an event,
+  // so they need a lead time. Everything else ignores this field.
+  const isDueDate = newRule.trigger_type === 'due_date';
+  const leadDays = Number.parseInt(newRule.trigger_value, 10);
+  const leadDaysValid = Number.isInteger(leadDays) && leadDays >= 0 && leadDays <= 90;
 
   const loadRules = useCallback(async () => {
     if (!boardId) return;
@@ -43,17 +49,21 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
       const res = await automationsApi.getAll(boardId);
       setRules(res.data || []);
     } catch (e) {
-      if (e.response?.status !== 403) alert(e.response?.data?.detail || 'Failed to load automations');
+      if (e.response?.status !== 403) alert(e.response?.data?.detail || t('Failed to load automations'));
     } finally {
       setLoading(false);
     }
-  }, [boardId, automationsApi]);
+  }, [boardId, automationsApi, t]);
 
   useEffect(() => { loadRules(); }, [loadRules]);
 
   const saveRule = async () => {
     if (!newRule.target.trim()) {
-      alert("Please provide a target value (e.g. Email address or Username)");
+      alert(t('Please provide a target value (e.g. Email address or Username)'));
+      return;
+    }
+    if (isDueDate && !leadDaysValid) {
+      alert(t('Days before due date must be a number between 0 and 90.'));
       return;
     }
     try {
@@ -63,13 +73,14 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
         trigger_condition: newRule.trigger_condition,
         action_type: newRule.action_type,
         action_payload: targetToPayload(newRule.action_type, newRule.target.trim()),
+        trigger_value: isDueDate ? String(leadDays) : '',
         is_active: true,
       });
-      setNewRule({ ...EMPTY_RULE, target: '' });
+      setNewRule({ ...EMPTY_RULE, target: '', trigger_value: '3' });
       setIsAdding(false);
       loadRules();
     } catch (e) {
-      alert(e.response?.data?.detail || "Failed to save rule");
+      alert(e.response?.data?.detail || t('Failed to save rule'));
     }
   };
 
@@ -78,7 +89,7 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
       await automationsApi.delete(boardId, id);
       loadRules();
     } catch (e) {
-      alert(e.response?.data?.detail || "Failed to delete rule");
+      alert(e.response?.data?.detail || t('Failed to delete rule'));
     }
   };
 
@@ -87,11 +98,13 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
       await automationsApi.update(boardId, rule.id, { is_active: !rule.is_active });
       loadRules();
     } catch (e) {
-      alert(e.response?.data?.detail || "Failed to update rule");
+      alert(e.response?.data?.detail || t('Failed to update rule'));
     }
   };
 
-  const label = (v) => String(v || '').replace(/_/g, ' ');
+  // Translate known enum values; fall back to a readable form for anything new
+  // so an unrecognised value still shows something instead of a raw key.
+  const label = (v) => t(String(v || '').replace(/_/g, ' '));
 
   return (
     <div className={`p-6 rounded-xl border ${bgCard} shadow-sm max-w-5xl mx-auto`}>
@@ -99,11 +112,11 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-            Advanced Automations
+            {t('Advanced Automations')}
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Set up IF/THEN rules to automate your workflow.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('Set up IF/THEN rules to automate your workflow.')}</p>
         </div>
-        <button onClick={() => setViewMode('board')} className="text-sm text-gray-500 hover:text-indigo-500">Back to Board</button>
+        <button onClick={() => setViewMode('board')} className="text-sm text-gray-500 hover:text-indigo-500">{t('Back to Board')}</button>
       </div>
 
       {/* Add New Rule Form */}
@@ -115,60 +128,91 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
             Create Custom Rule
           </button>
           ) : (
-            <p className="text-sm text-gray-500 italic">You need automation permissions to manage rules on this board.</p>
+            <p className="text-sm text-gray-500 italic">{t('You need automation permissions to manage rules on this board.')}</p>
           )
         ) : (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2 dark:border-gray-700">Builder</h3>
+            <h3 className="text-lg font-semibold border-b pb-2 dark:border-gray-700">{t('Builder')}</h3>
             <div className="flex flex-col md:flex-row gap-4 items-end">
-              
+
               <div className="flex-1 w-full">
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">When (IF)</label>
-                <select 
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">{t('When (IF)')}</label>
+                <select
                   className={`w-full p-2 border rounded-md ${inputCls}`}
                   value={newRule.trigger_type}
                   onChange={(e) => setNewRule({...newRule, trigger_type: e.target.value})}
                 >
-                  <option value="status_change">Task Status Changes To</option>
-                  <option value="task_created">New Task is Created</option>
-                  <option value="due_date">Due Date is Approaching</option>
+                  <option value="status_change">{t('Task Status Changes To')}</option>
+                  <option value="task_created">{t('New Task is Created')}</option>
+                  <option value="due_date">{t('Due Date is Approaching')}</option>
                 </select>
               </div>
 
               <div className="flex-1 w-full">
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Condition (IS)</label>
-                <select 
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">{t('Condition (IS)')}</label>
+                <select
                   className={`w-full p-2 border rounded-md ${inputCls}`}
                   value={newRule.trigger_condition}
                   onChange={(e) => setNewRule({...newRule, trigger_condition: e.target.value})}
                 >
-                  <option value="done">Done</option>
-                  <option value="doing">Doing</option>
-                  <option value="todo">To Do</option>
-                  <option value="high_priority">High Priority</option>
+                  <option value="done">{t('Done')}</option>
+                  <option value="doing">{t('Doing')}</option>
+                  <option value="todo">{t('To Do')}</option>
+                  <option value="high_priority">{t('High Priority')}</option>
                 </select>
+                {/* high_priority is a priority, not a status, so a due-date rule
+                    can never match it. Say so instead of saving a dead rule. */}
+                {isDueDate && newRule.trigger_condition === 'high_priority' && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    {t('High Priority is a priority, not a status, so a due date rule cannot use it.')}
+                  </p>
+                )}
               </div>
 
+              {isDueDate && (
+                <div className="flex-1 w-full">
+                  <label htmlFor="rule-lead-days" className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">
+                    {t('Days Before Due')}
+                  </label>
+                  <input
+                    id="rule-lead-days"
+                    type="number"
+                    min="0"
+                    max="90"
+                    inputMode="numeric"
+                    aria-invalid={!leadDaysValid}
+                    className={`w-full p-2 border rounded-md ${inputCls} ${leadDaysValid ? '' : 'border-red-500'}`}
+                    value={newRule.trigger_value}
+                    onChange={(e) => setNewRule({...newRule, trigger_value: e.target.value})}
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {leadDaysValid
+                      ? t('Checked automatically by the server scheduler - no need to reload the page.')
+                      : t('Enter a number between 0 and 90.')}
+                  </p>
+                </div>
+              )}
+
               <div className="flex-1 w-full">
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Action (THEN)</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">{t('Action (THEN)')}</label>
                 <select 
                   className={`w-full p-2 border rounded-md ${inputCls}`}
                   value={newRule.action_type}
                   onChange={(e) => setNewRule({...newRule, action_type: e.target.value})}
                 >
-                  <option value="send_email">Send Email To</option>
-                  <option value="assign_to">Assign To</option>
-                  <option value="add_label">Add Label</option>
-                  <option value="move_board">Move to Board</option>
+                  <option value="send_email">{t('Send Email To')}</option>
+                  <option value="assign_to">{t('Assign To')}</option>
+                  <option value="add_label">{t('Add Label')}</option>
+                  <option value="move_board">{t('Move to Board')}</option>
                 </select>
               </div>
 
               <div className="flex-1 w-full">
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Value</label>
-                <input 
-                  type="text" 
-                  className={`w-full p-2 border rounded-md ${inputCls}`} 
-                  placeholder={newRule.action_type === 'send_email' ? "client@email.com" : "Enter value..."}
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">{t('Value')}</label>
+                <input
+                  type="text"
+                  className={`w-full p-2 border rounded-md ${inputCls}`}
+                  placeholder={newRule.action_type === 'send_email' ? 'client@email.com' : t('Enter value...')}
                   value={newRule.target}
                   onChange={(e) => setNewRule({...newRule, target: e.target.value})}
                 />
@@ -176,8 +220,8 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button onClick={saveRule} className={`px-4 py-2 rounded-md font-medium text-sm ${primaryBtn}`}>Save Rule</button>
-              <button onClick={() => setIsAdding(false)} className="px-4 py-2 rounded-md font-medium text-sm border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Cancel</button>
+              <button onClick={saveRule} className={`px-4 py-2 rounded-md font-medium text-sm ${primaryBtn}`}>{t('Save Rule')}</button>
+              <button onClick={() => setIsAdding(false)} className="px-4 py-2 rounded-md font-medium text-sm border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('Cancel')}</button>
             </div>
           </div>
         )}
@@ -185,11 +229,11 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
 
       {/* Rules List */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Active Rules ({rules.length})</h3>
+        <h3 className="text-lg font-semibold mb-4">{t('Active Rules')} ({rules.length})</h3>
         {loading ? (
-          <p className="text-sm text-gray-500 italic">Loading rules...</p>
+          <p className="text-sm text-gray-500 italic">{t('Loading rules...')}</p>
         ) : rules.length === 0 ? (
-          <p className="text-sm text-gray-500 italic">No automations configured yet.</p>
+          <p className="text-sm text-gray-500 italic">{t('No automations configured yet.')}</p>
         ) : (
           <div className="space-y-3">
             {rules.map((rule) => {
@@ -202,8 +246,12 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
                       <span className="text-xs bg-indigo-100 dark:bg-indigo-900 px-2 py-1 rounded">IF</span>
                       {label(rule.trigger_type)}
                     </span>
-                    <span className="text-gray-500">is</span>
-                    <span className="font-semibold text-pink-500">{label(rule.trigger_condition)}</span>
+                    <span className="text-gray-500">{t('is')}</span>
+                    <span className="font-semibold text-pink-500">
+                      {rule.trigger_type === 'due_date'
+                        ? t('{{days}} days before due', { days: rule.trigger_value || '3' })
+                        : label(rule.trigger_condition)}
+                    </span>
                     <span className="flex items-center gap-1 font-semibold text-green-500 ml-2">
                       <span className="text-xs bg-green-100 dark:bg-green-900 px-2 py-1 rounded">THEN</span>
                       {label(rule.action_type)}
@@ -217,7 +265,7 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
                     <input type="checkbox" className="sr-only peer" checked={!!rule.is_active} onChange={() => toggleActive(rule)} />
                     <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-500"></div>
                   </label>
-                  <button onClick={() => removeRule(rule.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors" title="Delete Rule">
+                  <button onClick={() => removeRule(rule.id)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors" title={t('Delete Rule')}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                   </button>
                 </div>

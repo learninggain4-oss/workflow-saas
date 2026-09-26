@@ -1,6 +1,8 @@
 import os
 import re
 import json
+import time
+import threading
 import traceback
 import models
 import schemas
@@ -727,6 +729,55 @@ async def swagger_oauth2_redirect():
     return get_swagger_ui_oauth2_redirect_html()
 
 
+# --- AUTOMATION SCHEDULER ---
+# Time-based automations ("Due Date is Approaching") cannot be event-driven: a
+# reminder has to fire at a moment nobody touched the task. This daemon thread
+# is the piece that makes those rules real.
+AUTOMATION_SCAN_SECONDS = max(60, int(os.getenv("AUTOMATION_SCAN_SECONDS", "300") or 300))
+_scheduler_started = False
+
+
+def _automation_scheduler_loop():
+    """Scan for due-date reminders on an interval.
+
+    Runs in its own session, because the request-scoped one is long closed by the
+    time the next tick fires. A failing tick is logged and the loop continues:
+    one bad row must not kill every future reminder. The thread is a daemon, so
+    it never blocks shutdown.
+    """
+    while True:
+        time.sleep(AUTOMATION_SCAN_SECONDS)
+        db = SessionLocal()
+        try:
+            sent = core.run_due_date_automations(db)
+            if sent:
+                print(f"[automations] sent {sent} due-date reminder(s)", flush=True)
+        except Exception:
+            print("[automations] due-date scan failed", flush=True)
+            traceback.print_exc()
+            db.rollback()
+        finally:
+            db.close()
+
+
+def start_automation_scheduler():
+    global _scheduler_started
+    if _scheduler_started:
+        return
+    # Tests and one-off scripts turn this off so the loop never touches a
+    # throwaway database. conftest.py sets it before any test imports the app.
+    if os.getenv("AUTOMATION_SCHEDULER", "on").strip().lower() in ("off", "0", "false", "no"):
+        print("[automations] scheduler disabled by AUTOMATION_SCHEDULER", flush=True)
+        return
+    _scheduler_started = True
+    threading.Thread(
+        target=_automation_scheduler_loop,
+        name="automation-scheduler",
+        daemon=True,
+    ).start()
+    print(f"[automations] scheduler started (every {AUTOMATION_SCAN_SECONDS}s)", flush=True)
+
+
 # --- EXCEPTION HANDLING ---
 @app.exception_handler(Exception)
 async def global_handler(request, exc):
@@ -742,6 +793,9 @@ async def global_handler(request, exc):
 @app.on_event("startup")
 def fix_db():
     ensure_database_migrations()
+    # Only after migrations: the scheduler reads columns this call may have just
+    # added (tasks.automation_notifications, automations.trigger_value).
+    start_automation_scheduler()
 
 
 # --- ROOT ENDPOINT ---
