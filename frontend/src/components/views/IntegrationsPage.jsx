@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 
 export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputCls, primaryBtn }) {
-  // State for Integration Statuses
+  // State for Integration Statuses (Added new platforms and lastSynced property)
   const [integrations, setIntegrations] = useState({
-    github: { connected: false, repo: '' },
-    slack: { connected: false, webhook: '' },
-    drive: { connected: false, account: '' }
+    github: { connected: false, repo: '', lastSynced: null },
+    slack: { connected: false, webhook: '', lastSynced: null },
+    drive: { connected: false, account: '', lastSynced: null },
+    jira: { connected: false, url: '', lastSynced: null },    // NEW FEATURE
+    discord: { connected: false, webhook: '', lastSynced: null } // NEW FEATURE
   });
 
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(''); // NEW FEATURE: Search filter
 
   // MOCK API Handlers
   const handleConnectGitHub = async (e) => {
@@ -16,7 +19,7 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
     setLoading(true);
     // Simulate API Call for GitHub/GitLab Auth
     setTimeout(() => {
-      setIntegrations(prev => ({ ...prev, github: { connected: true, repo: prev.github.repo } }));
+      setIntegrations(prev => ({ ...prev, github: { connected: true, repo: prev.github.repo, lastSynced: new Date().toLocaleTimeString() } }));
       setLoading(false);
       alert('GitHub/GitLab connected successfully! Now tracking commits.');
     }, 1000);
@@ -27,7 +30,7 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
     setLoading(true);
     // Simulate API Call for Slack Webhook Setup
     setTimeout(() => {
-      setIntegrations(prev => ({ ...prev, slack: { connected: true, webhook: prev.slack.webhook } }));
+      setIntegrations(prev => ({ ...prev, slack: { connected: true, webhook: prev.slack.webhook, lastSynced: new Date().toLocaleTimeString() } }));
       setLoading(false);
       alert('Slack Webhook connected successfully! Notifications are enabled.');
     }, 1000);
@@ -37,34 +40,100 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
     setLoading(true);
     // Simulate Google Drive OAuth Flow
     setTimeout(() => {
-      setIntegrations(prev => ({ ...prev, drive: { connected: true, account: 'user@gmail.com' } }));
+      setIntegrations(prev => ({ ...prev, drive: { connected: true, account: 'user@gmail.com', lastSynced: new Date().toLocaleTimeString() } }));
       setLoading(false);
       alert('Google Drive connected successfully! You can now attach files directly.');
     }, 1000);
   };
 
+  // NEW FEATURE: Jira API Handler
+  const handleConnectJira = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, jira: { connected: true, url: prev.jira.url, lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false);
+      alert('Jira connected successfully! Now tracking issues and sprints.');
+    }, 1000);
+  };
+
+  // NEW FEATURE: Discord API Handler
+  const handleConnectDiscord = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setIntegrations(prev => ({ ...prev, discord: { connected: true, webhook: prev.discord.webhook, lastSynced: new Date().toLocaleTimeString() } }));
+      setLoading(false);
+      alert('Discord connected successfully! Alerts will be sent to your channel.');
+    }, 1000);
+  };
+
+  // NEW FEATURE: Sync Data Handler
+  const handleSync = (platform) => {
+    setIntegrations(prev => ({
+      ...prev,
+      [platform]: { ...prev[platform], lastSynced: new Date().toLocaleTimeString() }
+    }));
+  };
+
   const handleDisconnect = (platform) => {
     if(window.confirm(`Are you sure you want to disconnect ${platform}?`)) {
-      setIntegrations(prev => ({ ...prev, [platform]: { connected: false, repo: '', webhook: '', account: '' } }));
+      setIntegrations(prev => ({ ...prev, [platform]: { connected: false, repo: '', webhook: '', account: '', url: '', lastSynced: null } }));
+    }
+  };
+
+  // NEW FEATURE: Disconnect All
+  const handleDisconnectAll = () => {
+    if(window.confirm("Are you sure you want to disconnect ALL integrations?")) {
+      setIntegrations({
+        github: { connected: false, repo: '', lastSynced: null },
+        slack: { connected: false, webhook: '', lastSynced: null },
+        drive: { connected: false, account: '', lastSynced: null },
+        jira: { connected: false, url: '', lastSynced: null },
+        discord: { connected: false, webhook: '', lastSynced: null }
+      });
     }
   };
 
   const textColor = darkMode ? 'text-gray-100' : 'text-gray-900';
   const mutedColor = darkMode ? 'text-gray-400' : 'text-gray-500';
 
+  // NEW FEATURE: Check if item matches search term
+  const matchesSearch = (keywords) => keywords.toLowerCase().includes(searchTerm.toLowerCase());
+
+  // Check if any integration is connected to show the "Disconnect All" button
+  const isAnyConnected = Object.values(integrations).some(integration => integration.connected);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h2 className={`text-2xl font-bold ${textColor}`}>Third-Party Integrations</h2>
           <p className={`text-sm mt-1 ${mutedColor}`}>Connect your favorite tools to streamline your workflow.</p>
         </div>
-        <button onClick={() => setViewMode("board")} className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition">
-          Back to Board
-        </button>
+        
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {/* NEW FEATURE: Search Bar */}
+          <input 
+            type="text" 
+            placeholder="Search integrations..." 
+            className={`w-full sm:w-auto px-4 py-2 rounded-md border text-sm ${inputCls}`}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {isAnyConnected && (
+            <button onClick={handleDisconnectAll} className="w-full sm:w-auto px-4 py-2 border border-red-500 text-red-500 rounded-md text-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition whitespace-nowrap">
+              Disconnect All
+            </button>
+          )}
+          <button onClick={() => setViewMode("board")} className="w-full sm:w-auto px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition whitespace-nowrap">
+            Back to Board
+          </button>
+        </div>
       </div>
 
       {/* 1. GitHub / GitLab Integration */}
+      {matchesSearch('github gitlab repository code commits') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -96,14 +165,19 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
             </button>
           </form>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-            Tracking commits for <b>{integrations.github.repo}</b>
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Tracking commits for <b>{integrations.github.repo}</b> {integrations.github.lastSynced && <span className="text-xs ml-1 opacity-80">(Synced: {integrations.github.lastSynced})</span>}</span>
+            </div>
+            <button onClick={() => handleSync('github')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Sync Now</button>
           </div>
         )}
       </div>
+      )}
 
       {/* 2. Slack Integration */}
+      {matchesSearch('slack notifications chat messages') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -135,14 +209,19 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
             </button>
           </form>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-            Notifications are actively being sent to Slack.
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Notifications are actively being sent to Slack. {integrations.slack.lastSynced && <span className="text-xs ml-1 opacity-80">(Tested: {integrations.slack.lastSynced})</span>}</span>
+            </div>
+            <button onClick={() => handleSync('slack')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Test Connection</button>
           </div>
         )}
       </div>
+      )}
 
       {/* 3. Google Drive Integration */}
+      {matchesSearch('google drive files docs sheets') && (
       <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -167,12 +246,112 @@ export default function IntegrationsPage({ bgCard, setViewMode, darkMode, inputC
             </button>
           </div>
         ) : (
-          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-            Connected as <b>{integrations.drive.account}</b>
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Connected as <b>{integrations.drive.account}</b> {integrations.drive.lastSynced && <span className="text-xs ml-1 opacity-80">(Refreshed: {integrations.drive.lastSynced})</span>}</span>
+            </div>
+            <button onClick={() => handleSync('drive')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Refresh Data</button>
           </div>
         )}
       </div>
+      )}
+
+      {/* 4. NEW FEATURE: Jira Integration */}
+      {matchesSearch('jira issues tasks agile projects') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <svg className="w-8 h-8 text-[#0052CC]" viewBox="0 0 24 24" fill="currentColor"><path d="M11.53 2c0 2.4-1.97 4.35-4.4 4.35H2V2h9.53zm0 8.7c0 2.4-1.97 4.35-4.4 4.35H2v-4.35h9.53zM22 2c0 2.4-1.97 4.35-4.4 4.35h-5.13V2H22zm0 8.7c0 2.4-1.97 4.35-4.4 4.35h-5.13v-4.35H22zm0 8.7c0 2.4-1.97 4.35-4.4 4.35h-5.13v-4.35H22z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Jira Software</h3>
+              <p className={`text-sm ${mutedColor}`}>Link issues, epics, and sync status with Jira projects.</p>
+            </div>
+          </div>
+          {integrations.jira.connected ? (
+             <button onClick={() => handleDisconnect('jira')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>
+          ) : null}
+        </div>
+
+        {!integrations.jira.connected ? (
+          <form onSubmit={handleConnectJira} className="mt-5 flex gap-3">
+            <input 
+              type="url" 
+              required
+              placeholder="Jira Workspace URL (e.g., https://your-domain.atlassian.net)" 
+              className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`}
+              value={integrations.jira.url}
+              onChange={(e) => setIntegrations({...integrations, jira: {...integrations.jira, url: e.target.value}})}
+            />
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>
+              Connect Jira
+            </button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Linked to Jira workspace <b>{integrations.jira.url}</b> {integrations.jira.lastSynced && <span className="text-xs ml-1 opacity-80">(Synced: {integrations.jira.lastSynced})</span>}</span>
+            </div>
+            <button onClick={() => handleSync('jira')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Sync Issues</button>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* 5. NEW FEATURE: Discord Integration */}
+      {matchesSearch('discord webhooks alerts gaming chat') && (
+      <div className={`p-6 rounded-lg shadow-sm border ${bgCard}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+              <svg className="w-8 h-8 text-[#5865F2]" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+            </div>
+            <div>
+              <h3 className={`font-semibold text-lg ${textColor}`}>Discord Webhooks</h3>
+              <p className={`text-sm ${mutedColor}`}>Push notifications directly to your Discord server channels.</p>
+            </div>
+          </div>
+          {integrations.discord.connected ? (
+             <button onClick={() => handleDisconnect('discord')} className="px-4 py-2 border border-red-500 text-red-500 rounded hover:bg-red-500 hover:text-white transition text-sm">Disconnect</button>
+          ) : null}
+        </div>
+
+        {!integrations.discord.connected ? (
+          <form onSubmit={handleConnectDiscord} className="mt-5 flex gap-3">
+            <input 
+              type="url" 
+              required
+              placeholder="Discord Webhook URL" 
+              className={`flex-1 px-4 py-2 rounded-md border ${inputCls}`}
+              value={integrations.discord.webhook}
+              onChange={(e) => setIntegrations({...integrations, discord: {...integrations.discord, webhook: e.target.value}})}
+            />
+            <button type="submit" disabled={loading} className={`px-4 py-2 rounded-md font-medium ${primaryBtn}`}>
+              Save Webhook
+            </button>
+          </form>
+        ) : (
+          <div className="mt-5 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+              <span>Notifications are active on Discord. {integrations.discord.lastSynced && <span className="text-xs ml-1 opacity-80">(Tested: {integrations.discord.lastSynced})</span>}</span>
+            </div>
+            <button onClick={() => handleSync('discord')} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition">Test Connection</button>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Empty State for Search */}
+      {!matchesSearch('github gitlab slack notifications google drive files jira discord') && (
+        <div className="text-center py-10">
+          <p className={mutedColor}>No integrations found matching "{searchTerm}"</p>
+          <button onClick={() => setSearchTerm('')} className="mt-2 text-blue-500 hover:underline text-sm">Clear search</button>
+        </div>
+      )}
 
     </div>
   );
