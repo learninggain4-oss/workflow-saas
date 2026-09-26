@@ -25,6 +25,17 @@ if (!import.meta.env.VITE_API_URL) {
   );
 }
 
+// A cross-origin API host needs that frontend origin in the backend's
+// ALLOWED_ORIGINS, or every response comes back without an
+// Access-Control-Allow-Origin header - and a 500 then reaches the browser as an
+// opaque "Network Error" with no readable body. Name both hosts up front.
+if (import.meta.env.DEV && typeof window !== 'undefined' && !API_URL.includes(window.location.hostname)) {
+  console.warn(
+    `[api] frontend origin ${window.location.origin} is cross-origin to API ${API_URL}. ` +
+    `Add ${window.location.origin} to the backend's ALLOWED_ORIGINS (comma-separated), otherwise CORS will block the responses.`
+  );
+}
+
 const api = axios.create({
   baseURL: API_URL,
 });

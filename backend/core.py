@@ -143,6 +143,18 @@ def _board_response(board, current_user, db: Session):
     }
 
 
+# Columns that may be written through the task endpoints. `id`, `user_id` and
+# `board_id` are deliberately excluded: `board_id` would let a caller move a task
+# onto a board they have no access to, since ensure_board_access only validates
+# the task's original board. Lives here rather than in main.py because the task
+# routes live in routers/tasks.py, and routers cannot import from main.
+TASK_WRITABLE_FIELDS = {
+    "title", "description", "status", "priority", "start_date", "due_date",
+    "time_estimated", "time_spent", "assigned_to", "assigned_to_name",
+    "attachment_url", "labels", "dependencies", "recurring",
+}
+
+
 def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db: Session):
     """Executes board automation rules against the in-session task object.
 

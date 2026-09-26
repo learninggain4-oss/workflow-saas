@@ -183,15 +183,9 @@ normalize_existing_users_to_owner()
 
 
 
-# Columns that may be written through the task endpoints. `id`, `user_id` and
-# `board_id` are deliberately excluded: `board_id` would let a caller move a task
-# onto a board they have no access to, since ensure_board_access only validates
-# the task's original board.
-TASK_WRITABLE_FIELDS = {
-    "title", "description", "status", "priority", "start_date", "due_date",
-    "time_estimated", "time_spent", "assigned_to", "assigned_to_name",
-    "attachment_url", "labels", "dependencies", "recurring",
-}
+# TASK_WRITABLE_FIELDS now lives in core.py: the task routes that use it moved
+# into routers/tasks.py, and a router cannot import from main (main imports the
+# routers, so it would be circular).
 
 
 
@@ -229,8 +223,12 @@ default_allowed_origins = [
     "http://127.0.0.1:3000",
     "https://workflow-saas.netlify.app",
     "https://workflow-saas-cof-z.onrender.com",
+    # Production frontends. These were previously mistyped as
+    # "...production.up.railway.app" and "...-sjrk.onrender.com", neither of
+    # which matches the deployed hosts, so every cross-origin call was blocked.
     "https://workflow-saas-production.up.railway.app",
-    "https://workflow-saas-sjrk.onrender.com"
+    "https://workflow-saas-production.uv.railway.app",
+    "https://workflow-saas-sirk.onrender.com"
 ]
 
 cors_origins = [
@@ -242,7 +240,10 @@ cors_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$|^https://.*\.(netlify\.app|onrender\.com)$",
+    # Last-resort net for preview/staging hosts. Without a railway.app branch
+    # here, any new Railway subdomain silently loses its CORS headers - and a
+    # 500 then reaches the browser as an opaque "Network Error".
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$|^https://.*\.(netlify\.app|onrender\.com|railway\.app|up\.railway\.app|uv\.railway\.app)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -729,6 +730,11 @@ async def swagger_oauth2_redirect():
 # --- EXCEPTION HANDLING ---
 @app.exception_handler(Exception)
 async def global_handler(request, exc):
+    # Without this the traceback exists nowhere: the response body is hidden from
+    # the browser whenever CORS headers are missing, so a 500 is otherwise
+    # undiagnosable from both sides.
+    print(f"[error] {request.method} {request.url.path} -> {type(exc).__name__}: {exc}", flush=True)
+    traceback.print_exc()
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 

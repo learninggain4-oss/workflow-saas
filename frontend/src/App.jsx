@@ -522,7 +522,17 @@ export default function App() {
         return;
     }
 
-    await tasks.update(editing.id, editing); setEditing(null); fetchBoardData();
+    // saveEdit sends the whole task object and has no catch, so any server
+    // failure surfaced as an unhandled promise rejection ("Uncaught (in
+    // promise) AxiosError") with the edit silently lost. Fail visibly instead.
+    try {
+      await tasks.update(editing.id, editing);
+      setEditing(null);
+      fetchBoardData();
+    } catch (e) {
+      console.error(e);
+      alert(e.response?.data?.detail || "Could not save changes. Please try again.");
+    }
   };
 
   const delTask = async (id) => {

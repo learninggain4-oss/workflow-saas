@@ -1,7 +1,7 @@
 """Task routes."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from core import _dump_json, _parse_json, _task_response, _to_int, apply_automations, create_notification_safe, get_current_user, get_db, log_activity_safe, manager, models, now_str, schemas, utils
+from core import TASK_WRITABLE_FIELDS, _dump_json, _parse_json, _task_response, _to_int, apply_automations, create_notification_safe, get_current_user, get_db, log_activity_safe, manager, models, now_str, schemas, utils
 
 
 router = APIRouter()

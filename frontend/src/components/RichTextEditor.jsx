@@ -2,27 +2,31 @@ import React from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css'; // Quill ന്റെ സ്റ്റാൻഡേർഡ് തീം
 
+// ബോൾഡ്, ഇറ്റാലിക്, ലിങ്ക്, ടേബിൾ തുടങ്ങിയവയ്ക്കുള്ള മോഡ്യൂളുകൾ
+// Module scope on purpose: a new object identity on every render makes
+// react-quill re-initialise Quill, and the toolbar module can then try to attach
+// to a container that is no longer in the DOM ("quill:toolbar ignoring
+// attaching to nonexistent"). A stable reference keeps one editor instance.
+const modules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+    ['link', 'image'],
+    [{ 'table': [] }], // ടേബിൾ സപ്പോർട്ട്
+    ['clean']
+  ],
+};
+
+const formats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike',
+  'list', 'bullet',
+  'link', 'image',
+  'table'
+];
+
 export default function RichTextEditor({ value, onChange, readOnly, placeholder, className }) {
-  // ബോൾഡ്, ഇറ്റാലിക്, ലിങ്ക്, ടേബിൾ തുടങ്ങിയവയ്ക്കുള്ള മോഡ്യൂളുകൾ
-  const modules = {
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-      ['link', 'image'],
-      [{ 'table': [] }], // ടേബിൾ സപ്പോർട്ട്
-      ['clean']
-    ],
-  };
-
-  const formats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet',
-    'link', 'image',
-    'table'
-  ];
-
   return (
     <div className={`rich-text-container ${className || ''}`}>
       <ReactQuill 
