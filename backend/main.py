@@ -806,8 +806,10 @@ def root():
         "ok": True, 
         "email_host": cfg["host"], 
         "from": cfg["from"], 
-        "has_brevo_key": cfg["brevo_key"].startswith("xkeysib-"), 
-        "cloudinary": CLOUDINARY_ENABLED
+        "has_brevo_key": cfg["brevo_key"].startswith("xkeysib-"),
+        # core owns the Cloudinary config now that the split moved it out of
+        # main.py; reading it from here raised NameError at request time.
+        "cloudinary": core.CLOUDINARY_ENABLED
     }
 
 
@@ -954,7 +956,10 @@ async def websocket_endpoint(websocket: WebSocket, board_id: int):
             text_content = (parsed_data.get("text") or "").strip()
             if not text_content:
                 continue
-            await _publish_board_message(board_id, user_id, user_name, text_content)
+            # _publish_board_message moved to routers/chat.py with the rest of the
+        # board-chat routes; calling it bare here raised NameError on every
+        # inbound socket message.
+        await chat._publish_board_message(board_id, user_id, user_name, text_content)
     except WebSocketDisconnect:
         manager.disconnect(websocket, board_id)
     except Exception:
