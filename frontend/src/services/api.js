@@ -146,8 +146,13 @@ export const tasks = {
   getActivities: (id) => api.get(`/api/tasks/${id}/activities`),
 };
 
-export const automations = {
-  getAll: (boardId) => api.get(`/api/boards/${boardId}/automations`),
+export const onboarding = {
+  // Read-only: the server derives every step from rows that already exist, so
+  // there is nothing to write and no way for the page to show stale progress.
+  get: () => api.get('/api/onboarding'),
+};
+
+export const automations = {  getAll: (boardId) => api.get(`/api/boards/${boardId}/automations`),
   create: (boardId, data) => api.post(`/api/boards/${boardId}/automations`, data),
   update: (boardId, ruleId, data) => api.put(`/api/boards/${boardId}/automations/${ruleId}`, data),
   delete: (boardId, ruleId) => api.delete(`/api/boards/${boardId}/automations/${ruleId}`),

@@ -17,7 +17,7 @@ from sqlalchemy import text
 from jose import jwt
 from database import SessionLocal, engine, get_db
 from utils import create_token, get_current_user, get_smtp_config, manager, pwd_context
-from routers import auth, automations, boards, chat, notifications, subtasks, tasks
+from routers import auth, automations, boards, chat, notifications, onboarding, subtasks, tasks
 
 
 # --- DATABASE INITIALIZATION ---
@@ -883,6 +883,7 @@ app.include_router(automations.router)
 app.include_router(tasks.router)
 app.include_router(subtasks.router)
 app.include_router(chat.router)
+app.include_router(onboarding.router)
 
 # Re-exported for callers that still import these off the app module
 # (the test suite does). Canonical homes are core.py and models.py.
