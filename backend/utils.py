@@ -1,4 +1,4 @@
-import os, json, traceback, smtplib, ssl, threading, ipaddress, socket
+import os, json, traceback, smtplib, ssl, threading, ipaddress, socket, secrets
 from datetime import datetime, timedelta
 from typing import Dict, List
 from fastapi import WebSocket, Depends, HTTPException
@@ -11,14 +11,32 @@ import models
 from database import SessionLocal, get_db
 import requests
 
-SECRET_KEY = os.getenv("SECRET_KEY", "workflow-saas-secret-2024")
 ALGORITHM = "HS256"
 
-# The value SECRET_KEY falls back to when it is unset. main.py refuses to start a
-# production deploy while the key is still this, because it is a published
-# constant: anyone can mint a valid JWT for any user id with it.
-DEFAULT_DEV_SECRET_KEY = "workflow-saas-secret-2024"
-assert SECRET_KEY is not None
+# Values that must never be used to sign tokens. The second one is the string
+# this file used to hardcode as the fallback, which made it a *published* signing
+# key: anyone holding it could mint a valid token for any user, including owner.
+# It stays listed so a deploy that still has it in its environment is refused at
+# startup rather than silently running with a known key.
+KNOWN_WEAK_SECRET_KEYS = {
+    "",
+    "workflow-saas-secret-2024",
+    "change-me",
+    "changeme",
+    "secret",
+    "your-secret-key",
+}
+
+_RAW_SECRET_KEY = (os.getenv("SECRET_KEY") or "").strip()
+
+# True when the signing key is missing or known-compromised. main.py treats this
+# as fatal on a deployed service and as a loud warning in development.
+SECRET_KEY_IS_DEFAULT = _RAW_SECRET_KEY.lower() in KNOWN_WEAK_SECRET_KEYS
+
+# With no SECRET_KEY configured, fall back to a random per-process key rather than
+# a hardcoded one. Development still works, and restarting the dev server
+# invalidates old tokens - which is the correct outcome, not a regression.
+SECRET_KEY = _RAW_SECRET_KEY or secrets.token_urlsafe(48)
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")

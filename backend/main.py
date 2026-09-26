@@ -85,12 +85,13 @@ def validate_startup_config():
     problems = []
     warnings = []
 
-    # 1. SECRET_KEY must not be the shipped default. With the default, anyone can
-    #    forge a JWT for any user and become owner.
-    if (utils.SECRET_KEY or "").strip() == utils.DEFAULT_DEV_SECRET_KEY:
+    # 1. SECRET_KEY must not be missing or a known-compromised value. With one of
+    #    those, anyone can forge a JWT for any user and become owner.
+    if utils.SECRET_KEY_IS_DEFAULT:
         problems.append(
-            "SECRET_KEY is still the built-in development default. "
-            "Set a strong random SECRET_KEY - otherwise anyone can forge a login token."
+            "SECRET_KEY is unset or still set to a known-compromised default. "
+            "Generate a strong random key: python -c \"import secrets; print(secrets.token_urlsafe(48))\". "
+            "Until then anyone can forge a login token for any account."
         )
 
     # 2. SQLite on a deployed service. The filesystem is ephemeral and the file
