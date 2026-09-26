@@ -86,10 +86,12 @@ const classifyError = (err) => {
   if (err?.request) {
     return {
       title: "Can't reach the server",
-      message: 'The API is not responding. This is usually temporary - the backend may be down, restarting, or still deploying. Retrying in a few minutes usually works.',
+      // The "Try again" button sits directly below, so the body adds the cause
+      // and the reassurance without repeating the heading or restating the remedy.
+      message: "The API isn't responding. This is usually temporary — the backend may be down, restarting, or mid-deploy.",
     };
   }
-  return { title: 'Could not load integrations', message: 'Something went wrong before the request was sent.' };
+  return { title: 'Could not load integrations', message: 'The request could not be sent.' };
 };
 
 // Actions fail inline per provider, so they need a short one-liner.
@@ -362,17 +364,11 @@ export default function IntegrationsPage({
         <div role="alert" className={`p-6 rounded-lg shadow-sm border ${bgCard} text-center`}>
           <h3 className={`text-lg font-bold ${textColor}`}>{loadError.title}</h3>
           <p className={`mt-2 text-sm max-w-md mx-auto ${mutedColor} break-words`}>{loadError.message}</p>
-          <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onClick={load} className={`px-4 py-2 rounded-md text-sm font-medium ${primaryBtn}`}>
-              Try again
-            </button>
-            <button
-              onClick={() => setViewMode('board')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-            >
-              Back to Board
-            </button>
-          </div>
+          {/* No secondary "Back to Board" here: the page header already renders
+              one, so a second copy in the error card is pure duplication. */}
+          <button onClick={load} className={`mt-5 px-4 py-2 rounded-md text-sm font-medium ${primaryBtn}`}>
+            Try again
+          </button>
         </div>
       ) : (
         <>
