@@ -1,6 +1,6 @@
 // frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language), Offline PWA Sync & Task Activity Log
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, integrations as integrationsApi, WS_BASE } from './services/api';
+import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, integrations as integrationsApi, billing, WS_BASE } from './services/api';
 import { formatDate } from './utils/helpers';
 
 // NEW: Offline Sync imports
@@ -100,6 +100,11 @@ export default function App() {
   // NEW STATE FOR CHAT
   const [isChatOpen, setIsChatOpen] = useState(false); 
   const [chatMessages, setChatMessages] = useState([]);
+
+  // True while a Paddle checkout is open. Disables plan buttons so a user cannot
+  // open two checkouts at once.
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isManagingBilling, setIsManagingBilling] = useState(false);
 
   // NEW STATE FOR RECURRING TASKS
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
@@ -391,12 +396,83 @@ export default function App() {
   };
 
   const handleUpgrade = async () => {
+    if (!token) { alert("Please sign in before upgrading."); return; }
+
+    setIsUpgrading(true);
     try {
-      await auth.upgrade();
-      const userRes = await auth.getMe();
-      setUserData(userRes.data);
-      alert("Upgraded to Pro!"); addAccountActivity("Upgraded to Pro");
-    } catch { alert("Upgrade failed"); }
+      // Step 1: the server creates a Paddle transaction and returns a
+      // short-lived client token. The Paddle API key never reaches the browser.
+      const { data } = await billing.createCheckout();
+
+      if (!data?.client_token) {
+        alert("Checkout could not be started. Please try again.");
+        return;
+      }
+
+      if (typeof window.Paddle === "undefined") {
+        alert("The payment script did not load. Check your connection and try again.");
+        return;
+      }
+
+      // Step 2: point Paddle at the right environment before initialising.
+      window.Paddle.Environment.set(data.environment === "production" ? "production" : "sandbox");
+
+      await new Promise((resolve, reject) => {
+        window.Paddle.Initialize({
+          token: data.client_token,
+          eventCallback: (event) => {
+            if (event?.name === "checkout.completed") {
+              // NOTE: this is a UI hint only, not proof of payment. The tier is
+              // changed by the server from the signed Paddle webhook.
+              resolve({ completed: true });
+            } else if (event?.name === "checkout.closed") {
+              resolve({ completed: false });
+            }
+          },
+        });
+
+        window.Paddle.Checkout.open({
+          // Price and customer details are already bound server-side.
+          settings: {
+            displayMode: "overlay",
+            allowLogout: false,
+          },
+        });
+
+        // If the user dismisses the overlay without an event, do not hang.
+        setTimeout(() => resolve({ completed: false, timedOut: true }), 10 * 60 * 1000);
+      });
+
+      // Step 3: the webhook may land a moment after the modal closes, so poll
+      // briefly for the authoritative state rather than assuming success.
+      const becamePro = await pollForEntitlement();
+      if (becamePro) {
+        addAccountActivity("Upgraded to Pro");
+      } else {
+        alert("Payment is processing. Your Pro access will appear as soon as Paddle confirms it.");
+      }
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      alert(detail || "Could not start checkout. Please try again.");
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
+  // Ask the server whether the webhook has granted Pro yet. The browser cannot
+  // decide this for itself, so this only ever reflects server state.
+  const pollForEntitlement = async (attempts = 8, delayMs = 2500) => {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const { data } = await billing.getSubscription();
+        if (data?.entitled || data?.tier === "pro") {
+          setUserData(prev => (prev ? { ...prev, subscription_tier: "pro" } : prev));
+          return true;
+        }
+      } catch { /* transient; keep polling */ }
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+    return false;
   };
 
   const handlePlanSelection = async (planName) => {
@@ -765,7 +841,7 @@ export default function App() {
           {viewMode === "settings"? (
             <AccountSettingsPage {...{ userData, profileForm, setProfileForm, handleProfileUpdate, savingProfile, profilePreferences, setProfilePreferences, workspaceDefaults, setWorkspaceDefaults, resetProfilePreferences, darkMode, setDarkMode, profileAvatar, setProfileAvatar, handleAvatarUpload, handleDeleteAccount, accountActivity, handleUpgrade, securitySettings, handleVerifyEmail, toggleTwoFactor, toggleConnectedApp, bgCard, inputCls, primaryBtn, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
           ) : viewMode === "billing"? (
-            <BillingPage {...{ userData, bgCard, setViewMode, handleUpgrade, handlePlanSelection, t, changeLanguage: i18n.changeLanguage }} />
+            <BillingPage {...{ userData, bgCard, setViewMode, handleUpgrade, handlePlanSelection, billingApi: billing, isUpgrading, isManagingBilling, setIsManagingBilling, t, changeLanguage: i18n.changeLanguage }} />
           ) : viewMode === "reports"? (
             <ReportsPage {...{ analytics, bgCard, setViewMode, t, changeLanguage: i18n.changeLanguage }} />
           ) : viewMode === "team"? (

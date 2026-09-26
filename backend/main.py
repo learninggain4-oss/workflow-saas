@@ -8,7 +8,7 @@ import traceback
 import threading
 from datetime import date, timedelta
 
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 from fastapi.security import OAuth2PasswordRequestForm
@@ -114,6 +114,22 @@ def ensure_database_migrations():
                     ("integrations", "created_by", "INTEGER"),
                     ("integrations", "created_at", "VARCHAR DEFAULT ''"),
                     ("integrations", "updated_at", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "paddle_subscription_id", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "paddle_customer_id", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "status", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "price_id", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "current_period_end", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "canceled_at", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "created_at", "VARCHAR DEFAULT ''"),
+                    ("subscriptions", "updated_at", "VARCHAR DEFAULT ''"),
+                    ("invoices", "paddle_transaction_id", "VARCHAR DEFAULT ''"),
+                    ("invoices", "paddle_invoice_id", "VARCHAR DEFAULT ''"),
+                    ("invoices", "invoice_number", "VARCHAR DEFAULT ''"),
+                    ("invoices", "status", "VARCHAR DEFAULT ''"),
+                    ("invoices", "currency_code", "VARCHAR DEFAULT 'USD'"),
+                    ("invoices", "total", "TEXT DEFAULT ''"),
+                    ("invoices", "billed_at", "VARCHAR DEFAULT ''"),
+                    ("invoices", "created_at", "VARCHAR DEFAULT ''"),
                     ("activities", "task_id", "INTEGER"),
                 ]
                 tables = {row[0] for row in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
@@ -178,6 +194,26 @@ def ensure_database_migrations():
                     ("created_by", "INTEGER"),
                     ("created_at", "VARCHAR DEFAULT ''"),
                     ("updated_at", "VARCHAR DEFAULT ''"),
+                ],
+                "subscriptions": [
+                    ("paddle_subscription_id", "VARCHAR DEFAULT ''"),
+                    ("paddle_customer_id", "VARCHAR DEFAULT ''"),
+                    ("status", "VARCHAR DEFAULT ''"),
+                    ("price_id", "VARCHAR DEFAULT ''"),
+                    ("current_period_end", "VARCHAR DEFAULT ''"),
+                    ("canceled_at", "VARCHAR DEFAULT ''"),
+                    ("created_at", "VARCHAR DEFAULT ''"),
+                    ("updated_at", "VARCHAR DEFAULT ''"),
+                ],
+                "invoices": [
+                    ("paddle_transaction_id", "VARCHAR DEFAULT ''"),
+                    ("paddle_invoice_id", "VARCHAR DEFAULT ''"),
+                    ("invoice_number", "VARCHAR DEFAULT ''"),
+                    ("status", "VARCHAR DEFAULT ''"),
+                    ("currency_code", "VARCHAR DEFAULT 'USD'"),
+                    ("total", "TEXT DEFAULT ''"),
+                    ("billed_at", "VARCHAR DEFAULT ''"),
+                    ("created_at", "VARCHAR DEFAULT ''"),
                 ],
                 "activities": [
                     ("task_id", "INTEGER"),
@@ -1191,11 +1227,283 @@ def update_user_profile(payload: schemas.UserProfileUpdate, current_user=Depends
     }
 
 
-@app.post("/api/upgrade")
-def upgrade_to_pro(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    current_user.subscription_tier = "pro"
+# ==========================================
+#               BILLING (PADDLE)
+# ==========================================
+# The subscription tier is changed ONLY by the verified Paddle webhook. The
+# browser can start a checkout, but it can never assert that a payment
+# succeeded. The previous POST /api/upgrade, which set subscription_tier="pro"
+# for any authenticated caller, has been removed for that reason.
+
+# Paddle statuses that entitle the user to Pro features.
+PADDLE_ENTITLING_STATUSES = {"active", "trialing"}
+
+
+def _sync_tier_from_subscription(db: Session, user_id: int):
+    """Recompute User.subscription_tier from the authoritative Subscription row."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        return None
+    sub = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.user_id == user_id)
+        .order_by(models.Subscription.id.desc())
+        .first()
+    )
+    entitled = bool(sub and (sub.status or "").lower() in PADDLE_ENTITLING_STATUSES)
+    user.subscription_tier = "pro" if entitled else "free"
     db.commit()
-    return {"ok": True, "message": "Upgraded to Pro successfully!"}
+    return user
+
+
+def _subscription_payload(db: Session, user_id: int) -> dict:
+    sub = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.user_id == user_id)
+        .order_by(models.Subscription.id.desc())
+        .first()
+    )
+    return {
+        "has_subscription": sub is not None,
+        "status": (sub.status if sub else ""),
+        "entitled": bool(sub and (sub.status or "").lower() in PADDLE_ENTITLING_STATUSES),
+        "price_id": (sub.price_id if sub else ""),
+        "current_period_end": (sub.current_period_end if sub else ""),
+        "canceled_at": (sub.canceled_at if sub else ""),
+        "paddle_subscription_id": (sub.paddle_subscription_id if sub else ""),
+        "updated_at": (sub.updated_at if sub else ""),
+    }
+
+
+@app.get("/api/billing/subscription")
+def get_billing_subscription(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    payload = _subscription_payload(db, current_user.id)
+    payload["tier"] = current_user.subscription_tier
+    payload["checkout_enabled"] = utils.paddle_checkout_enabled()
+    return payload
+
+
+@app.get("/api/billing/invoices")
+def list_invoices(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    rows = (
+        db.query(models.Invoice)
+        .filter(models.Invoice.user_id == current_user.id)
+        .order_by(models.Invoice.id.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        {
+            "id": r.paddle_transaction_id,
+            "invoice_number": r.invoice_number,
+            "status": r.status,
+            "currency_code": r.currency_code,
+            "total": r.total,
+            "billed_at": r.billed_at,
+        }
+        for r in rows
+    ]
+
+
+@app.post("/api/billing/paddle/checkout")
+def create_paddle_checkout(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Creates a Paddle transaction server-side and returns a client token.
+
+    The Paddle API key is used here and never sent to the browser: the browser
+    only ever receives the short-lived client token that opens the checkout."""
+    if not utils.paddle_checkout_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Billing is not configured. Set PADDLE_API_KEY and PADDLE_PRICE_ID on the server.",
+        )
+
+    api_key = (os.getenv("PADDLE_API_KEY") or "").strip()
+    price_id = (os.getenv("PADDLE_PRICE_ID") or "").strip()
+
+    existing = (
+        db.query(models.Subscription)
+        .filter(models.Subscription.user_id == current_user.id)
+        .order_by(models.Subscription.id.desc())
+        .first()
+    )
+    if existing and (existing.status or "").lower() in PADDLE_ENTITLING_STATUSES:
+        raise HTTPException(status_code=400, detail="This account already has an active subscription.")
+
+    payload = {
+        "items": [{"price_id": price_id, "quantity": 1}],
+        "customer": {"email": current_user.email},
+        "collection_mode": "automatic",
+        # Paddle redirects back to the SPA after a successful purchase.
+        "settings": {"allow_fraud_detection": True},
+    }
+    if existing and existing.paddle_customer_id:
+        # Reuse the customer so renewals land on the same subscription.
+        payload["customer"] = {"id": existing.paddle_customer_id}
+
+    try:
+        resp = requests.post(
+            f"{utils.paddle_base_url()}/transactions",
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=utils.OUTBOUND_TIMEOUT,
+        )
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=504, detail="Paddle did not respond in time. Please try again.")
+    except requests.exceptions.RequestException:
+        raise HTTPException(status_code=502, detail="Could not reach Paddle to start checkout.")
+
+    if resp.status_code not in (200, 201):
+        # Log the upstream detail server-side; do not leak it to the client.
+        print(f"[billing] Paddle transaction failed ({resp.status_code}): {resp.text[:400]}")
+        raise HTTPException(status_code=502, detail="Paddle rejected the checkout request. Please try again.")
+
+    data = resp.json().get("data") or {}
+    client_token = data.get("client_token")
+    if not client_token:
+        raise HTTPException(status_code=502, detail="Paddle did not return a checkout token.")
+
+    return {"client_token": client_token, "transaction_id": data.get("id", ""), "environment": os.getenv("PADDLE_ENV", "sandbox")}
+
+
+@app.post("/api/webhooks/paddle")
+async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
+    """Receives Paddle events.
+
+    This endpoint is intentionally NOT behind JWT auth - Paddle has no user
+    token. The HMAC signature over the raw body is the authentication, and it
+    is verified before the payload is even parsed."""
+    raw_body = await request.body()
+    signature = request.headers.get("Paddle-Signature", "")
+
+    if not utils.verify_paddle_signature(raw_body, signature):
+        # Deliberately vague to the caller; log the reason for operators.
+        print("[billing] rejected Paddle webhook: bad or stale signature")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature.")
+
+    try:
+        event = json.loads(raw_body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Malformed payload.")
+
+    event_type = (event.get("event_type") or "").strip()
+    data = event.get("data") or {}
+
+    def as_text(value):
+        if value is None:
+            return ""
+        if isinstance(value, (int, float)):
+            return str(value)
+        return str(value)
+
+    if event_type in ("subscription.created", "subscription.updated"):
+        sub_id = as_text(data.get("id"))
+        status = as_text(data.get("status")).lower()
+
+        items = data.get("items") or []
+        price_id = ""
+        if items:
+            first = items[0] or {}
+            price = first.get("price") or {}
+            price_id = as_text(price.get("id") or first.get("price_id"))
+
+        period = data.get("current_billing_period") or {}
+        period_end = as_text(period.get("ends_at"))
+        customer = data.get("customer") or {}
+        customer_id = as_text(customer.get("id"))
+        canceled_at = as_text(data.get("canceled_at") or data.get("ends_at"))
+
+        # Paddle does not send the user's email on subscription events, so match
+        # on the stored customer id. An unknown customer is logged and skipped
+        # rather than guessed at.
+        sub = db.query(models.Subscription).filter(
+            models.Subscription.paddle_customer_id == customer_id
+        ).first()
+        if not sub and customer_id:
+            sub = db.query(models.Subscription).filter(
+                models.Subscription.paddle_customer_id == customer_id
+            ).first()
+        if not sub:
+            print(f"[billing] {event_type} for unknown Paddle customer {customer_id!r}; nothing to update")
+            return {"received": True, "matched": False}
+
+        sub.paddle_customer_id = customer_id
+        sub.status = status
+        sub.price_id = price_id
+        sub.current_period_end = period_end
+        sub.canceled_at = canceled_at
+        sub.updated_at = utils.now_str()
+        db.commit()
+        _sync_tier_from_subscription(db, sub.user_id)
+        return {"received": True, "matched": True}
+
+    if event_type in ("subscription.canceled", "subscription.paused"):
+        sub_id = as_text(data.get("id"))
+        sub = db.query(models.Subscription).filter(
+            models.Subscription.paddle_subscription_id == sub_id
+        ).first()
+        if not sub:
+            print(f"[billing] {event_type} for unknown subscription {sub_id!r}")
+            return {"received": True, "matched": False}
+        sub.status = as_text(data.get("status")).lower() or "canceled"
+        sub.canceled_at = as_text(data.get("canceled_at")) or utils.now_str()
+        sub.updated_at = utils.now_str()
+        db.commit()
+        _sync_tier_from_subscription(db, sub.user_id)
+        return {"received": True, "matched": True}
+
+    if event_type in ("transaction.completed", "transaction.refunded"):
+        txn_id = as_text(data.get("id"))
+        sub_id = as_text(data.get("subscription_id"))
+        details = data.get("details") or {}
+        total = as_text(details.get("total") or (data.get("details") or {}).get("totals", {}).get("total"))
+        currency = as_text(details.get("currency_code")) or "USD"
+        txn_status = as_text(data.get("status")).lower() or ("completed" if event_type.endswith("completed") else "refunded")
+        invoice_number = as_text(data.get("invoice_number"))
+        paddle_invoice_id = as_text(data.get("invoice_id"))
+
+        # Attach the transaction to a user. Prefer the subscription link; fall
+        # back to the customer id recorded at checkout time.
+        sub = db.query(models.Subscription).filter(
+            models.Subscription.paddle_subscription_id == sub_id
+        ).first()
+        if not sub:
+            customer = data.get("customer") or {}
+            sub = db.query(models.Subscription).filter(
+                models.Subscription.paddle_customer_id == as_text(customer.get("id"))
+            ).first()
+        if not sub:
+            print(f"[billing] {event_type} for unknown subscription/customer; invoice not recorded")
+            return {"received": True, "matched": False}
+
+        existing = db.query(models.Invoice).filter(
+            models.Invoice.paddle_transaction_id == txn_id
+        ).first()
+        if existing:
+            # Webhook retries: update in place rather than duplicating.
+            existing.status = txn_status
+            existing.total = total or existing.total
+            existing.currency_code = currency or existing.currency_code
+        else:
+            existing = models.Invoice(
+                user_id=sub.user_id,
+                paddle_transaction_id=txn_id,
+                paddle_invoice_id=paddle_invoice_id,
+                invoice_number=invoice_number,
+                status=txn_status,
+                currency_code=currency,
+                total=total,
+                billed_at=utils.now_str(),
+                created_at=utils.now_str(),
+            )
+            db.add(existing)
+
+        db.commit()
+        _sync_tier_from_subscription(db, sub.user_id)
+        return {"received": True, "matched": True}
+
+    # Acknowledge anything else so Paddle stops retrying.
+    return {"received": True, "handled": False, "event_type": event_type}
+
 
 
 @app.post("/api/test-email")

@@ -155,6 +155,65 @@ def assert_safe_outbound_url(url: str) -> str:
             )
     return url
 
+# ==========================================
+#         PADDLE WEBHOOK VERIFICATION
+# ==========================================
+# Paddle signs each webhook with HMAC-SHA256 over "<ts>:<raw body>" using the
+# notification destination secret, and sends it as:
+#   Paddle-Signature: ts=1671552777;h1=<hex digest>
+# Two things make this easy to get wrong, so both are handled here:
+#   1. The digest must be computed over the RAW body. Re-serialising the parsed
+#      JSON changes key order/whitespace and the digest will never match.
+#   2. `ts` must be freshness-checked, or a captured request can be replayed to
+#      grant a subscription that was never paid for.
+PADDLE_WEBHOOK_TOLERANCE_SECONDS = 300
+
+
+def verify_paddle_signature(raw_body: bytes, signature_header: str) -> bool:
+    """Return True only when the header is well-formed, fresh, and matches."""
+    import hashlib
+    import hmac
+    import time
+
+    secret = (os.getenv("PADDLE_WEBHOOK_SECRET") or "").strip()
+    if not secret or not raw_body or not signature_header:
+        return False
+
+    try:
+        parts = dict(
+            piece.split("=", 1) for piece in signature_header.split(";") if "=" in piece
+        )
+        ts = parts["ts"]
+        provided = parts["h1"]
+    except (KeyError, ValueError):
+        return False
+
+    # Reject stale signatures so a captured request cannot be replayed.
+    try:
+        age = abs(time.time() - int(ts))
+    except (TypeError, ValueError):
+        return False
+    if age > PADDLE_WEBHOOK_TOLERANCE_SECONDS:
+        return False
+
+    payload = ts.encode() + b":" + raw_body
+    expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, provided)
+
+
+def paddle_is_configured() -> bool:
+    return bool((os.getenv("PADDLE_API_KEY") or "").strip())
+
+
+def paddle_base_url() -> str:
+    env = (os.getenv("PADDLE_ENV") or "sandbox").strip().lower()
+    return "https://api.paddle.com" if env == "production" else "https://sandbox-api.paddle.com"
+
+
+def paddle_checkout_enabled() -> bool:
+    return paddle_is_configured() and bool((os.getenv("PADDLE_PRICE_ID") or "").strip())
+
+
 # Outbound calls to third parties are short-lived by design; keep timeouts tight
 # so a slow provider cannot occupy a worker.
 OUTBOUND_TIMEOUT = 10

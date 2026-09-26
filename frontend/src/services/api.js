@@ -63,7 +63,9 @@ export const auth = {
   },
   getMe: () => api.get('/api/users/me'),
   updateProfile: (data) => api.put('/api/users/me', data),
-  upgrade: () => api.post('/api/upgrade'),
+  // NOTE: the old `upgrade: () => api.post('/api/upgrade')` was removed along
+  // with the endpoint. It let any authenticated caller grant themselves Pro.
+  // Billing now goes through the `billing` service and the Paddle webhook.
 };
 
 export const admin = {
@@ -130,6 +132,14 @@ export const integrations = {
   connect: (boardId, provider, config) => api.post(`/api/boards/${boardId}/integrations`, { provider, config }),
   disconnect: (boardId, provider) => api.delete(`/api/boards/${boardId}/integrations/${provider}`),
   test: (boardId, provider) => api.post(`/api/boards/${boardId}/integrations/${provider}/test`),
+};
+
+export const billing = {
+  // Authoritative state, written only by the verified Paddle webhook.
+  getSubscription: () => api.get('/api/billing/subscription'),
+  getInvoices: () => api.get('/api/billing/invoices'),
+  // Returns a short-lived Paddle client token. The Paddle API key stays server-side.
+  createCheckout: () => api.post('/api/billing/paddle/checkout'),
 };
 
 export const subtasks = {

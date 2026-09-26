@@ -1,9 +1,62 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-export default function BillingPage({ userData, bgCard, setViewMode, handleUpgrade, handlePlanSelection }) {
+const describeError = (err, fallback) => {
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (err?.response) return `Request failed (HTTP ${err.response.status}).`;
+  if (err?.request) return "Couldn't reach the server.";
+  return fallback;
+};
+
+const formatMoney = (total, currency) => {
+  const amount = Number(total);
+  if (!Number.isFinite(amount)) return total || '-';
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency || ''}`.trim();
+  }
+};
+
+const formatDate = (value) => {
+  if (!value) return '-';
+  const d = new Date(String(value).replace(' ', 'T'));
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
+};
+
+export default function BillingPage({ userData, bgCard, setViewMode, handleUpgrade, handlePlanSelection, billingApi, isUpgrading, isManagingBilling, setIsManagingBilling }) {
   const [billingCycle, setBillingCycle] = useState('monthly');
+  const [subscription, setSubscription] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [billingLoading, setBillingLoading] = useState(true);
+  const [billingError, setBillingError] = useState(null);
 
   const currentTier = userData?.subscription_tier || 'free';
+
+  const loadBilling = useCallback(async () => {
+    if (!billingApi) return;
+    setBillingLoading(true);
+    setBillingError(null);
+    try {
+      const [subRes, invRes] = await Promise.all([
+        billingApi.getSubscription(),
+        billingApi.getInvoices().catch(() => ({ data: [] })),
+      ]);
+      setSubscription(subRes.data);
+      setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
+    } catch (err) {
+      setBillingError(describeError(err, 'Could not load billing information.'));
+    } finally {
+      setBillingLoading(false);
+    }
+  }, [billingApi]);
+
+  useEffect(() => {
+    loadBilling();
+  }, [loadBilling, currentTier]);
+
+  // The authoritative status, preferring the server over the cached user object.
+  const effectiveTier = subscription?.entitled ? 'pro' : (subscription?.tier || currentTier);
 
   const plans = useMemo(() => {
     const monthlyPrice = billingCycle === 'monthly' ? 19 : 190;
@@ -15,42 +68,36 @@ export default function BillingPage({ userData, bgCard, setViewMode, handleUpgra
         price: '$0',
         suffix: 'forever',
         description: 'For individuals and small task boards',
-        active: currentTier === 'free',
+        active: effectiveTier === 'free',
         recommended: false,
         features: ['3 boards', 'Up to 5 teammates', 'Basic automations', 'Email support'],
-        actionLabel: currentTier === 'free' ? 'Current plan' : 'Downgrade',
-        disabled: currentTier === 'free',
+        actionLabel: effectiveTier === 'free' ? 'Current plan' : 'Downgrade',
+        disabled: effectiveTier === 'free',
       },
       {
         name: 'Pro',
         price: `$${monthlyPrice}`,
         suffix: yearlyText,
         description: 'For growing product teams',
-        active: currentTier === 'pro',
+        active: effectiveTier === 'pro',
         recommended: true,
         features: ['Unlimited boards', 'Advanced analytics', 'Custom integrations', 'Priority support'],
-        actionLabel: currentTier === 'pro' ? 'Current plan' : 'Upgrade to Pro',
-        disabled: currentTier === 'pro',
+        actionLabel: effectiveTier === 'pro' ? 'Current plan' : 'Upgrade to Pro',
+        disabled: effectiveTier === 'pro' || isUpgrading,
       },
       {
         name: 'Enterprise',
         price: '$49',
         suffix: '/month',
         description: 'For large orgs and multi-team operations',
-        active: currentTier === 'enterprise',
+        active: effectiveTier === 'enterprise',
         recommended: false,
         features: ['SSO & governance', 'Audit logs', 'Dedicated onboarding', 'Custom SLA'],
-        actionLabel: currentTier === 'enterprise' ? 'Current plan' : 'Talk to sales',
+        actionLabel: effectiveTier === 'enterprise' ? 'Current plan' : 'Talk to sales',
         disabled: false,
       },
     ];
-  }, [billingCycle, currentTier]);
-
-  const invoices = [
-    { id: 'INV-1043', date: 'Sep 12, 2026', amount: '$19.00', status: 'Paid' },
-    { id: 'INV-1001', date: 'Aug 12, 2026', amount: '$19.00', status: 'Paid' },
-    { id: 'INV-0945', date: 'Jul 12, 2026', amount: '$19.00', status: 'Paid' },
-  ];
+  }, [billingCycle, effectiveTier, isUpgrading]);
 
   const automationRules = [
     { name: 'Task reminder', trigger: 'Due date' },
@@ -65,7 +112,7 @@ export default function BillingPage({ userData, bgCard, setViewMode, handleUpgra
     { role: 'Viewer', team: 'Marketing', access: 'Read-only' },
   ];
 
-  const usageValue = currentTier === 'pro' ? 76 : 82;
+  const usageValue = effectiveTier === 'pro' ? 76 : 82;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-2">
@@ -85,10 +132,11 @@ export default function BillingPage({ userData, bgCard, setViewMode, handleUpgra
             </button>
             <button
               type="button"
-              onClick={handleUpgrade}
-              className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-500/20"
+              onClick={() => { if (!effectiveTier || effectiveTier === 'pro') handleUpgrade(); else handlePlanSelection('Pro'); }}
+              disabled={isUpgrading || isManagingBilling}
+              className="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {currentTier === 'pro' ? 'Manage plan' : 'Upgrade plan'}
+              {isUpgrading ? 'Opening checkout...' : effectiveTier === 'pro' ? 'Manage plan' : 'Upgrade plan'}
             </button>
           </div>
         </div>
@@ -255,18 +303,40 @@ export default function BillingPage({ userData, bgCard, setViewMode, handleUpgra
               </button>
             </div>
             <div className="space-y-3">
-              {invoices.map((invoice) => (
-                <div key={invoice.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                  <div>
-                    <p className="text-sm font-semibold">{invoice.id}</p>
-                    <p className="text-xs text-slate-500">{invoice.date}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold">{invoice.amount}</p>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">{invoice.status}</p>
-                  </div>
+              {billingLoading ? (
+                <div className="space-y-3" aria-busy="true" aria-live="polite">
+                  <span className="sr-only">Loading invoices</span>
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="animate-pulse rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                      <div className="h-3 w-28 rounded bg-slate-200 dark:bg-slate-700" />
+                      <div className="mt-2 h-2.5 w-20 rounded bg-slate-100 dark:bg-slate-800" />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : billingError ? (
+                <p role="alert" className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+                  {billingError}
+                </p>
+              ) : invoices.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500 dark:border-slate-700">
+                  No invoices yet. Invoices appear here once Paddle confirms a payment.
+                </p>
+              ) : (
+                invoices.map((invoice) => (
+                  <div key={invoice.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{invoice.invoice_number || invoice.id}</p>
+                      <p className="text-xs text-slate-500">{formatDate(invoice.billed_at)}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold">{formatMoney(invoice.total, invoice.currency_code)}</p>
+                      <p className={`text-[10px] uppercase tracking-[0.2em] ${invoice.status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' : invoice.status === 'refunded' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
+                        {invoice.status}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
