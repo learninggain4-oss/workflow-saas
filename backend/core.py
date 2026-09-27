@@ -183,6 +183,31 @@ def _resolve_assignee(db, payload):
     return user.email
 
 
+def validate_rule_target(action_type, payload, db):
+    """Reject a rule whose target can never work, at save time.
+
+    A rule that saves cleanly and then silently does nothing is worse than a
+    rejected rule: the user watches a live rule that never fires and has no idea
+    why. Returns an error message, or None when the rule is usable.
+    """
+    if action_type != "assign_to":
+        return None
+
+    raw = str(payload.get("email") or payload.get("assigned_to") or "").strip()
+    if not raw:
+        return "An email address is required for Assign To."
+    if "@" not in raw:
+        return f"'{raw}' is not an email address. Use the person's email, not their username."
+
+    user = db.query(models.User).filter(func.lower(models.User.email) == raw.lower()).first()
+    if user is None:
+        return (
+            f"No user has the email address '{raw}'. "
+            "Assign the task to someone who already has an account, or invite them first."
+        )
+    return None
+
+
 def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db: Session):
     """Executes board automation rules against the in-session task object.
 
@@ -199,7 +224,13 @@ def apply_automations(task: models.Task, board_id: int, event: str, old_status: 
             if event == "update" and old_status != task.status and task.status == rule.trigger_condition:
                 trigger = True
         elif rule.trigger_type == "task_created" and event == "create":
-            trigger = True
+            # The condition is part of the rule as the builder states it
+            # ("IF task created IS todo"), so it has to be checked here too. It
+            # used to be ignored on this path, which made a rule fire for every
+            # new task regardless of the status the user picked.
+            condition = (rule.trigger_condition or "").strip().lower()
+            if not condition or (task.status or "").strip().lower() == condition:
+                trigger = True
             
         if trigger:
             payload = _parse_json(rule.action_payload, {})

@@ -19,7 +19,7 @@ const ACTION_FIELDS = {
   },
   assign_to: {
     placeholder: 'teammate@company.com',
-    hint: 'Email of someone who already has an account. Unknown addresses are skipped.',
+    hint: 'Email of someone who already has an account. An unknown address is rejected when you save.',
     type: 'email',
   },
   add_label: {
@@ -184,11 +184,12 @@ export default function AdvancedAutomations({ bgCard, setViewMode, darkMode, inp
                   <option value="todo">{t('To Do')}</option>
                   <option value="high_priority">{t('High Priority')}</option>
                 </select>
-                {/* high_priority is a priority, not a status, so a due-date rule
-                    can never match it. Say so instead of saving a dead rule. */}
-                {isDueDate && newRule.trigger_condition === 'high_priority' && (
+                {/* high_priority is a priority, not a status, so any rule whose
+                    condition is matched against task.status can never satisfy
+                    it. That is every trigger except status_change. */}
+                {newRule.trigger_type !== 'status_change' && newRule.trigger_condition === 'high_priority' && (
                   <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                    {t('High Priority is a priority, not a status, so a due date rule cannot use it.')}
+                    {t('High Priority is a priority, not a status, so this condition can never match.')}
                   </p>
                 )}
               </div>
