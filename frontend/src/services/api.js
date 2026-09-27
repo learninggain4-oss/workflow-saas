@@ -161,6 +161,27 @@ export const onboarding = {
   get: () => api.get('/api/onboarding'),
 };
 
+export const audit = {
+  // Owner-only. Keyset paginated: pass `cursor` (the next_cursor from the
+  // previous response) rather than a page number, so rows cannot be skipped or
+  // repeated while the log is still receiving writes.
+  get: (params = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === null || value === '') continue;
+      if (key === 'cursor') {
+        if (!value) continue;
+        query.set('cursor_created_at', value.created_at);
+        query.set('cursor_id', value.id);
+        continue;
+      }
+      query.set(key, value);
+    }
+    const qs = query.toString();
+    return api.get(`/api/audit${qs ? `?${qs}` : ''}`);
+  },
+};
+
 export const automations = {  getAll: (boardId) => api.get(`/api/boards/${boardId}/automations`),
   create: (boardId, data) => api.post(`/api/boards/${boardId}/automations`, data),
   update: (boardId, ruleId, data) => api.put(`/api/boards/${boardId}/automations/${ruleId}`, data),

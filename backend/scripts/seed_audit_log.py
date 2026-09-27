@@ -126,31 +126,36 @@ def _weighted_event_type(rng):
     return EVENT_CATALOG[0][0]
 
 
-def _business_hour(rng, day):
-    """Weekday 09:00-18:00 UTC mostly, with a thin tail of evening and weekend
-    work. A flat 24-hour distribution is the giveaway of generated data."""
-    stamp = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+def _business_hour(rng, day, now=None):
+    """One plausible working-hours timestamp on `day`, or None for none.
+
+    Weekday 09:00-18:00 UTC mostly, with a thin evening tail. A flat 24-hour
+    distribution is the giveaway of generated data. Returns None rather than a
+    future stamp: a seeded log that claims to know what happens later today is
+    worse than a sparse one.
+    """
+    now = now or datetime.now(timezone.utc)
     weekend = day.weekday() >= 5
 
-    if weekend and rng.random() > 0.15:
-        # Most weekend days are quiet; the few events that do happen are
-        # on-call style, mid-afternoon.
-        return None
     if weekend:
-        hour = rng.randint(10, 16)
+        if rng.random() > 0.15:
+            return None
+        hour, minute = rng.randint(10, 16), rng.randint(0, 59)
     else:
         r = rng.random()
         if r < 0.78:
-            hour = rng.randint(9, 17)
+            hour, minute = rng.randint(9, 17), rng.randint(0, 59)
         elif r < 0.95:
             hour = rng.choice([8, 18, 19, 20])
+            minute = rng.randint(0, 59)
         else:
-            hour = rng.randint(21, 23) + rng.choice([0, 30])
-    if hour >= 24:
-        return None
-    minute = rng.randint(0, 59)
-    second = rng.randint(0, 59)
-    return stamp.replace(hour=hour, minute=minute, second=second)
+            hour = rng.choice([21, 22, 23])
+            minute = rng.randint(0, 59)
+
+    stamp = datetime(day.year, day.month, day.day, tzinfo=timezone.utc).replace(
+        hour=hour, minute=minute, second=rng.randint(0, 59)
+    )
+    return None if stamp > now else stamp
 
 
 def _iso(stamp):
@@ -164,16 +169,18 @@ def generate(days, total_events, seed, boards, user_ids=None):
     by_name = {p[1]: p for p in PEOPLE}
     today = datetime.now(timezone.utc).date()
 
-    # Build the candidate pool first so events can be spread across the whole
-    # window instead of piling up on the last day.
+    # An explicit count per day keeps the distribution intentional. Looping
+    # "until this day happens to return None" made whole days vanish.
     pool = []
+    now = datetime.now(timezone.utc)
     for offset in range(days):
         day = today - timedelta(days=offset)
-        while True:
-            stamp = _business_hour(rng, day)
-            if stamp is None:
-                break
-            pool.append(stamp)
+        weekend = day.weekday() >= 5
+        candidates = rng.randint(1, 4) if weekend else rng.randint(18, 36)
+        for _ in range(candidates):
+            stamp = _business_hour(rng, day, now=now)
+            if stamp is not None:
+                pool.append(stamp)
     if not pool:
         raise SystemExit("no candidate timestamps in the requested window")
 
