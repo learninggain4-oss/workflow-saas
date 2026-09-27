@@ -1,6 +1,6 @@
 import React from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { getLabelCls } from '../../utils/helpers';
+import { getLabelCls } from '../utils/formatters';
 
 export default function BoardView({ canEdit, title, setTitle, addTask, onDragEnd, filtered, setEditing, inputCls, primaryBtn, bgKanbanCol, bgTask }) {
   return (

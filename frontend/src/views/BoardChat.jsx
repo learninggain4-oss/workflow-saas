@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { formatMentions } from '../../utils/helpers';
+import { formatMentions } from '../utils/formatters';
 
 export default function BoardChat({ isOpen, onClose, selectedBoard, boardMembers, userData, messages, setMessages, sendMessage, canPost, bgCard, inputCls, primaryBtn, subCard, darkMode }) {
   const [input, setInput] = useState("");

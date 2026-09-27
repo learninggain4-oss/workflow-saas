@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { boards as boardsApi, templates as templatesApi } from '../../services/api';
+import { boards as boardsApi, templates as templatesApi } from '../services/api';
 
 export default function TemplatesPage({ bgCard, setViewMode, setSelectedBoard, refreshBoards }) {
   const [creating, setCreating] = useState(null);

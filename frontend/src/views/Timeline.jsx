@@ -1,4 +1,4 @@
-// frontend/src/components/views/Timeline.jsx
+// frontend/src/views/Timeline.jsx
 import React, { useMemo } from 'react';
 
 export default function Timeline({ tasksList = [], setEditing, timelineDays = [], bgCard }) {

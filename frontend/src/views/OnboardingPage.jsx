@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { onboarding as onboardingApi } from '../../services/api';
+import { onboarding as onboardingApi } from '../services/api';
 
 // The server sends state only (done + counts). Titles, descriptions, and where
 // each step's button navigates live here, because this component owns the

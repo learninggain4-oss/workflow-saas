@@ -255,7 +255,7 @@ def test_add_label_still_works(board):
 # ---------------------------------------------------------------- the UI
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend" / "src"
-AUTOMATIONS = FRONTEND / "components" / "views" / "AdvancedAutomations.jsx"
+AUTOMATIONS = FRONTEND / "views" / "AdvancedAutomations.jsx"
 I18N = FRONTEND / "i18n.js"
 
 

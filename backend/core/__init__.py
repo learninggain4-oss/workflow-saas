@@ -14,13 +14,18 @@ import models
 import schemas
 import utils
 import templates_catalog
+from database import SessionLocal, get_db
 from sqlalchemy import Boolean, Column, Integer, String, Text, func
 from pydantic import BaseModel
-from database import SessionLocal, get_db
-from utils import create_notification_safe, create_token, get_current_user, get_user_boards, log_activity_safe, manager, now_str, pwd_context, send_email_safe
 
+# Re-export cloudinary module for routers that do `from core import cloudinary`
+try:
+    import cloudinary
+except Exception:
+    cloudinary = None
 
-# --- CLOUDINARY CONFIGURATION ---
+CLOUDINARY_ENABLED = False
+
 try:
     import cloudinary.uploader
     cloudinary.config(
@@ -33,6 +38,7 @@ try:
 except Exception:
     CLOUDINARY_ENABLED = False
 
+
 class Automation(models.Base):
     __tablename__ = "automations"
     id = Column(Integer, primary_key=True, index=True)
@@ -41,8 +47,6 @@ class Automation(models.Base):
     trigger_condition = Column(String, default="")
     action_type = Column(String, default="")
     action_payload = Column(Text, default="{}")
-    # due_date rules only: how many days before the due date to fire. Empty
-    # means DEFAULT_DUE_REMINDER_DAYS. Ignored by the event-driven triggers.
     trigger_value = Column(String, default="")
     is_active = Column(Boolean, default=True)
 
@@ -123,19 +127,16 @@ def _task_response(t: models.Task) -> dict:
     }
 
 
-def _board_response(board, current_user, db: Session):
+def _board_response(board, current_user, db):
     role = utils.get_board_member_role(board.id, current_user.id, db)
     if role is None and utils.normalize_role(getattr(current_user, "role", "")) == "owner":
         role = "owner"
     role = role or "editor"
-    
-    # Retrieve the raw permissions
+
     raw_perms = utils.default_permissions_for_role("owner") if role == "owner" else utils.get_board_member_permissions(board.id, current_user.id, db)
-    
-    # Normalize permissions so the key set matches get_board_members
+
     permissions = utils.normalize_permissions(role, raw_perms)
-    
-    # Retain viewRoleDistribution if it exists in raw_perms
+
     if isinstance(raw_perms, dict) and "viewRoleDistribution" in raw_perms:
         permissions["viewRoleDistribution"] = bool(raw_perms["viewRoleDistribution"])
 
@@ -149,11 +150,6 @@ def _board_response(board, current_user, db: Session):
     }
 
 
-# Columns that may be written through the task endpoints. `id`, `user_id` and
-# `board_id` are deliberately excluded: `board_id` would let a caller move a task
-# onto a board they have no access to, since ensure_board_access only validates
-# the task's original board. Lives here rather than in main.py because the task
-# routes live in routers/tasks.py, and routers cannot import from main.
 TASK_WRITABLE_FIELDS = {
     "title", "description", "status", "priority", "start_date", "due_date",
     "time_estimated", "time_spent", "assigned_to", "assigned_to_name",
@@ -208,34 +204,28 @@ def validate_rule_target(action_type, payload, db):
     return None
 
 
-def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db: Session):
+def apply_automations(task: models.Task, board_id: int, event: str, old_status: str, db):
     """Executes board automation rules against the in-session task object.
 
     Callers commit once afterwards, so a rule that changes the task cannot
     re-enter update_task and recurse. The changes ride the caller's commit."""
     automations = db.query(Automation).filter(Automation.board_id == board_id, Automation.is_active == True).all()
     modified = False
-    
+
     for rule in automations:
         trigger = False
-        
-        # Evaluate triggers
+
         if rule.trigger_type == "status_change":
             if event == "update" and old_status != task.status and task.status == rule.trigger_condition:
                 trigger = True
         elif rule.trigger_type == "task_created" and event == "create":
-            # The condition is part of the rule as the builder states it
-            # ("IF task created IS todo"), so it has to be checked here too. It
-            # used to be ignored on this path, which made a rule fire for every
-            # new task regardless of the status the user picked.
             condition = (rule.trigger_condition or "").strip().lower()
             if not condition or (task.status or "").strip().lower() == condition:
                 trigger = True
-            
+
         if trigger:
             payload = _parse_json(rule.action_payload, {})
-            
-            # Execute Actions
+
             if rule.action_type == "send_email":
                 to_email = payload.get("to")
                 subject = payload.get("subject", "Task Automation Update")
@@ -250,13 +240,13 @@ def apply_automations(task: models.Task, board_id: int, event: str, old_status: 
                         target=send_email_safe,
                         args=(to_email, subject, html_body)
                     ).start()
-                    
+
             elif rule.action_type == "assign_to":
                 assignee = _resolve_assignee(db, payload)
                 if assignee and task.assigned_to != assignee:
                     task.assigned_to = assignee
                     modified = True
-                    
+
             elif rule.action_type == "add_label":
                 new_label = payload.get("label")
                 if new_label:
@@ -266,23 +256,23 @@ def apply_automations(task: models.Task, board_id: int, event: str, old_status: 
                         labels_list.append(new_label)
                         task.labels = ",".join(labels_list)
                         modified = True
-                        
+
     return modified
 
 
-# ---------------------------------------------------------------------------
-# Time-based automations ("Due Date is Approaching")
-# ---------------------------------------------------------------------------
-# apply_automations() above is event-driven: it only runs when a task is created
-# or edited. A due-date reminder is neither - it has to fire at a moment nobody
-# touched the task - so it cannot be implemented as another branch there. It needs
-# a scan, which the scheduler in main.py calls on an interval.
-
 DEFAULT_DUE_REMINDER_DAYS = 3
-# Conditions that make sense for a time-based rule. "high_priority" is a
-# priority, not a status, so it is rejected here rather than silently matching
-# nothing; the event-driven path still accepts it for status_change rules.
 DUE_DATE_STATUS_CONDITIONS = ("todo", "doing", "in_progress", "blocked", "done", "")
+
+
+def _reminder_days(rule):
+    """Lead time in days for a due_date rule, clamped to a sane range."""
+    try:
+        days = int(str(rule.trigger_value or "").strip())
+    except (TypeError, ValueError):
+        return DEFAULT_DUE_REMINDER_DAYS
+    if days < 0:
+        return 0
+    return min(days, 90)
 
 
 def _parse_due_date(raw):
@@ -303,17 +293,6 @@ def _parse_due_date(raw):
     return None
 
 
-def _reminder_days(rule):
-    """Lead time in days for a due_date rule, clamped to a sane range."""
-    try:
-        days = int(str(rule.trigger_value or "").strip())
-    except (TypeError, ValueError):
-        return DEFAULT_DUE_REMINDER_DAYS
-    if days < 0:
-        return 0
-    return min(days, 90)
-
-
 def run_due_date_automations(db, today=None):
     """Fire every active due_date rule whose window is open.
 
@@ -332,13 +311,9 @@ def run_due_date_automations(db, today=None):
     for rule in rules:
         condition = (rule.trigger_condition or "").strip().lower()
         if condition not in DUE_DATE_STATUS_CONDITIONS:
-            # A status-shaped condition this rule cannot honour. Skipping keeps
-            # the scan honest instead of emailing for tasks that never match.
             continue
 
         lead = _reminder_days(rule)
-        # Window: [today, today + lead]. Overdue tasks are not "approaching",
-        # and a rule with a 0-day lead fires only on the due date itself.
         tasks = db.query(models.Task).filter(models.Task.board_id == rule.board_id).all()
 
         for task in tasks:
@@ -352,7 +327,7 @@ def run_due_date_automations(db, today=None):
 
             already = _parse_json(getattr(task, "automation_notifications", "{}"), {}) or {}
             if str(already.get(str(rule.id))) == task.due_date:
-                continue  # already reminded for this exact due date
+                continue
 
             payload = _parse_json(rule.action_payload, {}) or {}
             action_type = (rule.action_type or "").strip()
@@ -390,10 +365,6 @@ def run_due_date_automations(db, today=None):
                 if assignee and task.assigned_to != assignee:
                     task.assigned_to = assignee
 
-            # move_board is deliberately not supported here: relocating a task
-            # needs the destination board's membership to be validated, which
-            # the event path does and this scan must not fake.
-
             already[str(rule.id)] = task.due_date
             task.automation_notifications = json.dumps(already)
             sent += 1
@@ -401,3 +372,69 @@ def run_due_date_automations(db, today=None):
     if sent:
         db.commit()
     return sent
+
+
+# Re-export commonly-used names from utils/database so routers that
+# historically did `from core import X` keep working after the split.
+from utils import (
+    create_notification_safe,
+    create_token,
+    get_current_user,
+    get_user_boards,
+    log_activity_safe,
+    manager,
+    now_str,
+    pwd_context,
+    send_email_safe,
+    build_professional_email_html,
+    normalize_role,
+    default_permissions_for_role,
+    get_board_member_role,
+    get_board_member_permissions,
+    normalize_permissions,
+)
+
+
+__all__ = [
+    "CLOUDINARY_ENABLED",
+    "cloudinary",
+    "Automation",
+    "BoardMessage",
+    "AutomationCreatePayload",
+    "BoardMessageCreate",
+    "_parse_json",
+    "_dump_json",
+    "_to_int",
+    "_task_response",
+    "_board_response",
+    "TASK_WRITABLE_FIELDS",
+    "apply_automations",
+    "run_due_date_automations",
+    "validate_rule_target",
+    "_resolve_assignee",
+    "DEFAULT_DUE_REMINDER_DAYS",
+    "DUE_DATE_STATUS_CONDITIONS",
+    "_parse_due_date",
+    "_reminder_days",
+    "SessionLocal",
+    "get_db",
+    "models",
+    "schemas",
+    "utils",
+    "templates_catalog",
+    "create_notification_safe",
+    "create_token",
+    "get_current_user",
+    "get_user_boards",
+    "log_activity_safe",
+    "manager",
+    "now_str",
+    "pwd_context",
+    "send_email_safe",
+    "build_professional_email_html",
+    "normalize_role",
+    "default_permissions_for_role",
+    "get_board_member_role",
+    "get_board_member_permissions",
+    "normalize_permissions",
+]

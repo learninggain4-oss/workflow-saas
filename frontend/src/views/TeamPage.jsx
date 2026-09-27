@@ -1,6 +1,6 @@
 // frontend/src/pages/TeamPage.jsx - FULL FIXED & PROFESSIONALLY STYLED (OPTIMIZED)
 import React, { useMemo, useCallback } from 'react';
-import { admin } from '../../services/api';
+import { admin } from '../services/api';
 
 const normalizeRoleValue = (role) => {
   const value = String(role || 'editor').trim().toLowerCase().replace(/[-\s]+/g, '_');

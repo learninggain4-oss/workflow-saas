@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatDate } from '../../utils/helpers';
+import { formatDate } from '../utils/formatters';
 
 export default function CalendarView({ calDate, tasksList, setEditing, firstDay, daysInMonth, m, y, bgCard, subCard }) {
   return (

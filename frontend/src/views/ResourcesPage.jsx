@@ -1,4 +1,4 @@
-// frontend/src/components/views/ResourcesPage.jsx - LIVE REAL FIXED
+// frontend/src/views/ResourcesPage.jsx - LIVE REAL FIXED
 import React, { useState, useMemo } from 'react';
 
 export default function ResourcesPage({ bgCard, setViewMode }) {

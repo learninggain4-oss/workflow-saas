@@ -137,7 +137,7 @@ def test_health_reports_healthy_when_nothing_failed():
 
 def test_a_failed_write_is_buffered_rather_than_lost(monkeypatch):
     """The core property: the event is recoverable, not merely logged."""
-    monkeypatch.setattr(utils, "SessionLocal", lambda: _EventsTableBroken())
+    monkeypatch.setattr(utils.audit, "SessionLocal", lambda: _EventsTableBroken())
 
     utils.log_audit_event(
         "board.deleted", "Owner deleted project 'Secret'", actor_email="o@b.test",
@@ -161,12 +161,12 @@ def test_a_total_outage_leaves_only_the_counter():
     """If the database is gone there is nowhere to buffer. The counter is then
     the only evidence, which is why it exists and why it is reported as
     unhealthy rather than swallowed."""
-    original = utils.SessionLocal
-    utils.SessionLocal = lambda: _BadSession()
+    original = utils.audit.SessionLocal
+    utils.audit.SessionLocal = lambda: _BadSession()
     try:
         utils.log_audit_event("board.deleted", "gone", actor_email="o@b.test")
     finally:
-        utils.SessionLocal = original
+        utils.audit.SessionLocal = original
 
     assert _failures() == [], "nothing could be buffered during a full outage"
     assert utils.AUDIT_COUNTERS["failed"] == 1
@@ -175,12 +175,12 @@ def test_a_total_outage_leaves_only_the_counter():
 
 
 def test_a_failure_increments_the_counter():
-    original = utils.SessionLocal
-    utils.SessionLocal = lambda: _EventsTableBroken()
+    original = utils.audit.SessionLocal
+    utils.audit.SessionLocal = lambda: _EventsTableBroken()
     try:
         utils.log_audit_event("task.created", "boom", actor_email="a@b.test")
     finally:
-        utils.SessionLocal = original
+        utils.audit.SessionLocal = original
     assert utils.AUDIT_COUNTERS["failed"] == 1
     assert utils.AUDIT_COUNTERS["last_failure_at"]
     assert "audit_events is locked" in utils.AUDIT_COUNTERS["last_error"]
@@ -189,13 +189,13 @@ def test_a_failure_increments_the_counter():
 def test_the_write_is_retried_once_before_giving_up(monkeypatch):
     """A transient lock is common; one retry recovers it without buffering."""
     attempts = {"n": 0}
-    real = utils.SessionLocal
+    real = utils.audit.SessionLocal
 
     def flaky():
         attempts["n"] += 1
         return _BadSession() if attempts["n"] == 1 else real()
 
-    monkeypatch.setattr(utils, "SessionLocal", flaky)
+    monkeypatch.setattr(utils.audit, "SessionLocal", flaky)
     utils.log_audit_event("task.created", "transient", actor_email="a@b.test")
 
     assert attempts["n"] == 2, "expected exactly one retry"
@@ -224,12 +224,12 @@ def test_a_payload_error_is_still_buffered():
 
 
 def test_health_surfaces_a_pending_failure():
-    original = utils.SessionLocal
-    utils.SessionLocal = lambda: _EventsTableBroken()
+    original = utils.audit.SessionLocal
+    utils.audit.SessionLocal = lambda: _EventsTableBroken()
     try:
         utils.log_audit_event("board.deleted", "gone", actor_email="o@b.test")
     finally:
-        utils.SessionLocal = original
+        utils.audit.SessionLocal = original
 
     db = SessionLocal()
     try:
@@ -243,13 +243,13 @@ def test_health_surfaces_a_pending_failure():
 # ---------------------------------------------------------------- replay
 
 def test_drain_replays_a_buffered_event():
-    original = utils.SessionLocal
-    utils.SessionLocal = lambda: _EventsTableBroken()
+    original = utils.audit.SessionLocal
+    utils.audit.SessionLocal = lambda: _EventsTableBroken()
     try:
         utils.log_audit_event("board.deleted", "Owner deleted project 'Secret'",
                               actor_email="o@b.test", target_id="7", severity="warning")
     finally:
-        utils.SessionLocal = original
+        utils.audit.SessionLocal = original
     assert _events() == []
 
     db = SessionLocal()
@@ -415,12 +415,12 @@ def test_daily_maintenance_replays_even_with_retention_off(monkeypatch):
     retention setting."""
     monkeypatch.delenv("AUDIT_RETENTION_MONTHS", raising=False)
 
-    original = utils.SessionLocal
-    utils.SessionLocal = lambda: _EventsTableBroken()
+    original = utils.audit.SessionLocal
+    utils.audit.SessionLocal = lambda: _EventsTableBroken()
     try:
         utils.log_audit_event("board.deleted", "Owner deleted project 'X'", actor_email="o@b.test")
     finally:
-        utils.SessionLocal = original
+        utils.audit.SessionLocal = original
     assert _events() == []
 
     main.run_daily_audit_maintenance()

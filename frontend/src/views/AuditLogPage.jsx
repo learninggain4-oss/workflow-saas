@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { audit as auditApi } from '../../services/api';
+import { audit as auditApi } from '../services/api';
 
 const SEVERITY_TONE = {
   info: 'bg-indigo-500',

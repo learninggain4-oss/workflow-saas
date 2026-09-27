@@ -1,6 +1,6 @@
 import React from 'react';
-import { AVAILABLE_LABELS, formatMentions } from '../utils/helpers';
-import TaskDependencies from '../components/views/TaskDependencies';
+import { AVAILABLE_LABELS, formatMentions } from '../utils/formatters';
+import TaskDependencies from '../views/TaskDependencies';
 import TaskActivityLog from '../components/TaskActivityLog'; // ആവശ്യാനുസരണം പാത്ത് പരിശോധിക്കുക
 import RichTextEditor from './RichTextEditor'; // നിങ്ങളുടെ ഫയൽ സ്ട്രക്ച്ചർ അനുസരിച്ച് ഈ പാത്ത് മാറ്റുക
 

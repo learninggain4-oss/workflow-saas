@@ -1,7 +1,7 @@
 // frontend/src/App.jsx - FULL FIXED - Added viewRoleDistribution, Time Tracking, Task Dependencies, Board Chat, Advanced Automations & Recurring Tasks, Global Search, i18n (Multi-Language), Offline PWA Sync & Task Activity Log
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { auth, admin, boards, tasks, subtasks, comments, notifs, uploadFile, boardChat, automations as automationsApi, WS_BASE } from './services/api';
-import { formatDate } from './utils/helpers';
+import { formatDate } from './utils/formatters';
 
 // NEW: Offline Sync imports
 import { saveTasksLocally, getLocalTasks, saveOfflineAction, syncOfflineActions } from './services/offlineSync';
@@ -14,26 +14,26 @@ import { useTranslation } from 'react-i18next';
 import Auth from './components/Auth';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import Dashboard from './components/views/Dashboard';
-import BoardView from './components/views/BoardView';
-import Timeline from './components/views/Timeline';
-import CalendarView from './components/views/CalendarView';
-import GanttChartView from './components/views/GanttChartView'; // NEW: Gantt Chart View Import
+import Dashboard from './views/Dashboard';
+import BoardView from './views/BoardView';
+import Timeline from './views/Timeline';
+import CalendarView from './views/CalendarView';
+import GanttChartView from './views/GanttChartView'; // NEW: Gantt Chart View Import
 import TaskModal from './components/TaskModal';
-import AccountSettingsPage from './components/views/AccountSettingsPage';
-import ReportsPage from './components/views/ReportsPage';
-import TeamPage from './components/views/TeamPage';
-import AdvancedAutomations from './components/views/AdvancedAutomations';
-import AuditLogPage from './components/views/AuditLogPage';
-import TemplatesPage from './components/views/TemplatesPage';
-import OnboardingPage from './components/views/OnboardingPage';
-import ResourcesPage from './components/views/ResourcesPage';
-import FeedbackPage from './components/views/FeedbackPage';
-import TimeTracker from './components/views/TimeTracker'; 
-import BoardChat from './components/views/BoardChat'; 
+import AccountSettingsPage from './views/AccountSettingsPage';
+import ReportsPage from './views/ReportsPage';
+import TeamPage from './views/TeamPage';
+import AdvancedAutomations from './views/AdvancedAutomations';
+import AuditLogPage from './views/AuditLogPage';
+import TemplatesPage from './views/TemplatesPage';
+import OnboardingPage from './views/OnboardingPage';
+import ResourcesPage from './views/ResourcesPage';
+import FeedbackPage from './views/FeedbackPage';
+import TimeTracker from './views/TimeTracker'; 
+import BoardChat from './views/BoardChat'; 
 
 // NEW: Recurring Tasks Component
-import RecurringTaskModal from './components/views/RecurringTaskModal';
+import RecurringTaskModal from './views/RecurringTaskModal';
 
 // NEW: Global Search Component
 import GlobalSearch from './components/GlobalSearch';
