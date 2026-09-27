@@ -737,6 +737,41 @@ AUTOMATION_SCAN_SECONDS = max(60, int(os.getenv("AUTOMATION_SCAN_SECONDS", "300"
 _scheduler_started = False
 
 
+def run_audit_retention():
+    """Once a day, blank the IP and user agent on audit rows past retention.
+
+    Opt-in via AUDIT_RETENTION_MONTHS. It is off by default on purpose: a
+    developer or demo database is full of seeded rows whose IPs are the whole
+    point, and a job that quietly erased them would be baffling. Set it to 12 in
+    production, where those columns are personal data.
+    """
+    raw = (os.getenv("AUDIT_RETENTION_MONTHS") or "").strip()
+    if not raw:
+        return
+    try:
+        months = int(raw)
+    except ValueError:
+        print(f"[audit] ignoring invalid AUDIT_RETENTION_MONTHS={raw!r}", flush=True)
+        return
+    if months <= 0:
+        return
+
+    db = SessionLocal()
+    try:
+        scrubbed = utils.scrub_audit_pii(db, months=months)
+        if scrubbed:
+            print(f"[audit] retention: scrubbed PII on {scrubbed} row(s) older than {months} month(s)", flush=True)
+    except Exception:
+        print("[audit] retention pass failed", flush=True)
+        traceback.print_exc()
+        db.rollback()
+    finally:
+        db.close()
+
+
+_last_retention = 0.0
+
+
 def _automation_scheduler_loop():
     """Scan for due-date reminders on an interval.
 
@@ -745,6 +780,7 @@ def _automation_scheduler_loop():
     one bad row must not kill every future reminder. The thread is a daemon, so
     it never blocks shutdown.
     """
+    global _last_retention
     while True:
         time.sleep(AUTOMATION_SCAN_SECONDS)
         db = SessionLocal()
@@ -758,6 +794,12 @@ def _automation_scheduler_loop():
             db.rollback()
         finally:
             db.close()
+
+        # Retention rides the same thread rather than starting a second one, but
+        # only once a day - scrubbing is a batch job, not a 5-minute task.
+        if time.time() - _last_retention >= 86400:
+            _last_retention = time.time()
+            run_audit_retention()
 
 
 def start_automation_scheduler():

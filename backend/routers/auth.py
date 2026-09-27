@@ -1,7 +1,7 @@
 """Auth and user profile routes."""
 import base64
 import threading
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from core import CLOUDINARY_ENABLED, _dump_json, _parse_json, cloudinary, create_token, get_current_user, get_db, models, pwd_context, schemas, send_email_safe, utils
@@ -48,16 +48,48 @@ def register(req: schemas.RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/api/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # register normalises to lowercase, so match the same way. The frontend
     # lowercases the username too, but older rows may predate that.
-    user = db.query(models.User).filter(models.User.email == (form_data.username or "").strip().lower()).first()
+    email = (form_data.username or "").strip().lower()
+    user = db.query(models.User).filter(models.User.email == email).first()
     if not user or not pwd_context.verify(form_data.password, user.password_hash):
+        # Deliberately NOT passing db= here. This branch raises, and a shared
+        # session would roll the audit row back along with the 401 - the one
+        # event an owner most needs to see would be the one event that vanished.
+        # The submitted password is never recorded.
+        utils.log_audit_event(
+            "auth.login_failed",
+            f"Failed sign-in for {email or 'an unknown account'}",
+            actor_user_id=user.id if user else None,
+            actor_email=email,
+            actor_name=user.name if user else "",
+            target_type="session",
+            target_label=email,
+            ip_address=utils.client_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+            severity="warning",
+            outcome="failure",
+        )
         raise HTTPException(status_code=401, detail="Wrong email or password")
-    
+
+    utils.log_audit_event(
+        "auth.login",
+        f"{user.name or user.email} signed in",
+        actor_user_id=user.id,
+        actor_email=user.email,
+        actor_name=user.name,
+        target_type="session",
+        target_label=user.email,
+        ip_address=utils.client_ip(request),
+        user_agent=request.headers.get("user-agent", ""),
+        severity="info",
+        outcome="success",
+    )
+
     return {
-        "access_token": create_token({"sub": user.email}), 
-        "token_type": "bearer", 
+        "access_token": create_token({"sub": user.email}),
+        "token_type": "bearer",
         "id": user.id
     }
 

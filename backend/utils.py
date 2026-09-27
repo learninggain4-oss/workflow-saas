@@ -1,5 +1,5 @@
 ﻿import os, json, traceback, smtplib, ssl, threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from fastapi import WebSocket, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
@@ -203,6 +203,99 @@ def log_audit_event(event_type, action, *, actor_user_id=None, actor_email="", a
                 own.close()
     except Exception:
         print(f"[audit] failed to record {event_type}: {traceback.format_exc()}", flush=True)
+
+
+def trusted_proxies():
+    """Proxy addresses whose X-Forwarded-For header we are willing to believe.
+
+    Empty by default, which means we believe none of them.
+    """
+    return {p.strip() for p in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if p.strip()}
+
+
+def client_ip(request, proxies=None):
+    """Best-effort client address for an audit row.
+
+    X-Forwarded-For is supplied by the client: anyone can send it. Trusting it
+    unconditionally lets a caller write whatever address they like into the
+    audit trail, and in a log that is read as evidence that is forgery, not a
+    cosmetic problem.
+
+    So the header is consulted only when the immediate peer is a proxy the
+    operator has explicitly trusted, and then only the right-most untrusted
+    entry - the address the last proxy actually observed, with trusted hops
+    stripped off.
+
+    With TRUSTED_PROXY_IPS unset (the default) this returns the direct peer,
+    which behind Render/Railway is the proxy's own address. That is a real
+    limitation and it is the safe one: the alternative is trusting a header
+    straight from the internet. Set TRUSTED_PROXY_IPS to the proxy's address to
+    get real client IPs.
+
+    PREREQUISITE, and this is the part that actually matters: uvicorn rewrites
+    request.client from X-Forwarded-For *before* this function runs, whenever
+    the peer is in its --forwarded-allow-ips list (default 127.0.0.1). If that
+    default is left in place, anything able to reach the app on localhost can
+    write any address it likes into the audit trail. Run the app with
+    --forwarded-allow-ips set to the real proxy, or with --no-proxy-headers.
+    This function is the second layer, not the first.
+    """
+    peer = ""
+    if request is not None and getattr(request, "client", None) is not None:
+        peer = request.client.host or ""
+
+    trusted = trusted_proxies() if proxies is None else set(proxies)
+    if not trusted or peer not in trusted:
+        return peer
+
+    forwarded = ""
+    headers = getattr(request, "headers", None)
+    if headers is not None:
+        forwarded = headers.get("x-forwarded-for", "") or ""
+    for candidate in reversed([c.strip() for c in forwarded.split(",") if c.strip()]):
+        if candidate not in trusted:
+            return candidate
+    return peer
+
+
+def scrub_audit_pii(db, months=12, batch_size=1000):
+    """Blank the IP and user agent on audit rows older than the retention window.
+
+    IP address and user agent are personal data under GDPR, so they are kept for
+    a bounded window and then removed. Only those two columns are touched: the
+    event itself, who did it and what they did remain, which is what an audit
+    trail is actually for.
+
+    Batched, and each batch committed, so a large backlog does not hold one
+    long transaction. Returns the number of rows scrubbed.
+    """
+    if months <= 0:
+        return 0
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=30 * months)
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    scrubbed = 0
+    while True:
+        ids = [
+            row[0]
+            for row in db.query(models.AuditEvent.id)
+            .filter(
+                models.AuditEvent.created_at < cutoff,
+                (models.AuditEvent.ip_address != "") | (models.AuditEvent.user_agent != ""),
+            )
+            .limit(batch_size)
+            .all()
+        ]
+        if not ids:
+            break
+        db.query(models.AuditEvent).filter(models.AuditEvent.id.in_(ids)).update(
+            {models.AuditEvent.ip_address: "", models.AuditEvent.user_agent: ""},
+            synchronize_session=False,
+        )
+        db.commit()
+        scrubbed += len(ids)
+    return scrubbed
 
 
 def build_professional_email_html(title: str, intro: str, rows: List[tuple], cta_text: str = "Open WorkFlow SaaS", cta_url: str = "https://workflow-saas-production.up.railway.app/") -> str:
