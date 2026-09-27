@@ -1,4 +1,4 @@
-import os, json, traceback, smtplib, ssl, threading
+﻿import os, json, traceback, smtplib, ssl, threading
 from datetime import datetime, timedelta
 from typing import Dict, List
 from fastapi import WebSocket, Depends, HTTPException
@@ -18,6 +18,19 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def audit_now_str():
+    """Timestamp for audit evidence, always UTC.
+
+    Deliberately not now_str(): that one is naive local time, which is fine for
+    a task's created_at but unusable for an audit trail - you cannot line events
+    up across servers, and a DST jump silently shifts them by an hour. Audit
+    rows are evidence, so they get an explicit clock and are formatted to match
+    the rest of the schema.
+    """
+    from datetime import timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 def create_token(data: dict):
     to_encode = data.copy()
@@ -143,6 +156,54 @@ def log_activity_safe(board_id, user_name, action, task_id=None):
         db2.commit()
         db2.close()
     except: pass
+
+def log_audit_event(event_type, action, *, actor_user_id=None, actor_email="", actor_name="",
+                    target_type="", target_id="", target_label="", ip_address="",
+                    user_agent="", severity="info", outcome="success", board_id=None,
+                    details=None, db=None):
+    """Record one audit event.
+
+    Mirrors log_activity_safe: an audit write must never roll back or fail the
+    business action it is describing, so problems are logged and swallowed. The
+    trade-off is deliberate - losing an audit line is bad, losing the user's
+    work because auditing broke is worse. Once this ships to production the
+    swallow should be replaced with a durable queue rather than a wider try.
+
+    Accepts an explicit session (db=) so a caller that already has one does not
+    open a second connection mid-transaction; otherwise a short-lived one is
+    used, matching log_activity_safe.
+    """
+    try:
+        payload = json.dumps(details or {}, default=str)
+        fields = dict(
+            created_at=audit_now_str(),
+            actor_user_id=actor_user_id,
+            actor_email=(actor_email or "")[:320],
+            actor_name=(actor_name or "")[:160],
+            event_type=(event_type or "system.unknown")[:120],
+            action=(action or "")[:500],
+            target_type=(target_type or "")[:80],
+            target_id=(target_id or "")[:160],
+            target_label=(target_label or "")[:300],
+            ip_address=(ip_address or "")[:64],
+            user_agent=(user_agent or "")[:500],
+            severity=severity if severity in ("info", "notice", "warning", "critical") else "info",
+            outcome=outcome if outcome in ("success", "failure", "denied") else "success",
+            board_id=board_id,
+            details=payload,
+        )
+        if db is not None:
+            db.add(models.AuditEvent(**fields))
+        else:
+            own = SessionLocal()
+            try:
+                own.add(models.AuditEvent(**fields))
+                own.commit()
+            finally:
+                own.close()
+    except Exception:
+        print(f"[audit] failed to record {event_type}: {traceback.format_exc()}", flush=True)
+
 
 def build_professional_email_html(title: str, intro: str, rows: List[tuple], cta_text: str = "Open WorkFlow SaaS", cta_url: str = "https://workflow-saas-production.up.railway.app/") -> str:
     details = "".join(

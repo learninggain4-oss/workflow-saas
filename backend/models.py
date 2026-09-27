@@ -117,6 +117,68 @@ class Activity(Base):
     created_at = Column(String, default="")
 
 
+# ==========================================
+#            AUDIT EVENTS
+# ==========================================
+# Deliberately separate from Activity. Activity is the friendly per-board feed
+# ("renamed task to X") that the UI renders with `action` free text; an audit
+# trail is platform-wide governance evidence that needs a fixed vocabulary, the
+# source IP, the outcome, and enough structure to be filtered and exported.
+# Extending Activity would have meant a schema change under every read path
+# that already selects from it.
+#
+# actor_email and created_at are stored as strings, matching now_str() and the
+# rest of this schema. ISO-8601 sorts lexicographically, which is what the
+# ordering and date-range queries rely on.
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # When the event happened. String for consistency with every other
+    # timestamp column in this schema; ISO-8601 UTC.
+    created_at = Column(String, default="", index=True)
+
+    # Who did it. actor_user_id is null for system-origin events (scheduler,
+    # migrations, jobs) so those are not mistaken for a human.
+    actor_user_id = Column(Integer, nullable=True, index=True)
+    actor_email = Column(String, default="", index=True)
+    actor_name = Column(String, default="")
+
+    # Fixed vocabulary, not free text. Dot-namespaced so a prefix filter selects
+    # a whole family (e.g. "auth." for every sign-in event).
+    event_type = Column(String, default="", index=True)
+
+    # Human-readable rendering of the same fact, for exports and audit reviews.
+    action = Column(String, default="")
+
+    # What was acted on. target_id is a string because not every target is a
+    # row id (an email address, an integration slug, a settings key).
+    target_type = Column(String, default="")
+    target_id = Column(String, default="")
+    target_label = Column(String, default="")
+
+    # Network origin. Stored as text because a proxy chain or an IPv6 literal
+    # will not fit a naive integer, and because this is evidence, not a key.
+    ip_address = Column(String, default="", index=True)
+    user_agent = Column(String, default="")
+
+    # info | notice | warning | critical - drives alerting, not just colour.
+    severity = Column(String, default="info", index=True)
+    # success | failure | denied. A denied event is the one that usually matters.
+    outcome = Column(String, default="success", index=True)
+
+    # Set when the event is scoped to a project, so board-scoped audit views do
+    # not have to parse the target columns.
+    board_id = Column(Integer, nullable=True, index=True)
+
+    # Free-form structured detail as JSON. Never the place for the fields above:
+    # anything filtered or alerted on belongs in a real column. Named `details`
+    # because SQLAlchemy reserves `metadata` on declarative models.
+    details = Column(Text, default="{}")
+
+
 class Notification(Base):
     __tablename__ = "notifications"
     
