@@ -1,10 +1,10 @@
-"""Board, template, membership and export routes."""
+﻿"""Board, template, membership and export routes."""
 import io
 import csv
 import json
 import traceback
 import threading
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from core import _board_response, _parse_json, create_notification_safe, get_current_user, get_db, get_user_boards, log_activity_safe, models, now_str, pwd_context, schemas, send_email_safe, templates_catalog, utils
@@ -77,17 +77,38 @@ def create_board_from_template(payload: schemas.BoardFromTemplate, current_user=
 
 
 @router.post("/api/boards")
-def create_board(payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+def create_board(request: Request, payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.subscription_tier == "free":
         board_count = db.query(models.Board).filter(models.Board.owner_id == current_user.id).count()
         if board_count >= 3:
             raise HTTPException(status_code=402, detail="Free plan limit reached (Max 3 boards).")
-            
-    b = models.Board(name=payload.name, description=payload.description or "", owner_id=current_user.id)
+
+    # Same guard as rename_board. boards.name is NOT NULL but "" passes that, so
+    # without this a whitespace-only name creates a project the UI has to guess
+    # how to display. A project name is the one thing the user always supplies.
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="A project name is required.")
+    if len(name) > 80:
+        raise HTTPException(status_code=422, detail="Project name must be 80 characters or fewer.")
+
+    b = models.Board(name=name, description=payload.description or "", owner_id=current_user.id)
     db.add(b)
     db.commit()
     db.refresh(b)
-    
+
+    # Separate from log_activity_safe on purpose: the activity feed is a friendly
+    # per-project timeline, the audit trail is governance evidence. They must not
+    # be merged, or every UI tweak becomes a change to the evidence record.
+    # db= is shared here so the audit row and the project land together - if the
+    # create rolls back, there is nothing to audit.
+    utils.log_audit_event(
+        "board.created", f"{current_user.name or current_user.email} created project '{b.name}'",
+        request=request, actor=current_user, target_type="board", target_id=b.id,
+        target_label=b.name, board_id=b.id, outcome="success", severity="notice",
+        details={"description": b.description or ""},
+)
+
     log_activity_safe(b.id, current_user.name, f"created board {b.name}")
     return _board_response(b, current_user, db)
 
@@ -102,8 +123,10 @@ def get_board(board_id: int, current_user=Depends(get_current_user), db: Session
 
 
 @router.put("/api/boards/{board_id}")
-def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+def rename_board(request: Request, board_id: int, payload: schemas.BoardCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     b = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Board rename", required_permission="manageBoard")
+
+    previous_name = b.name
 
     # Trim, then reject a blank name. boards.name is NOT NULL, so an empty
     # string would silently produce an unnamed project that the UI has to guess
@@ -125,24 +148,47 @@ def rename_board(board_id: int, payload: schemas.BoardCreate, current_user=Depen
     b.description = description
     db.commit()
     db.refresh(b)
+    utils.log_audit_event(
+        "board.renamed", f"{current_user.name or current_user.email} updated project '{b.name}'",
+        request=request, actor=current_user, target_type="board", target_id=b.id,
+        target_label=b.name, board_id=b.id, outcome="success", severity="notice",
+        details={"previous_name": previous_name, "renamed": previous_name != b.name,
+                 "description_changed": description != (b.description or "")},
+    )
     log_activity_safe(b.id, current_user.name, f"updated project '{b.name}'")
     return _board_response(b, current_user, db)
 
 
 @router.delete("/api/boards/{board_id}")
-async def delete_board(board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def delete_board(request: Request, board_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     b = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Board delete", required_permission="manageBoard")
     tids = [t.id for t in db.query(models.Task).filter(models.Task.board_id == board_id).all()]
     if tids:
         db.query(models.Comment).filter(models.Comment.task_id.in_(tids)).delete(synchronize_session=False)
         db.query(models.Subtask).filter(models.Subtask.task_id.in_(tids)).delete(synchronize_session=False)
-        
+
     db.query(models.Task).filter(models.Task.board_id == board_id).delete(synchronize_session=False)
     db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id).delete(synchronize_session=False)
     db.query(models.Activity).filter(models.Activity.board_id == board_id).delete(synchronize_session=False)
-    
+
+    # Captured before the row goes, so the evidence survives the deletion - the
+    # project is about to stop existing, and an audit row with no board_id is
+    # still a permanent record that the deletion happened.
+    project_name = b.name
+    task_count = len(tids)
+
     db.delete(b)
     db.commit()
+    # Emitted after the commit, with its own session. A shared session would
+    # either be silently dropped by routes that never commit again, or commit the
+    # deletion early. Recording only committed actions is the point.
+    utils.log_audit_event(
+        "board.deleted",
+        f"{current_user.name or current_user.email} deleted project '{project_name}'",
+        request=request, actor=current_user, target_type="board", target_id=board_id,
+        target_label=project_name, board_id=None, outcome="success", severity="warning",
+        details={"tasks_removed": task_count},
+    )
     return {"ok": True}
 
 
@@ -164,7 +210,7 @@ def export_board_csv(board_id: int, current_user=Depends(get_current_user), db: 
 
 
 @router.post("/api/boards/{board_id}/invite")
-def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+def invite(request: Request, board_id: int, payload: schemas.InviteRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     board = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Board invite", required_permission="manageMembers")
     target = db.query(models.User).filter(models.User.email == payload.email).first()
     # FIXED: normalize with admin alias support
@@ -218,13 +264,28 @@ def invite(board_id: int, payload: schemas.InviteRequest, current_user=Depends(g
     if not bm:
         db.add(models.BoardMember(board_id=board_id, user_id=target.id, role=role, permissions=json.dumps(permissions, ensure_ascii=False)))
         db.commit()
+        utils.log_audit_event(
+            "member.invited",
+            f"{current_user.name or current_user.email} invited {payload.email} as {role}",
+            request=request, actor=current_user, target_type="member", target_id=target.id,
+            target_label=payload.email, board_id=board_id, outcome="success", severity="notice",
+            details={"role": role, "account_created": target.id is not None},
+)
         log_activity_safe(board_id, current_user.name, f"invited {payload.email} as {role}")
         create_notification_safe(target.id, board_id, None, f"You were invited to board '{board.name}'", "invite", f"Invited to {board.name}")
     else:
         # FIXED: Preserve correct role position - update with normalized role
+        previous_role = bm.role
         bm.role = role
         bm.permissions = json.dumps(permissions, ensure_ascii=False)
         db.commit()
+        utils.log_audit_event(
+            "member.role_changed",
+            f"{current_user.name or current_user.email} changed {payload.email} to {role}",
+            request=request, actor=current_user, target_type="member", target_id=target.id,
+            target_label=payload.email, board_id=board_id, outcome="success", severity="notice",
+            details={"previous_role": previous_role, "role": role},
+)
         log_activity_safe(board_id, current_user.name, f"updated {payload.email} role to {role}")
 
     return {"ok": True, "message": "Invite sent successfully", "role": role, "user_created": target.id is not None}
@@ -259,7 +320,7 @@ def get_board_members(board_id: int, current_user=Depends(get_current_user), db:
 
 
 @router.put("/api/boards/{board_id}/members/{user_id}")
-def update_board_member_role(board_id: int, user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+def update_board_member_role(request: Request, board_id: int, user_id: int, payload: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Member role update", required_permission="manageMembers")
 
     board = db.query(models.Board).filter(models.Board.id == board_id).first()
@@ -286,6 +347,7 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
         raise HTTPException(status_code=404, detail="User not found")
 
     member = db.query(models.BoardMember).filter(models.BoardMember.board_id == board_id, models.BoardMember.user_id == user_id).first()
+    previous_role = member.role if member else None
     if member:
         member.role = role
         member.permissions = json.dumps(permissions, ensure_ascii=False)
@@ -294,12 +356,20 @@ def update_board_member_role(board_id: int, user_id: int, payload: dict, current
         db.add(member)
 
     db.commit()
+    utils.log_audit_event(
+        "member.role_changed",
+        f"{current_user.name or current_user.email} changed {target.email} to {role}",
+        request=request, actor=current_user, target_type="member", target_id=target.id,
+        target_label=target.email, board_id=board_id, outcome="success", severity="notice",
+        details={"previous_role": previous_role, "role": role,
+                 "access_granted": previous_role is None},
+    )
     log_activity_safe(board_id, current_user.name, f"updated {target.email} access to {role}")
     return {"ok": True, "message": "Member role updated", "role": role, "permissions": permissions}
 
 
 @router.delete("/api/boards/{board_id}/members/{user_id}")
-def remove_board_member(board_id: int, user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+def remove_board_member(request: Request, board_id: int, user_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     board = utils.ensure_board_access(board_id, current_user, db, required_role="administrator", action="Member removal", required_permission="manageMembers")
 
     if user_id == board.owner_id:
@@ -310,8 +380,17 @@ def remove_board_member(board_id: int, user_id: int, current_user=Depends(get_cu
         raise HTTPException(status_code=404, detail="Member not found")
 
     target = db.query(models.User).filter(models.User.id == user_id).first()
+    removed_role = member.role
+    removed_email = target.email if target else str(user_id)
     db.delete(member)
     db.commit()
+    utils.log_audit_event(
+        "member.removed",
+        f"{current_user.name or current_user.email} removed {removed_email} from the project",
+        request=request, actor=current_user, target_type="member", target_id=user_id,
+        target_label=removed_email, board_id=board_id, outcome="success", severity="warning",
+        details={"previous_role": removed_role},
+    )
     log_activity_safe(board_id, current_user.name, f"removed {target.email if target else user_id} from board")
     return {"ok": True, "removed": True, "message": "Member removed from board"}
 

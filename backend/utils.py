@@ -160,8 +160,13 @@ def log_activity_safe(board_id, user_name, action, task_id=None):
 def log_audit_event(event_type, action, *, actor_user_id=None, actor_email="", actor_name="",
                     target_type="", target_id="", target_label="", ip_address="",
                     user_agent="", severity="info", outcome="success", board_id=None,
-                    details=None, db=None):
+                    details=None, db=None, actor=None, request=None):
     """Record one audit event.
+
+    `actor=` takes a User row and fills the three actor columns; `request=` takes
+    a Starlette request and fills ip_address and user_agent. Both are
+    conveniences - anything passed explicitly wins, so a caller can override the
+    address (a job with no request, or a known proxy hop).
 
     Mirrors log_activity_safe: an audit write must never roll back or fail the
     business action it is describing, so problems are logged and swallowed. The
@@ -171,10 +176,25 @@ def log_audit_event(event_type, action, *, actor_user_id=None, actor_email="", a
 
     Accepts an explicit session (db=) so a caller that already has one does not
     open a second connection mid-transaction; otherwise a short-lived one is
-    used, matching log_activity_safe.
+    used, matching log_activity_safe. Pass db= only when the audit row should
+    share the caller's fate - a success path. On a path that raises, omitting db
+    keeps the row from being rolled back with the error.
     """
     try:
+        if actor is not None:
+            actor_user_id = actor_user_id if actor_user_id is not None else getattr(actor, "id", None)
+            actor_email = actor_email or getattr(actor, "email", "") or ""
+            actor_name = actor_name or getattr(actor, "name", "") or ""
+        if request is not None:
+            if not ip_address:
+                ip_address = client_ip(request)
+            if not user_agent:
+                user_agent = request.headers.get("user-agent", "") or ""
+
         payload = json.dumps(details or {}, default=str)
+        # target_id is a String column, but callers naturally pass a row id.
+        # Coerce before truncating: an int is not sliceable, and the truncation
+        # is what protects the column from an oversized value.
         fields = dict(
             created_at=audit_now_str(),
             actor_user_id=actor_user_id,
@@ -183,7 +203,7 @@ def log_audit_event(event_type, action, *, actor_user_id=None, actor_email="", a
             event_type=(event_type or "system.unknown")[:120],
             action=(action or "")[:500],
             target_type=(target_type or "")[:80],
-            target_id=(target_id or "")[:160],
+            target_id=str(target_id or "")[:160],
             target_label=(target_label or "")[:300],
             ip_address=(ip_address or "")[:64],
             user_agent=(user_agent or "")[:500],

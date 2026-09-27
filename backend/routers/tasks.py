@@ -1,5 +1,5 @@
-"""Task routes."""
-from fastapi import APIRouter, Depends, HTTPException
+﻿"""Task routes."""
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from core import TASK_WRITABLE_FIELDS, _dump_json, _parse_json, _task_response, _to_int, apply_automations, create_notification_safe, get_current_user, get_db, log_activity_safe, manager, models, now_str, schemas, utils
 
@@ -17,7 +17,7 @@ def list_tasks(board_id: int, current_user=Depends(get_current_user), db: Sessio
 
 
 @router.post("/api/tasks")
-async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_task(request: Request, payload: schemas.TaskCreate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     if payload.board_id:
         utils.ensure_board_access(payload.board_id, current_user, db, required_role="editor", action="Task creation", required_permission="createTasks")
         board_owner = db.query(models.Board).filter(models.Board.id == payload.board_id).first()
@@ -48,6 +48,12 @@ async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_curr
     db.refresh(t)
 
     if payload.board_id:
+        utils.log_audit_event(
+            "task.created", f"{current_user.name or current_user.email} created task '{t.title}'",
+            request=request, actor=current_user, target_type="task", target_id=t.id,
+            target_label=t.title, board_id=t.board_id, outcome="success", severity="info",
+            details={"status": t.status, "priority": t.priority},
+)
         log_activity_safe(payload.board_id, current_user.name, f"created task '{payload.title}'", task_id=t.id)
 
         if apply_automations(t, payload.board_id, "create", "", db):
@@ -61,7 +67,7 @@ async def create_task(payload: schemas.TaskCreate, current_user=Depends(get_curr
 
 
 @router.put("/api/tasks/{task_id}")
-async def update_task(task_id: int, payload: schemas.TaskUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def update_task(request: Request, task_id: int, payload: schemas.TaskUpdate, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -109,6 +115,34 @@ async def update_task(task_id: int, payload: schemas.TaskUpdate, current_user=De
 
     if t.board_id:
         actor = current_user.name if current_user.name else "Someone"
+        # One audit row per distinct change, not one per save. The frontend sends
+        # the whole task object on every edit, so a single "updated" row would
+        # fire even when a drag changed nothing and would swallow the fact that
+        # the status actually changed.
+        if old_status != t.status:
+            utils.log_audit_event(
+                "task.status_changed",
+                f"{actor} moved '{t.title}' from {old_status} to {t.status}",
+                request=request, actor=current_user, target_type="task", target_id=t.id,
+                target_label=t.title, board_id=t.board_id, outcome="success", severity="info",
+                details={"from": old_status, "to": t.status},
+)
+        if old_title != t.title:
+            utils.log_audit_event(
+                "task.updated", f"{actor} renamed task to '{t.title}'",
+                request=request, actor=current_user, target_type="task", target_id=t.id,
+                target_label=t.title, board_id=t.board_id, outcome="success", severity="info",
+                details={"previous_title": old_title},
+)
+        if old_assign != t.assigned_to:
+            utils.log_audit_event(
+                "task.assigned",
+                f"{actor} assigned '{t.title}' to {t.assigned_to or 'nobody'}",
+                request=request, actor=current_user, target_type="task", target_id=t.id,
+                target_label=t.title, board_id=t.board_id, outcome="success", severity="notice",
+                details={"previous_assignee": old_assign, "assignee": t.assigned_to},
+)
+
         if old_status != t.status:
             log_activity_safe(t.board_id, actor, f"moved '{t.title}' {old_status}->{t.status}", task_id=t.id)
         if old_title != t.title:
@@ -124,7 +158,7 @@ async def update_task(task_id: int, payload: schemas.TaskUpdate, current_user=De
 
 
 @router.delete("/api/tasks/{task_id}")
-async def delete_task(task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def delete_task(request: Request, task_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     t = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404)
@@ -146,8 +180,23 @@ async def delete_task(task_id: int, current_user=Depends(get_current_user), db: 
                 other.dependencies = _dump_json(remaining, [])
                 other.updated_at = now_str()
 
+    # Captured before the row goes: the task is about to stop existing, and an
+    # audit row that outlives its subject is the whole point of one.
+    title = t.title
+    status = t.status
+    board_label = None
+    if bid:
+        board_row = db.query(models.Board).filter(models.Board.id == bid).first()
+        board_label = board_row.name if board_row else None
+
     db.delete(t)
     db.commit()
+    utils.log_audit_event(
+        "task.deleted", f"{current_user.name or current_user.email} deleted task '{title}'",
+        request=request, actor=current_user, target_type="task", target_id=task_id,
+        target_label=title, board_id=bid, outcome="success", severity="warning",
+        details={"status": status, "project": board_label},
+    )
     
     if bid: 
         await manager.broadcast(bid, {"type": "update"})
