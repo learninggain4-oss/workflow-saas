@@ -18,7 +18,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from core import get_current_user, get_db, models
-from utils import is_owner_user
+from utils import audit_health, is_owner_user
 
 
 router = APIRouter()
@@ -112,6 +112,22 @@ def _apply_filters(query, *, event_type, family, severities, outcomes,
             )
         )
     return query
+
+
+@router.get("/api/audit/health")
+def audit_health_endpoint(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    """Write-health for the audit pipeline itself.
+
+    An audit trail is only worth anything if you can tell that a line is missing
+    because nothing happened rather than because the write failed. This is that
+    signal: a non-zero `failed` or a non-zero `pending_replay` means events are
+    missing and being retried, not that nothing happened.
+    """
+    if not is_owner_user(current_user, db):
+        raise HTTPException(status_code=403, detail="Owner access required")
+    health = audit_health(db)
+    health["healthy"] = health["failed"] == 0 and (health["pending_replay"] or 0) == 0
+    return health
 
 
 @router.get("/api/audit")

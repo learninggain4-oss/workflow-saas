@@ -737,39 +737,47 @@ AUTOMATION_SCAN_SECONDS = max(60, int(os.getenv("AUTOMATION_SCAN_SECONDS", "300"
 _scheduler_started = False
 
 
-def run_audit_retention():
-    """Once a day, blank the IP and user agent on audit rows past retention.
+def run_daily_audit_maintenance():
+    """Once a day: replay anything the write path could not record, then scrub PII.
 
-    Opt-in via AUDIT_RETENTION_MONTHS. It is off by default on purpose: a
-    developer or demo database is full of seeded rows whose IPs are the whole
-    point, and a job that quietly erased them would be baffling. Set it to 12 in
-    production, where those columns are personal data.
+    The replay runs unconditionally. It is tempting to hang it off the retention
+    setting, but retention is about privacy and replay is about evidence: an
+    event that failed to write is still owed, whether or not anyone has configured
+    how long to keep IP addresses.
+
+    The PII scrub is opt-in via AUDIT_RETENTION_MONTHS, off by default on
+    purpose: a developer or demo database is full of seeded rows whose IPs are the
+    whole point, and a job that quietly erased them would be baffling. Set it to
+    12 in production, where those columns are personal data.
     """
-    raw = (os.getenv("AUDIT_RETENTION_MONTHS") or "").strip()
-    if not raw:
-        return
-    try:
-        months = int(raw)
-    except ValueError:
-        print(f"[audit] ignoring invalid AUDIT_RETENTION_MONTHS={raw!r}", flush=True)
-        return
-    if months <= 0:
-        return
-
     db = SessionLocal()
     try:
-        scrubbed = utils.scrub_audit_pii(db, months=months)
-        if scrubbed:
-            print(f"[audit] retention: scrubbed PII on {scrubbed} row(s) older than {months} month(s)", flush=True)
+        recovered, still_failing = utils.drain_audit_failures(db)
+        if recovered or still_failing:
+            print(f"[audit] replay: recovered {recovered}, still failing {still_failing}", flush=True)
+        if still_failing:
+            print("[audit] replay: some events are still unwritten; check /api/audit/health", flush=True)
+
+        raw = (os.getenv("AUDIT_RETENTION_MONTHS") or "").strip()
+        if raw:
+            try:
+                months = int(raw)
+            except ValueError:
+                print(f"[audit] ignoring invalid AUDIT_RETENTION_MONTHS={raw!r}", flush=True)
+                months = 0
+            if months > 0:
+                scrubbed = utils.scrub_audit_pii(db, months=months)
+                if scrubbed:
+                    print(f"[audit] retention: scrubbed PII on {scrubbed} row(s) older than {months} month(s)", flush=True)
     except Exception:
-        print("[audit] retention pass failed", flush=True)
+        print("[audit] daily maintenance failed", flush=True)
         traceback.print_exc()
         db.rollback()
     finally:
         db.close()
 
 
-_last_retention = 0.0
+_last_maintenance = 0.0
 
 
 def _automation_scheduler_loop():
@@ -780,7 +788,7 @@ def _automation_scheduler_loop():
     one bad row must not kill every future reminder. The thread is a daemon, so
     it never blocks shutdown.
     """
-    global _last_retention
+    global _last_maintenance
     while True:
         time.sleep(AUTOMATION_SCAN_SECONDS)
         db = SessionLocal()
@@ -795,11 +803,11 @@ def _automation_scheduler_loop():
         finally:
             db.close()
 
-        # Retention rides the same thread rather than starting a second one, but
-        # only once a day - scrubbing is a batch job, not a 5-minute task.
-        if time.time() - _last_retention >= 86400:
-            _last_retention = time.time()
-            run_audit_retention()
+        # Daily maintenance rides the same thread rather than starting a second
+        # one - it is a batch job, not something to repeat every 5 minutes.
+        if time.time() - _last_maintenance >= 86400:
+            _last_maintenance = time.time()
+            run_daily_audit_maintenance()
 
 
 def start_automation_scheduler():

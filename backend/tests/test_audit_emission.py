@@ -291,19 +291,19 @@ def test_retention_is_off_unless_configured(monkeypatch):
     """A dev or demo database must keep its seeded IPs."""
     monkeypatch.delenv("AUDIT_RETENTION_MONTHS", raising=False)
     old = _row(400)
-    main.run_audit_retention()
+    main.run_daily_audit_maintenance()
     assert {r.id: r for r in _events()}[old.id].ip_address == "203.0.113.5"
 
 
 def test_configured_retention_scrubs(monkeypatch):
     monkeypatch.setenv("AUDIT_RETENTION_MONTHS", "12")
     old = _row(400)
-    main.run_audit_retention()
+    main.run_daily_audit_maintenance()
     assert {r.id: r for r in _events()}[old.id].ip_address == ""
 
 
 def test_an_invalid_retention_setting_is_ignored(monkeypatch):
     monkeypatch.setenv("AUDIT_RETENTION_MONTHS", "twelve months")
     old = _row(400)
-    main.run_audit_retention()  # must not raise
+    main.run_daily_audit_maintenance()  # must not raise
     assert {r.id: r for r in _events()}[old.id].ip_address == "203.0.113.5"

@@ -179,6 +179,40 @@ class AuditEvent(Base):
     details = Column(Text, default="{}")
 
 
+class AuditWriteFailure(Base):
+    """An audit event that could not be written to audit_events.
+
+    The point of an audit trail is that the absence of a line means something. If
+    a write is swallowed and forgotten, a deleted project or a failed sign-in
+    leaves no trace and nobody can tell whether nothing happened or something
+    happened and went unrecorded. So a failed write is itself persisted, with
+    the full event, and retried - which turns "we may have lost it" into "we
+    know, and here it is".
+
+    Deliberately separate from audit_events: it is operational state, not
+    evidence, and must not be readable as if it were a real event.
+    """
+
+    __tablename__ = "audit_write_failures"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(String, default="", index=True)
+    # The event that failed, kept whole so it can be replayed verbatim.
+    event_type = Column(String, default="")
+    action = Column(String, default="")
+    payload = Column(Text, default="{}")
+    error = Column(Text, default="")
+    attempts = Column(Integer, default=0)
+
+    @property
+    def fields(self):
+        import json
+        try:
+            return json.loads(self.payload or "{}")
+        except (TypeError, ValueError):
+            return {}
+
+
 class Notification(Base):
     __tablename__ = "notifications"
     

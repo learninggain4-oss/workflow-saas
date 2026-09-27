@@ -169,10 +169,12 @@ def log_audit_event(event_type, action, *, actor_user_id=None, actor_email="", a
     address (a job with no request, or a known proxy hop).
 
     Mirrors log_activity_safe: an audit write must never roll back or fail the
-    business action it is describing, so problems are logged and swallowed. The
-    trade-off is deliberate - losing an audit line is bad, losing the user's
-    work because auditing broke is worse. Once this ships to production the
-    swallow should be replaced with a durable queue rather than a wider try.
+    business action it is describing, so failures are swallowed - but not
+    discarded. Each attempt gets one immediate retry (transient lock and
+    serialization errors are common), and a final failure is written to
+    audit_write_failures for drain_audit_failures to replay. Losing an audit line
+    is bad; losing the user's work because auditing broke is worse; and losing
+    both without a trace is unacceptable.
 
     Accepts an explicit session (db=) so a caller that already has one does not
     open a second connection mid-transaction; otherwise a short-lived one is
@@ -212,17 +214,120 @@ def log_audit_event(event_type, action, *, actor_user_id=None, actor_email="", a
             board_id=board_id,
             details=payload,
         )
-        if db is not None:
-            db.add(models.AuditEvent(**fields))
-        else:
-            own = SessionLocal()
+        last_error = None
+        for _attempt in (1, 2):
             try:
-                own.add(models.AuditEvent(**fields))
-                own.commit()
-            finally:
-                own.close()
+                if db is not None:
+                    db.add(models.AuditEvent(**fields))
+                else:
+                    own = SessionLocal()
+                    try:
+                        own.add(models.AuditEvent(**fields))
+                        own.commit()
+                    finally:
+                        own.close()
+                AUDIT_COUNTERS["written"] += 1
+                return
+            except Exception as exc:
+                last_error = exc
+                # A failed add poisons the shared session; discard the pending
+                # object so the next attempt starts from a clean state.
+                if db is not None:
+                    db.rollback()
+
+        _record_audit_failure(fields, last_error, event_type, action)
+    except Exception as exc:
+        # Something outside the write itself failed (a bad argument, an
+        # unserialisable detail). Buffer it rather than losing it.
+        _record_audit_failure({"event_type": event_type, "action": action}, exc, event_type, action)
+
+
+# In-process counters. Cheap for a health check, and the last line of defence:
+# if even the failure table cannot be written (the database is gone) this is the
+# only remaining evidence, and it does not survive a restart.
+AUDIT_COUNTERS = {
+    "written": 0, "failed": 0, "drained": 0,
+    "last_failure_at": "", "last_error": "",
+}
+
+
+def _record_audit_failure(fields, error, event_type, action):
+    """Persist a failed audit write so it can be replayed rather than lost."""
+    AUDIT_COUNTERS["failed"] += 1
+    AUDIT_COUNTERS["last_failure_at"] = audit_now_str()
+    AUDIT_COUNTERS["last_error"] = str(error)[:500]
+    try:
+        db2 = SessionLocal()
+        try:
+            db2.add(models.AuditWriteFailure(
+                created_at=audit_now_str(),
+                event_type=(event_type or "")[:120],
+                action=(action or "")[:500],
+                payload=json.dumps(fields, default=str),
+                error=str(error)[:1000],
+                attempts=1,
+            ))
+            db2.commit()
+        finally:
+            db2.close()
     except Exception:
-        print(f"[audit] failed to record {event_type}: {traceback.format_exc()}", flush=True)
+        # The audit write failed AND the failure record failed, so the database
+        # is almost certainly unavailable. The counter is all that is left.
+        print(f"[audit] could not even record the write failure for {event_type}", flush=True)
+
+
+def drain_audit_failures(db, limit=100):
+    """Replay buffered audit writes. Returns (recovered, still_failing).
+
+    Called daily by the scheduler. A row that keeps failing stays in place with
+    its attempt count incremented, so a permanently bad payload is visible
+    instead of being retried forever.
+    """
+    rows = db.query(models.AuditWriteFailure).order_by(models.AuditWriteFailure.id).limit(limit).all()
+    recovered = 0
+    still_failing = 0
+    for row in rows:
+        try:
+            fields = row.fields
+            # A payload that will not parse degrades to {}, and an AuditEvent
+            # built from that is a valid but contentless row. Writing it would
+            # put blank evidence in the table AND clear the visible failure,
+            # which is worse than leaving the row buffered. Treat it as a
+            # permanent failure so someone can actually look at it.
+            if not fields.get("event_type") or not fields.get("created_at"):
+                raise ValueError(f"buffered row {row.id} has an unusable payload")
+            db.add(models.AuditEvent(**fields))
+            db.commit()
+            db.delete(row)
+            db.commit()
+            AUDIT_COUNTERS["drained"] += 1
+            recovered += 1
+        except Exception as exc:
+            db.rollback()
+            row.attempts = (row.attempts or 0) + 1
+            row.error = str(exc)[:1000]
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+            still_failing += 1
+    return recovered, still_failing
+
+
+def audit_health(db):
+    """Counters plus anything still waiting to be replayed."""
+    try:
+        pending = db.query(models.AuditWriteFailure).count()
+    except Exception:
+        pending = None
+    return {
+        "written": AUDIT_COUNTERS["written"],
+        "failed": AUDIT_COUNTERS["failed"],
+        "drained": AUDIT_COUNTERS["drained"],
+        "last_failure_at": AUDIT_COUNTERS["last_failure_at"],
+        "last_error": AUDIT_COUNTERS["last_error"],
+        "pending_replay": pending,
+    }
 
 
 def trusted_proxies():
